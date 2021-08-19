@@ -292,6 +292,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private boolean mPassthroughMode = true;
     private boolean mUseCodec2 = false;
     private int mAvSyncHwId = 0;
+    private int mOmxAvSyncHwId = 0;
     private int mAvSyncIdPassthroughFlag = 1 << 16;
     private int mDemuxId = 0;
     public int mVideoFilterId = 0;
@@ -1932,6 +1933,19 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
             Log.d(TAG, "mAudioFilterId:" + mAudioFilterId);
         }
         Log.d(TAG, "mAvSyncHwId:" + mAvSyncHwId);
+        if (mAvSyncHwId != 0)
+            mOmxAvSyncHwId = mAvSyncHwId | mAvSyncIdPassthroughFlag;
+        mVideoMediaFormat.setInteger(VIDEO_FILTER_ID_KEY, mVideoFilterId);
+        if (mUseCodec2) {
+            mVideoMediaFormat.setInteger(HW_AV_SYNC_ID_KEY, mAvSyncHwId);
+        } else {
+            mVideoMediaFormat.setInteger("audio-hw-sync", mOmxAvSyncHwId);
+        }
+        mVideoMediaFormat.setFeatureEnabled(CodecCapabilities.FEATURE_TunneledPlayback, true);
+    }
+
+    private void CreateAudioTrack() {
+    Log.d(TAG, "CreateAudioTrack");
         if (mAudioformat != null) {
             try {
                 mAudioTrack = new AudioTrack.Builder()
@@ -1954,15 +1968,6 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         }else {
             Log.e(TAG, "mAudioformat is null!");
         }
-        if (mAvSyncHwId != 0)
-            mAvSyncHwId = mAvSyncHwId | mAvSyncIdPassthroughFlag;
-        mVideoMediaFormat.setInteger(VIDEO_FILTER_ID_KEY, mVideoFilterId);
-        if (mUseCodec2) {
-            mVideoMediaFormat.setInteger(HW_AV_SYNC_ID_KEY, mAvSyncHwId);
-        } else {
-            mVideoMediaFormat.setInteger("audio-hw-sync", mAvSyncHwId);
-        }
-        mVideoMediaFormat.setFeatureEnabled(CodecCapabilities.FEATURE_TunneledPlayback, true);
     }
 
     private void parseSectionData(byte[] data) {
@@ -2344,6 +2349,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                                  }
                                  if (mPassthroughMode) {
                                      passthroughSetup();
+                                     CreateAudioTrack();
                                  } else {
                                      //For non-passthrough clear playback, start av filter in tuner hal
                                      if (mVideoFilter != null) {
@@ -2410,6 +2416,8 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     }
 
     private Filter openPcrFilter(int pcrPid) {
+        if (mEnableLocalPlay)
+            pcrPid = 0x1fff;
         Log.d(TAG, "openPcrFilter pcrPid:0x" + Integer.toHexString(pcrPid));
         Filter filter = mTuner.openFilter(Filter.TYPE_TS, Filter.SUBTYPE_PCR, 1024 * 1024, mExecutor, mfilterCallback);
         if (filter != null) {
@@ -2553,6 +2561,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                             mDvrPlayback.start();
                             mDvrPlayback.flush();
                             mResetDvrPlayback = true;
+                            CreateAudioTrack();
                             Thread.sleep(200);
                             Log.d(TAG, "DvrPlayback start read data");
                         }
