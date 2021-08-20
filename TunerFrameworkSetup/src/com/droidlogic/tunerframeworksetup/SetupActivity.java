@@ -1220,10 +1220,6 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
 
         Log.d(TAG, "MediaCodecPlayer start");
         mMediaCodecPlayer.startPlayer();
-        if (mDvrPlayback == null) {
-            mDvrPlayback = mTuner.openDvrPlayback(mDvrMQSize_MB * 1024 * 1024, mExecutor, this);
-            mDvrPlayback.configure(getDvrSettings());
-        }
         if (bTuner) {
             Log.d(TAG, "Frequency:" + mFrequency.getText().toString() + "MHz");
             int freqMhz = 0;

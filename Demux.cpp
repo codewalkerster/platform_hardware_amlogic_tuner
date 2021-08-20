@@ -30,8 +30,6 @@ namespace implementation {
 #define WAIT_TIMEOUT 3000000000
 #define PSI_MAX_SIZE 4096
 
-static int mSupportLocalPlayer = 0;
-
 #ifdef TUNERHAL_DBG
 #define TF_DEBUG_DROP_TS_NUM "vendor.tf.drop.tsnum"
 #define TF_DEBUG_DUMP_ES_DATA "vendor.tf.dump.es"
@@ -53,10 +51,9 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     ALOGD("mDropLen:%d mFilterOutputTotalLen:%d mDropTsPktNum:%d mDumpEsData:%d",
         mDropLen, mFilterOutputTotalLen, mDropTsPktNum, mDumpEsData);
 #endif
-    mSupportLocalPlayer = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, 0);
     AmDmxDevice = new AM_DMX_Device();
     AmDmxDevice->dev_no = demuxId;
-    ALOGD("mDemuxId:%d mSupportLocalPlayer:%d", mDemuxId, mSupportLocalPlayer);
+    ALOGD("mDemuxId:%d", mDemuxId);
     AmDmxDevice->AM_DMX_Open();
     mMediaSyncWrap = new MediaSyncWrap();
     mAmDvrDevice = new AmDvr(mDemuxId);
@@ -262,14 +259,6 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         return Void();
     }
 
-    if (mSupportLocalPlayer) {
-        ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL");
-        AmDmxDevice->dmx_dvr_open(INPUT_LOCAL);
-    } else if (filter->isRecordFilter()) {
-        ALOGD("[Demux] dmx_dvr_open INPUT_DEMOD");
-        mAmDvrDevice->AM_DVR_Open(INPUT_DEMOD);
-    }
-
     if (tsFilterType == DemuxTsFilterType::SECTION
         || tsFilterType == DemuxTsFilterType::VIDEO
         || tsFilterType == DemuxTsFilterType::AUDIO) {
@@ -429,6 +418,8 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
         case DvrType::PLAYBACK:
             ALOGD("DvrType::PLAYBACK");
             mDvrPlayback = new Dvr(type, bufferSize, cb, this);
+            ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL");
+            AmDmxDevice->dmx_dvr_open(INPUT_LOCAL);
             if (!mDvrPlayback->createDvrMQ()) {
                 _hidl_cb(Result::UNKNOWN_ERROR, mDvrPlayback);
                 return Void();
@@ -446,6 +437,8 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
         case DvrType::RECORD:
             ALOGD("DvrType::RECORD");
             mDvrRecord = new Dvr(type, bufferSize, cb, this);
+            ALOGD("[Demux] dmx_dvr_open INPUT_DEMOD");
+            mAmDvrDevice->AM_DVR_Open(INPUT_DEMOD);
             if (!mDvrRecord->createDvrMQ()) {
                 _hidl_cb(Result::UNKNOWN_ERROR, mDvrRecord);
                 return Void();
@@ -497,7 +490,7 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
     set<uint32_t>::iterator it;
     for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
         if (pid == mFilters[*it]->getTpid()) {
-            if (mSupportLocalPlayer) {
+            if (1) {
                 AmDmxDevice->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000);
             } else {
                 mFilters[*it]->updateFilterOutput(data);
