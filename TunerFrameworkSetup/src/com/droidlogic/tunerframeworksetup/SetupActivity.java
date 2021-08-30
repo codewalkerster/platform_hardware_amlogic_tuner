@@ -1861,7 +1861,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                         case 0x03:
                         case 0x04:
                             mAudioMimeType = MediaFormat.MIMETYPE_AUDIO_MPEG;
-                            mAudioformat = new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_MP3).setSampleRate(4001).setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            mAudioformat = new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_MP3).setSampleRate(48000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                                                 .build();
                             break;
                         case 0x0e:
@@ -1871,7 +1871,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                         case 0x11:
                             Log.d(TAG, "aac format audio.");
                             mAudioMimeType = MediaFormat.MIMETYPE_AUDIO_AAC;
-                            mAudioformat = new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_AAC_LC).setSampleRate(4001).setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            mAudioformat = new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_AAC_HE_V2).setSampleRate(48000).setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                                                 .build();
                             break;
                         case 0x81:
