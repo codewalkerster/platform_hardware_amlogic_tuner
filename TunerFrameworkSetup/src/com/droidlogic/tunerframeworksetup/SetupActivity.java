@@ -290,10 +290,8 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private String mVideoMimeType = MediaCodecPlayer.TEST_MIME_TYPE;
     private String mAudioMimeType = MediaCodecPlayer.AUDIO_MIME_TYPE;
     private boolean mPassthroughMode = true;
-    private boolean mUseCodec2 = false;
+    private boolean mEnableFlowCtl = false;
     private int mAvSyncHwId = 0;
-    private int mOmxAvSyncHwId = 0;
-    private int mAvSyncIdPassthroughFlag = 1 << 16;
     private int mDemuxId = 0;
     public int mVideoFilterId = 0;
     public int mAudioFilterId = 0;
@@ -325,6 +323,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private static final String WVCAS_PROP_CONTENT_TYPE = "vendor.wvcas.content.type";
     private static final String WVCAS_PROP_CUSTOMER_DATA = "vendor.wvcas.customer.data";
     private static final String TF_PROP_ENABLE_PASSTHROUGH = "vendor.tf.enable.passthrough";
+    private static final String TF_PROP_ENABLE_FLOW_CONTROL = "vendor.tf.enable.flow_control";
     private static final String TF_PROP_DUMP_ES_DATA = "vendor.tf.dump.es";
     private static final String TF_DEBUG_ENABLE_LOCAL_PLAY = "vendor.tf.enable.localplay";
     private static final String TF_PROP_ENABLE_DVR         = "vendor.tf.enable.dvr";
@@ -346,6 +345,11 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         if (mEnablePassthrough != null && mEnablePassthrough.length() > 0)
             mPassthroughMode = Integer.parseInt(mEnablePassthrough) == 0 ? false : true;
         Log.d(TAG, "mPassthroughMode: " + mPassthroughMode);
+
+        String mEnableFlowCtlStr = getPropString("getprop " + TF_PROP_ENABLE_FLOW_CONTROL);
+        if (mEnableFlowCtlStr != null && mEnableFlowCtlStr.length() > 0)
+            mEnableFlowCtl = Integer.parseInt(mEnableFlowCtlStr) == 0 ? false : true;
+        Log.d(TAG, "mEnableFlowCtl: " + mEnableFlowCtl);
 
         String mEnableDumpEs = getPropString("getprop " + TF_PROP_DUMP_ES_DATA);
         if (mEnableDumpEs != null && mEnableDumpEs.length() > 0)
@@ -1933,14 +1937,8 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
             Log.d(TAG, "mAudioFilterId:" + mAudioFilterId);
         }
         Log.d(TAG, "mAvSyncHwId:" + mAvSyncHwId);
-        if (mAvSyncHwId != 0)
-            mOmxAvSyncHwId = mAvSyncHwId | mAvSyncIdPassthroughFlag;
         mVideoMediaFormat.setInteger(VIDEO_FILTER_ID_KEY, mVideoFilterId);
-        if (mUseCodec2) {
-            mVideoMediaFormat.setInteger(HW_AV_SYNC_ID_KEY, mAvSyncHwId);
-        } else {
-            mVideoMediaFormat.setInteger("audio-hw-sync", mOmxAvSyncHwId);
-        }
+        mVideoMediaFormat.setInteger(HW_AV_SYNC_ID_KEY, mAvSyncHwId);
         mVideoMediaFormat.setFeatureEnabled(CodecCapabilities.FEATURE_TunneledPlayback, true);
     }
 
@@ -2486,7 +2484,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     }
 
     public void onFrameRendered(MediaCodec codec, long presentationTimeUs, long nanoTime) {
-        if (mDecoderFreeBufPercentage.get() != presentationTimeUs && mPassthroughMode) {
+        if (mDecoderFreeBufPercentage.get() != presentationTimeUs && mPassthroughMode && mEnableFlowCtl) {
             mDecoderFreeBufPercentage.set(presentationTimeUs);
             if (presentationTimeUs < MIN_DECODER_BUFFER_FREE_THRESHOLD / 2)
                 Log.d(TAG, "onFrameRendered decoderFreeBufPercentage = " + presentationTimeUs + " nanoTime= " + nanoTime);
