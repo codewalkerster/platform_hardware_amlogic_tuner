@@ -217,6 +217,7 @@ class Demux : public IDemux {
     const bool DEBUG_DEMUX = false;
     sp<MediaSyncWrap> mMediaSyncWrap;
     sp<AmDvr> mAmDvrDevice;
+    int mAvSyncHwId = -1;
     //int mfd;
 };
 

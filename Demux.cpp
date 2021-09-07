@@ -304,11 +304,15 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     Result status;
 
     int fid;
-    int avSyncHwId = -1;
+
+    if (mAvSyncHwId != -1) {
+        _hidl_cb(Result::SUCCESS, mAvSyncHwId);
+        return Void();
+    }
 
     if (filter == nullptr) {
         ALOGE("[Demux] filter is null!");
-        _hidl_cb(Result::INVALID_STATE, avSyncHwId);
+        _hidl_cb(Result::INVALID_STATE, mAvSyncHwId);
         return Void();
     }
 
@@ -319,7 +323,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
 
     if (status != Result::SUCCESS) {
         ALOGE("[Demux] Can't get filter Id.");
-        _hidl_cb(Result::INVALID_STATE, avSyncHwId);
+        _hidl_cb(Result::INVALID_STATE, mAvSyncHwId);
         return Void();
     }
 
@@ -327,21 +331,21 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     if ((isPassthroughMediaFilterId(fid) && !mPlaybackFilterIds.empty())
     || (mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty())) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
-        avSyncHwId = mMediaSyncWrap->getAvSyncHwId(mDemuxId, avPid);
-        ALOGD("[Demux] mAvFilterId:%d avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, avSyncHwId);
-        _hidl_cb(Result::SUCCESS, avSyncHwId);
+        mAvSyncHwId = mMediaSyncWrap->getAvSyncHwId(mDemuxId, avPid);
+        ALOGD("[Demux] mAvFilterId:%d avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
+        _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
 
     } else if (mFilters[fid]->isPcrFilter() && !mPcrFilterIds.empty()) {
         // Return the lowest pcr filter id in the default implementation as the av sync id
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
-        avSyncHwId = mMediaSyncWrap->getAvSyncHwId(mDemuxId, pcrPid);
-        ALOGD("[Demux] mPcrFilterId:%d pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, avSyncHwId);
-        _hidl_cb(Result::SUCCESS, avSyncHwId);
+        mAvSyncHwId = mMediaSyncWrap->getAvSyncHwId(mDemuxId, pcrPid);
+        ALOGD("[Demux] mPcrFilterId:%d pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
+        _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
     } else {
         ALOGD("[Demux] No pcr or No media filter opened.");
-        _hidl_cb(Result::INVALID_STATE, avSyncHwId);
+        _hidl_cb(Result::INVALID_STATE, mAvSyncHwId);
         return Void();
     }
 }
