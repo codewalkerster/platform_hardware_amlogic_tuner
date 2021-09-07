@@ -116,6 +116,8 @@ class Demux : public IDemux {
     sp<AmDvr> getAmDvrDevice();
     void addPassthroughMediaFilterId(uint32_t filterId);
     bool isPassthroughMediaFilterId(uint32_t filterId);
+    bool checkPesFilterId(uint32_t filterId);
+    void combinePesData(uint32_t filterId);
 
   private:
     // Tuner service
@@ -147,6 +149,8 @@ class Demux : public IDemux {
 
     uint32_t mDemuxId;
     uint32_t mCiCamId;
+
+    set<uint32_t> mPesFilterIds;
     set<uint32_t> mPcrFilterIds;
     /**
      * Record the last used filter id. Initial value is -1.

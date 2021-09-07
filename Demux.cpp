@@ -97,6 +97,63 @@ void Demux::postDvrData(void* demux) {
     dmxDev->startRecordFilterDispatcher();
 }
 
+void Demux::combinePesData(uint32_t filterId) {
+    ALOGV("%s/%d", __FUNCTION__, __LINE__);
+    uint8_t tmpbuf[8] = {0};
+    uint8_t tmpbuf1[8] = {0};
+    int result = -1;
+    int packetLen = 0;
+    int64_t packetHeader = 0;
+    vector<uint8_t> pesData;
+    int size = 1;
+    while (AmDmxDevice->AM_DMX_Read(filterId, tmpbuf, &size) == 0) {
+        packetHeader = ((packetHeader<<8) & 0x000000ffffffff00) | tmpbuf[0];
+        //ALOGD("[Demux] packetHeader = %llx", packetHeader);
+        if ((packetHeader & 0xffffffff) == 0x000001bd) {
+            ALOGD("## [Demux] combinePesData %x,%llx,-----------\n", tmpbuf[0], packetHeader & 0xffffffffff);
+            size = 2;
+            result = AmDmxDevice->AM_DMX_Read(filterId, tmpbuf1, &size);
+            packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
+            ALOGD("[Demux] packetLen = %d", packetLen);
+            pesData.resize(packetLen + 6);
+            pesData[0] = 0x0;
+            pesData[1] = 0x0;
+            pesData[2] = 0x01;
+            pesData[3] = 0xbd;
+            pesData[4] = tmpbuf1[0];
+            pesData[5] = tmpbuf1[1];
+            int readLen = 0;
+            int dataLen = 0;
+            do {
+                dataLen = packetLen - readLen;
+                result = AmDmxDevice->AM_DMX_Read(filterId, pesData.data() + 6 + readLen, &dataLen);
+                if (result == 0) {
+                    readLen += dataLen;
+                }
+            } while(readLen < packetLen);
+
+            updateFilterOutput(filterId, pesData);
+            startFilterHandler(filterId);
+            return;
+        } else {
+            // advance header, not report error if no problem.
+            if (tmpbuf[0] == 0xFF) {
+                if (packetHeader == 0xFF || packetHeader == 0xFFFF || packetHeader == 0xFFFFFF
+                    || packetHeader == 0xFFFFFFFF || packetHeader == 0xFFFFFFFFFF) {
+                    continue;
+                }
+            } else if (tmpbuf[0] == 0) {
+                if (packetHeader == 0xff00 || packetHeader == 0xff0000 || packetHeader == 0xffffffff00 || packetHeader == 0xffffff0000) {
+                    continue;
+                }
+            } else if (tmpbuf[0] == 1 && (packetHeader == 0xffff000001 || packetHeader == 0xff000001)) {
+                continue;
+            }
+        }
+    }
+
+}
+
 void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     vector<uint8_t> tmpData;
     vector<uint8_t> tmpSectionData;
@@ -195,17 +252,23 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             }
         }
     } else {
-        tmpSectionData.resize(sectionSize);
-        int readRet = dmxDev->getAmDmxDevice()
-                      ->AM_DMX_Read(fid, tmpSectionData.data(), &sectionSize);
-        if (readRet != 0) {
-            ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
-            return;
+        bool isPesFilterId = dmxDev->checkPesFilterId(fid);
+        if (isPesFilterId) {
+            ALOGD("start pes data combine fid = %d", fid);
+            dmxDev->combinePesData(fid);
         } else {
-            ALOGV("fid =%d section data size:%d", fid, sectionSize);
             tmpSectionData.resize(sectionSize);
-            dmxDev->updateFilterOutput(fid, tmpSectionData);
-            dmxDev->startFilterHandler(fid);
+            int readRet = dmxDev->getAmDmxDevice()
+                          ->AM_DMX_Read(fid, tmpSectionData.data(), &sectionSize);
+            if (readRet != 0) {
+                ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
+                return;
+            } else {
+                ALOGV("fid =%d section data size:%d", fid, sectionSize);
+                tmpSectionData.resize(sectionSize);
+                dmxDev->updateFilterOutput(fid, tmpSectionData);
+                dmxDev->startFilterHandler(fid);
+            }
         }
     }
 }
@@ -261,7 +324,8 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
 
     if (tsFilterType == DemuxTsFilterType::SECTION
         || tsFilterType == DemuxTsFilterType::VIDEO
-        || tsFilterType == DemuxTsFilterType::AUDIO) {
+        || tsFilterType == DemuxTsFilterType::AUDIO
+        || tsFilterType == DemuxTsFilterType::PES) {
         AmDmxDevice->AM_DMX_SetCallback(dmxFilterIdx, this->postData, this);
     } else if (tsFilterType == DemuxTsFilterType::PCR) {
         AmDmxDevice->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
@@ -270,6 +334,10 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
     }
 
     mFilters[dmxFilterIdx] = filter;
+    if (tsFilterType == DemuxTsFilterType::PES) {
+        mPesFilterIds.insert(dmxFilterIdx);
+        ALOGD("Insert PES filter");
+    }
     if (tsFilterType == DemuxTsFilterType::PCR) {
         mPcrFilterIds.insert(dmxFilterIdx);
         ALOGD("Insert pcr filter");
@@ -332,6 +400,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     || (mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty())) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
         mAvSyncHwId = mMediaSyncWrap->getAvSyncHwId(mDemuxId, avPid);
+        mMediaSyncWrap->bindAvSyncId(mAvSyncHwId);
         ALOGD("[Demux] mAvFilterId:%d avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
@@ -340,6 +409,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
         // Return the lowest pcr filter id in the default implementation as the av sync id
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
         mAvSyncHwId = mMediaSyncWrap->getAvSyncHwId(mDemuxId, pcrPid);
+        mMediaSyncWrap->bindAvSyncId(mAvSyncHwId);
         ALOGD("[Demux] mPcrFilterId:%d pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
@@ -351,7 +421,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
 }
 
 Return<void> Demux::getAvSyncTime(AvSyncHwId avSyncHwId, getAvSyncTime_cb _hidl_cb) {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
     uint64_t avSyncTime = -1;
     /*
@@ -369,6 +439,7 @@ Return<void> Demux::getAvSyncTime(AvSyncHwId avSyncHwId, getAvSyncTime_cb _hidl_
         time = mMediaSyncWrap->getAvSyncTime();
         avSyncTime = 0x1FFFFFFFF & ((9*time)/100);
     }
+    //ALOGD("%s/%d avSyncTime = %llu", __FUNCTION__, __LINE__, avSyncTime);
 
     _hidl_cb(Result::SUCCESS, avSyncTime);
     return Void();
@@ -385,6 +456,7 @@ Return<Result> Demux::close() {
     mPlaybackFilterIds.clear();
     mRecordFilterIds.clear();
     mPcrFilterIds.clear();
+    mPesFilterIds.clear();
     mFilters.clear();
     mLastUsedFilterId = -1;
 
@@ -478,10 +550,13 @@ Result Demux::removeFilter(uint32_t filterId) {
     if (mDvrPlayback != nullptr) {
         mDvrPlayback->removePlaybackFilter(filterId);
     }
+    if (checkPesFilterId(filterId)) {
+        mPesFilterIds.erase(filterId);
+        ALOGD("%s/%d fid = %d", __FUNCTION__, __LINE__, filterId);
+    }
     mPlaybackFilterIds.erase(filterId);
     mRecordFilterIds.erase(filterId);
     mFilters.erase(filterId);
-
     return Result::SUCCESS;
 }
 
@@ -679,6 +754,15 @@ bool Demux::isPassthroughMediaFilterId(uint32_t filterId) {
     std::lock_guard<std::mutex> lock(mFilterLock);
     set<uint32_t>::iterator it;
     for (it = mPassThroughMediaFilterIds.begin(); it != mPassThroughMediaFilterIds.end(); it++) {
+        if (*it == filterId)
+            return true;
+    }
+    return false;
+}
+
+bool Demux::checkPesFilterId(uint32_t filterId) {
+    set<uint32_t>::iterator it;
+    for (it = mPesFilterIds.begin(); it != mPesFilterIds.end(); it++) {
         if (*it == filterId)
             return true;
     }

@@ -278,6 +278,24 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     }
                     break;
                 }
+                case DemuxTsFilterType::PES: {
+                    ALOGD("%s subType:PES", __FUNCTION__);
+                    struct dmx_pes_filter_params pesp;
+                    memset(&pesp, 0, sizeof(pesp));
+                    pesp.pid = mTpid;
+                    pesp.output = DMX_OUT_TAP;
+                    pesp.pes_type = DMX_PES_SUBTITLE;
+                    pesp.input = DMX_IN_FRONTEND;
+                    if (mDemux->getAmDmxDevice()
+                        ->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0 ) {
+                        return Result::UNAVAILABLE;
+                    }
+                    if (mDemux->getAmDmxDevice()
+                        ->AM_DMX_SetPesFilter(mFilterId, &pesp) != 0 ) {
+                        return Result::UNAVAILABLE;
+                    }
+                    break;
+                }
                 default:
                     break;
             }
@@ -623,6 +641,8 @@ Result Filter::startPesFilterHandler() {
         return Result::SUCCESS;
     }
 
+
+    #if 0
     for (int i = 0; i < mFilterOutput.size(); i += 188) {
         if (mPesSizeLeft == 0) {
             uint32_t prefix = (mFilterOutput[i + 4] << 16) | (mFilterOutput[i + 5] << 8) |
@@ -675,9 +695,31 @@ Result Filter::startPesFilterHandler() {
         int size = mFilterEvent.events.size();
         mFilterEvent.events.resize(size + 1);
         mFilterEvent.events[size].pes(pesEvent);
+        fillDataToDecoder();
         mPesOutput.clear();
     }
+    #endif
+            // size match then create event
+    if (!writeDataToFilterMQ(mFilterOutput)) {
+        ALOGD("[Filter] pes data write failed");
+        mFilterOutput.clear();
+        return Result::INVALID_STATE;
+    }
+    maySendFilterStatusCallback();
+    DemuxFilterPesEvent pesEvent;
+    pesEvent = {
+            // temp dump meta data
+            .streamId = mFilterOutput[3],
+            .dataLength = static_cast<uint16_t>(mFilterOutput.size()),
+    };
+    if (DEBUG_FILTER) {
+        ALOGD("[Filter] assembled pes data length %d", pesEvent.dataLength);
+    }
 
+    int size = mFilterEvent.events.size();
+    mFilterEvent.events.resize(size + 1);
+    mFilterEvent.events[size].pes(pesEvent);
+    fillDataToDecoder();
     mFilterOutput.clear();
 
     return Result::SUCCESS;
