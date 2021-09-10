@@ -105,6 +105,7 @@ import java.io.FileOutputStream;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class SetupActivity extends Activity implements OnTuneEventListener, ScanCallback, OnPlaybackStatusChangedListener, OnRecordStatusChangedListener, MediaCodecPlayer.onLicenseReceiveListener, MediaCodec.OnFrameRenderedListener {
 
@@ -137,6 +138,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private ClickListener mClickListener = null;
 
     private Handler mUiHandler = null;
+    private Handler mCasHandler = null;
     private HandlerThread mHandlerThread = null;
     private Handler mTaskHandler = null;
     private MediaCodecPlayer mMediaCodecPlayer = null;
@@ -165,48 +167,15 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private AtomicBoolean mDvrReadStart = new AtomicBoolean(false);
     private AtomicBoolean mDvrReadThreadExit = new AtomicBoolean(true);
 
-    private static final int WV_CA_ID = 0x4AD4;
-
-    private static final int WVCAS_INDIVIDUALIZATION_REQUEST = 1000;
-    private static final int WVCAS_INDIVIDUALIZATION_RESPONSE = 1001;
-    private static final int WVCAS_INDIVIDUALIZATION_COMPLETE = 1002;
-
-    private static final int WVCAS_LICENSE_REQUEST = 2000;
-    private static final int WVCAS_LICENSE_RESPONSE = 2001;
-    private static final int WVCAS_ERROR_DEPRECATED = 2002;
-    private static final int WVCAS_LICENSE_RENEWAL_REQUEST = 2003;
-    private static final int WVCAS_LICENSE_RENEWAL_RESPONSE = 2004;
-    private static final int WVCAS_LICENSE_RENEWAL_URL = 2005;
-    private static final int WVCAS_LICENSE_CAS_READY = 2006;
-    private static final int WVCAS_LICENSE_CAS_RENEWAL_READY = 2007;
-    private static final int WVCAS_LICENSE_REMOVAL = 2008;
-    private static final int WVCAS_LICENSE_REMOVED = 2009;
-
-    private static final int WVCAS_SESSION_ID   = 3000;
-    private static final int WVCAS_SET_CAS_SOC_ID   = 3001;
-    private static final int WVCAS_SET_CAS_SOC_DATA = 3002;
-
-    private static final int WVCAS_UNIQUE_ID = 4000;
-    private static final int WVCAS_QUERY_UNIQUE_ID = 4001;
-
-    private static final int WVCAS_ERROR = 5000;
-
-    private static final int WVCAS_SET_PARENTAL_CONTROL_AGE = 6000;
-    private static final int WVCAS_DEPRECATED_PARENTAL_CONTROL_AGE_UPDATED = 6001;
-    private static final int WVCAS_ACCESS_DENIED_BY_PARENTAL_CONTROL = 6002;
-    private static final int WVCAS_AGE_RESTRICTION_UPDATED = 6003;
-
     /**
      * The event to indicate that the status of CAS system is changed by the removal or insertion of
      * physical CAS modules.
      */
-    public static final int WVCAS_PLUGIN_STATUS_PHYSICAL_MODULE_CHANGED = 0
-            /*android.hardware.cas.V1_2.StatusEvent.PLUGIN_PHYSICAL_MODULE_CHANGED*/;
+    public static final int CAS_PLUGIN_STATUS_PHYSICAL_MODULE_CHANGED = 0;
     /**
      * The event to indicate that the number of CAS system's session is changed.
      */
-    public static final int WVCAS_PLUGIN_STATUS_SESSION_NUMBER_CHANGED = 1
-            /*android.hardware.cas.V1_2.StatusEvent.PLUGIN_SESSION_NUMBER_CHANGED*/;
+    public static final int CAS_PLUGIN_STATUS_SESSION_NUMBER_CHANGED = 1;
 
     private static final byte[] EMPTY_PSSH = new byte[0];
     private static final byte[] GOOGLE_TEST_PSSH = {
@@ -226,8 +195,6 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private Looper mLooper;
     private MediaCas mMediaCas = null;
     private MediaCas.EventListener mListener = null;
-    private MediaCas.Session mCasCurSession = null;
-    private int mCasCurSessionId = -1;
     private Descrambler mDescrambler = null;
 
     private boolean resolutionSupported = false;
@@ -242,15 +209,10 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
 
     private static final int MAX_DSC_CHANNEL_NUM = 2;
     private static final int MAX_CAS_ECM_TID_NUM = 4;
+    private static final int CAS_KEY_TOKEN_SIZE = 4;
 
     private PmtInfo mPmtInfo = null;
     private PatInfo mPatInfo = null;
-
-    private int mEcmPidNum = 0;
-    private DscChannelInfo[] mEsCasInfo = new DscChannelInfo[MAX_DSC_CHANNEL_NUM];
-    private byte[] mCasKeyToken = null;
-    private int mCasKeyTokenIdx = 0;
-    private int mCaSysId = -1;
 
     public static final int PAT_PID = 0x0;
     public static final int PAT_TID = 0x0;
@@ -283,10 +245,17 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private long mDvrHighThreshold = DEFAULT_DVR_HIGH_THRESHOLD;
     private int frequency = -1;
     private File mDumpFile = null;
-    private AtomicBoolean mHasSetKeyToken = new AtomicBoolean(false);
+
     private AtomicBoolean mPlayerStart = new AtomicBoolean(false);
-    private AtomicBoolean mLicenseReceived = new AtomicBoolean(false);
+
+    private AtomicBoolean mCasProvisioned = new AtomicBoolean(false);
+    private AtomicBoolean mCasLicenseReceived = new AtomicBoolean(false);
+    private AtomicInteger mCurCasIdx = new AtomicInteger(-1);
+    private AtomicBoolean mHasSetPrivateData = new AtomicBoolean(false);
     private boolean mIsCasPlayback = false;
+    private int mEcmPidNum = 0;
+    private DscChannelInfo[] mEsCasInfo = new DscChannelInfo[MAX_DSC_CHANNEL_NUM];
+    private AtomicInteger mCasSessionNum = new AtomicInteger(0);
     private String mVideoMimeType = MediaCodecPlayer.TEST_MIME_TYPE;
     private String mAudioMimeType = MediaCodecPlayer.AUDIO_MIME_TYPE;
     private boolean mPassthroughMode = true;
@@ -306,6 +275,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private boolean mDumpVideoEs = false;
     private boolean mEnableLocalPlay = false;
     private boolean mEnableDvr = false;
+    private boolean mEnableExtendEcmTid = false;
 
     private String mScanMode = "Dvbt";
     private String mStreamMode = "tuner";
@@ -327,6 +297,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private static final String TF_PROP_DUMP_ES_DATA = "vendor.tf.dump.es";
     private static final String TF_DEBUG_ENABLE_LOCAL_PLAY = "vendor.tf.enable.localplay";
     private static final String TF_PROP_ENABLE_DVR         = "vendor.tf.enable.dvr";
+    private static final String CAS_PROP_EXTEND_ECMTID = "vendor.cas.extend.ecmtid";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -382,6 +353,11 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
             mEnableDvr = Integer.parseInt(enableDvr) == 0 ? false : true;
         Log.d(TAG, "mEnableDvr: " + mEnableDvr);
 
+        String enableExtendEcmTid = getPropString("getprop " + CAS_PROP_EXTEND_ECMTID);
+        if (enableExtendEcmTid != null && enableExtendEcmTid.length() > 0)
+            mEnableExtendEcmTid = Integer.parseInt(enableExtendEcmTid) == 0 ? false : true;
+        Log.d(TAG, "mEnableExtendEcmTid: " + mEnableExtendEcmTid);
+
         try {
             Log.d(TAG, "Create temp file");
             tmpFile = File.createTempFile("tuner", "dvr_test");
@@ -393,10 +369,8 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
 
     @Override
     public void onLicenseReceive() {
-        if (mMediaCas != null) {
-            mLicenseReceived.set(true);
-            Log.d(TAG, "onLicenseReceive ok");
-        }
+        mCasLicenseReceived.compareAndSet(false, true);
+        Log.d(TAG, "License received");
     }
 
     @Override
@@ -649,71 +623,22 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         mLicenseLister = l;
     }
 
-    private Handler mHandler = new Handler() {
-        public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case PROVISION_COMPLETE_MSG:
-                    if (resolutionSupported) {
-                        try {
-                            mCasCurSession = mMediaCas.openSession();
-                            Log.d(TAG, "mCasCurSession: " + mCasCurSession);
-                        } catch (MediaCasException e) {
-                            Log.e(TAG, "mHandler:exception:" + Log.getStackTraceString(e));
-                        }
-                    } else {
-                        Log.e(TAG, "mHandler:Resolution is not support!");
-                    }
-                    break;
-                case OPEN_SESSION_COMPLETE_MSG:
-                    Log.i(TAG, "Ready to setPrivateData");
-                    try {
-                        if (mPmtInfo.mPrivateDataLen > 0)
-                            mCasCurSession.setPrivateData(mPmtInfo.mPrivateData);
-                        break;
-                    } catch (MediaCasException e) {
-                            Log.e(TAG, "mHandler:exception:" + Log.getStackTraceString(e));
-                    }
-                case LICENSED_REV_MSG:
-                    if (mLicenseLister != null) {
-                        mLicenseLister.onLicenseReceive();
-                    }
-                    break;
-                case LICENSED_TIMEOUT_MSG:
-                    Log.e(TAG, "mHandler:Get license timeout!");
-                    break;
-                default:
-                    Log.e(TAG, "mHandler:Unkonwn msg!");
-                    break;
-            }
-        }
-    };
-
-    private boolean deviceHasMediaCas() {
-        if (!MediaCas.isSystemIdSupported(WV_CA_ID)) {
-            Log.w(TAG, "Widevine CAS is not supported!");
-            return false;
-        } else {
-            Log.i(TAG, "Widevine CAS is supported");
-        }
-        return true;
-    }
-
     public byte[] sendProvisionRequest(byte[] data) throws Exception {
         Exception ex = null;
         Post.Response response = null;
         try {
             String uri = CERT_URL + "&signedRequest=" + (new String(data, "UTF-8"));
-            Log.i(TAG, "Send Provisioning Request: URI=" + uri);
+            Log.i(TAG, "Send provision request: URI=" + uri);
             final Post post = new Post(uri, null);
             post.setProperty("Connection", "close");
             post.setProperty("Content-Length", "0");
 
             response = post.send();
             if (response.code != 200) {
-                ex = new Exception("Provioning server returned HTTP error code " + response.code);
+                ex = new Exception("Provision server returned HTTP error code " + response.code);
             }
             if (response.body == null) {
-                ex = new Exception("No provisioning response!");
+                ex = new Exception("No provision response!");
             }
             return response.body;
         } catch (Exception e) {
@@ -761,144 +686,206 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     }
 
     private MediaCas startMediaCas() {
+        Log.d(TAG, "Create MediaCas mCaSystemId:" + mPmtInfo.mCaSystemId);
+        try {
+            if (mMediaCas == null)
+                mMediaCas = new MediaCas(mPmtInfo.mCaSystemId);
+        } catch (MediaCasException e) {
+            Log.e(TAG, "MediaCasException:" + Log.getStackTraceString(e));
+        }
+
+        mListener = new MediaCas.EventListener() {
+            @Override
+            public void onEvent(MediaCas mMediaCas, int event, int arg, byte[] data) {
+                String data_str = new String(data);
+                Log.d(TAG, "MediaCas event id: " + event);
+                Message message = Message.obtain();
+                switch (event) {
+                    case WvCasEventId.WVCAS_INDIVIDUALIZATION_REQUEST :
+                        Log.d(TAG, "WVCAS_INDIVIDUALIZATION_REQUEST");
+                        try {
+                            byte[] response = sendProvisionRequest(data);
+                            mMediaCas.sendEvent(WvCasEventId.WVCAS_INDIVIDUALIZATION_RESPONSE, 0, response);
+                            //TimeUnit.SECONDS.sleep(2);
+                        } catch (Exception ex) {
+                            Log.e(TAG, "Provision Exception: " + ex.toString());
+                        }
+                        break;
+                    case WvCasEventId.WVCAS_LICENSE_REQUEST :
+                    case WvCasEventId.WVCAS_LICENSE_RENEWAL_REQUEST :
+                        try {
+                            byte[] response = sendLicenseRequest(data);
+                            if (response == null) {
+                                Log.e(TAG, "License response is null!");
+                                break;
+                            } else {
+                                Log.d(TAG, "License Response: " + Base64.encodeToString(response, Base64.NO_WRAP));
+                                mMediaCas.sendEvent(event == WvCasEventId.WVCAS_LICENSE_REQUEST ?
+                                    WvCasEventId.WVCAS_LICENSE_RESPONSE : WvCasEventId.WVCAS_LICENSE_RENEWAL_RESPONSE, 0, response);
+                            }
+                        } catch (Exception ex) {
+                            Log.e(TAG, "License Request Exception: " + ex.toString());
+                        }
+                        break;
+                    case WvCasEventId.WVCAS_INDIVIDUALIZATION_COMPLETE :
+                        Log.d(TAG, "WVCAS_INDIVIDUALIZATION_COMPLETE");
+                        mCasProvisioned.compareAndSet(false, true);
+                        mCasHandler.removeMessages(PROVISION_COMPLETE_MSG);
+                        message.what = PROVISION_COMPLETE_MSG;
+                        mCasHandler.sendMessage(message);
+                        break;
+                    case WvCasEventId.WVCAS_SESSION_ID :
+                        message.arg1 = mCurCasIdx.get();
+                        Log.d(TAG, "WVCAS_SESSION_ID " + "mCurCasIdx:" +  message.arg1 + " arg:" + arg + " data:" + data_str);
+                        mEsCasInfo[message.arg1].mCasSessionId = arg;
+                        mCasSessionNum.incrementAndGet();
+                        Log.d(TAG, "mCasSessionNum: " + mCasSessionNum.get());
+                        mCasHandler.removeMessages(OPEN_SESSION_COMPLETE_MSG);
+                        message.what = OPEN_SESSION_COMPLETE_MSG;
+                        mCasHandler.sendMessage(message);
+                        break;
+                    case WvCasEventId.WVCAS_LICENSE_CAS_READY :
+                    case WvCasEventId.WVCAS_LICENSE_CAS_RENEWAL_READY :
+                        Log.d(TAG, "License Ready " + "arg:" + arg + " data:" + data_str);
+                        mCasHandler.removeMessages(LICENSED_REV_MSG);
+                        message.what = LICENSED_REV_MSG;
+                        mCasHandler.sendMessage(message);
+                        break;
+                    case WvCasEventId.WVCAS_LICENSE_RENEWAL_URL :
+                    case WvCasEventId.WVCAS_LICENSE_REMOVED :
+                    case WvCasEventId.WVCAS_LICENSE_NEW_EXPIRY_TIME :
+                    case WvCasEventId.WVCAS_UNIQUE_ID :
+                        Log.d(TAG, "Event Info " + "arg:" + arg + " data:" + data_str);
+                        break;
+                    case WvCasEventId.WVCAS_ERROR :
+                        Log.e(TAG, "WVCAS ERROR!");
+                        break;
+                    default:
+                        Log.e(TAG, "MediaCas event: Not supported: " + event);
+                        break;
+                }
+                return;
+            }
+
+            @Override
+            public void onSessionEvent(MediaCas mMediaCas, MediaCas.Session mCasSession, int event, int arg, byte[] data) {
+                String data_str = new String(data);
+                Log.d(TAG, "MediaCas session event id: " + event + " mCasSession:" + mCasSession
+                    + " arg:" + arg + " data:" + data_str);
+                if (event == WvCasEventId.WVCAS_ACCESS_DENIED_BY_PARENTAL_CONTROL) {
+                    Log.d(TAG, "WVCAS_ACCESS_DENIED_BY_PARENTAL_CONTROL");
+                } else if (event == WvCasEventId.WVCAS_AGE_RESTRICTION_UPDATED) {
+                    Log.d(TAG, "WVCAS_AGE_RESTRICTION_UPDATED " + data[0]);
+                    try {
+                        mCasSession.sendSessionEvent(WvCasEventId.WVCAS_SET_PARENTAL_CONTROL_AGE, 0, data);
+                    } catch (Exception ex) {
+                        Log.e(TAG, "License Renewal Request: Exception: " + ex.toString());
+                    }
+                } else if (event == WvCasEventId.WVCAS_ERROR) {
+                    Log.e(TAG, "WVCAS_ERROR");
+                } else {
+                    Log.e(TAG, "MediaCas session event not supported: " + event);
+                }
+            }
+
+            @Override
+            public void onPluginStatusUpdate(MediaCas mMediaCas, int status, int arg) {
+                if (status == CAS_PLUGIN_STATUS_PHYSICAL_MODULE_CHANGED) {
+                    Log.d(TAG, "WVCAS_PLUGIN_STATUS_PHYSICAL_MODULE_CHANGED " + "status:" + status + "arg:" + arg);
+                } else if (status == CAS_PLUGIN_STATUS_SESSION_NUMBER_CHANGED) {
+                    Log.d(TAG, "WVCAS_PLUGIN_STATUS_SESSION_NUMBER_CHANGED " + "status:" + status + "arg:" + arg);
+                } else {
+                    Log.e(TAG, "MediaCas status not supported: " + status);
+                }
+            }
+
+            @Override
+            /**
+             * Notify the listener that the session resources was lost.
+             *
+             * @param mediaCas the MediaCas object to receive this event.
+             */
+            public void onResourceLost(MediaCas mMediaCas) {
+                Log.w(TAG, "Received Cas Resource Reclaim event");
+                mMediaCas.close();
+            }
+        };
+        mMediaCas.setEventListener(mListener, null);
+        mCasHandler = new Handler() {
+            public void handleMessage(Message msg) {
+                int mCasIdx = -1;
+                switch (msg.what) {
+                    case PROVISION_COMPLETE_MSG:
+                        if (!resolutionSupported)
+                            Log.e(TAG, "mHandler:Resolution is not support!");
+                        Log.d(TAG, "PROVISION_COMPLETE_MSG");
+
+                        for (int i = 0; i < MAX_DSC_CHANNEL_NUM; i++) {
+                            int casIdx = i;
+                            int ecmPid = mEsCasInfo[casIdx].getEcmPid();
+                            Log.d(TAG, "casIdx:" + casIdx + " ecmPid:0x" + Integer.toHexString(ecmPid));
+                            if (ecmPid != 0x1fff) {
+                                mCurCasIdx.getAndSet(casIdx);
+                                try {
+                                    mEsCasInfo[casIdx].mCasSession = mMediaCas.openSession(mEsCasInfo[casIdx].mSessionUsage, mEsCasInfo[casIdx].mScramblingMode);
+                                } catch (MediaCasException e) {
+                                  Log.e(TAG, "MediaCasException:" + Log.getStackTraceString(e));
+                                }
+                                Log.d(TAG, "Open cas session casIdx:" + casIdx);
+                                startEcmSectionFilter(casIdx, ecmPid, WVCAS_ECM_TID_128, 0);
+                                startEcmSectionFilter(casIdx, ecmPid, WVCAS_ECM_TID_129, 1);
+                                if (mEnableExtendEcmTid) {
+                                    startEcmSectionFilter(casIdx, ecmPid, WVCAS_TEST_ECM_TID_176, 2);
+                                    startEcmSectionFilter(casIdx, ecmPid, WVCAS_TEST_ECM_TID_177, 3);
+                                }
+                            }
+                        }
+
+                        break;
+                    case OPEN_SESSION_COMPLETE_MSG:
+                        mCasIdx = msg.arg1;
+                        Log.d(TAG, "OPEN_SESSION_COMPLETE_MSG mCasIdx: " + mCasIdx);
+                        mEsCasInfo[mCasIdx].mSessionOpened.compareAndSet(false, true);
+                        try {
+                            if (mPmtInfo.mPrivateData != null && !mHasSetPrivateData.get()) {
+                                Log.i(TAG, "setPrivateData");
+                                mEsCasInfo[mCasIdx].mCasSession.setPrivateData(mPmtInfo.mPrivateData);
+                                mHasSetPrivateData.compareAndSet(false, true);
+                            }
+                            break;
+                        } catch (MediaCasException e) {
+                                Log.e(TAG, "mHandler:exception:" + Log.getStackTraceString(e));
+                        }
+                    case LICENSED_REV_MSG:
+                        if (mLicenseLister != null) {
+                            mLicenseLister.onLicenseReceive();
+                        }
+                        break;
+                    case LICENSED_TIMEOUT_MSG:
+                        Log.e(TAG, "mHandler:Get license timeout!");
+                        break;
+                    default:
+                        Log.e(TAG, "mHandler:Unkonwn msg!");
+                        break;
+                }
+            }
+        };
+
         new Thread() {
             @Override
             public void run() {
-                if (mMediaCas != null) {
-                    Log.e(TAG, "Failed to start MediaCas: already started");
+                if (mMediaCas == null) {
+                    Log.e(TAG, "mMediaCas is null!");
                     return;
-                } else {
-                    Log.d(TAG, "startMediaCas");
                 }
                 // Set up a looper to handle events
                 Looper.prepare();
-
                 // Save the looper so that we can terminate this thread
                 // after we are done with it.
                 mLooper = Looper.myLooper();
 
-                mListener = new MediaCas.EventListener() {
-                    @Override
-                    public void onEvent(MediaCas mMediaCas, int event, int arg, byte[] data) {
-                        String data_str = new String(data);
-                        if (event == WVCAS_INDIVIDUALIZATION_REQUEST) {
-                            try {
-                                byte[] response = sendProvisionRequest(data);
-                                mMediaCas.sendEvent(WVCAS_INDIVIDUALIZATION_RESPONSE, 0, response);
-                                //TimeUnit.SECONDS.sleep(2);
-                            } catch (Exception ex) {
-                                Log.e(TAG, "Provisioning: Exception: " + ex.toString());
-                                return;
-                            }
-                        } else if (event == WVCAS_LICENSE_REQUEST || event == WVCAS_LICENSE_RENEWAL_REQUEST) {
-                            try {
-                                byte[] response = sendLicenseRequest(data);
-                                Log.d(TAG, "License response="
-                                        + Base64.encodeToString(response, Base64.NO_WRAP));
-                                if (event == WVCAS_LICENSE_REQUEST)
-                                    mMediaCas.sendEvent(WVCAS_LICENSE_RESPONSE, 0, response);
-                                else if (event == WVCAS_LICENSE_RENEWAL_REQUEST)
-                                    mMediaCas.sendEvent(WVCAS_LICENSE_RENEWAL_RESPONSE, 0, response);
-                            } catch (Exception ex) {
-                                Log.e(TAG, "License Request: Exception: " + ex.toString());
-                                return;
-                            }
-                        } else if (event == WVCAS_INDIVIDUALIZATION_COMPLETE) {
-                            Log.d(TAG, "WVCAS_INDIVIDUALIZATION_COMPLETE");
-                            mHandler.removeMessages(PROVISION_COMPLETE_MSG);
-                            Message message = Message.obtain();
-                            message.what = PROVISION_COMPLETE_MSG;
-                            mHandler.sendMessage(message);
-                        } else if (event == WVCAS_SESSION_ID) {
-                            mCasCurSessionId = arg;
-                            Log.d(TAG, "mCasSessionId " + "arg:" + arg + " data:" + data_str);
-                            mHandler.removeMessages(OPEN_SESSION_COMPLETE_MSG);
-                            Message message = Message.obtain();
-                            message.what = OPEN_SESSION_COMPLETE_MSG;
-                            mHandler.sendMessage(message);
-                        } else if (event == WVCAS_LICENSE_RENEWAL_REQUEST) {
-                            Log.d(TAG, "WVCAS_LICENSE_RENEWAL_REQUEST");
-                            try {
-                                byte[] response = sendLicenseRequest(data);
-                                Log.d(TAG, "License Renewal response="
-                                        + Base64.encodeToString(response, Base64.NO_WRAP));
-                                mMediaCas.sendEvent(WVCAS_LICENSE_RENEWAL_RESPONSE, 0, response);
-                            } catch (Exception ex) {
-                                Log.e(TAG, "License Renewal Request: Exception: " + ex.toString());
-                                return;
-                            }
-                        } else if (event == WVCAS_LICENSE_CAS_READY) {
-                            Log.d(TAG, "WVCAS_LICENSE_CAS_READY " + "arg:" + arg + " data:" + data_str);
-                            mHandler.removeMessages(LICENSED_REV_MSG);
-                            Message message = Message.obtain();
-                            message.what = LICENSED_REV_MSG;
-                            mHandler.sendMessage(message);
-                        } else if (event == WVCAS_LICENSE_CAS_RENEWAL_READY) {
-                            Log.d(TAG, "WVCAS_LICENSE_CAS_RENEWAL_READY " + "arg:" + arg + " data:" + data_str);
-                            mHandler.removeMessages(LICENSED_REV_MSG);
-                            Message message = Message.obtain();
-                            message.what = LICENSED_REV_MSG;
-                            mHandler.sendMessage(message);
-                        } else if (event == WVCAS_LICENSE_RENEWAL_URL) {
-                            Log.d(TAG, "WVCAS_LICENSE_RENEWAL_URL " + "arg:" + arg + " data:" + data_str);
-                        } else if (event == WVCAS_LICENSE_REMOVED) {
-                            Log.d(TAG, "WVCAS_LICENSE_REMOVED " + "arg:" + arg + " data:" + data_str);
-                        } else if (event == WVCAS_UNIQUE_ID) {
-                            Log.d(TAG, "WVCAS_UNIQUE_ID " + "arg:" + arg + " data:" + data_str);
-                        } else if (event == WVCAS_ERROR) {
-                            Log.d(TAG, "WVCAS_ERROR");
-                        } else {
-                            Log.e(TAG, "MediaCas event: Not supported: " + event);
-                        }
-                    }
-                    @Override
-                    public void onSessionEvent(MediaCas mMediaCas, MediaCas.Session mCasSession, int event, int arg, byte[] data) {
-                        String data_str = new String(data);
-                        Log.i(TAG, "MediaCas session event data:" + data_str + " " + data[0]);
-                        if (event == WVCAS_ACCESS_DENIED_BY_PARENTAL_CONTROL) {
-                            Log.d(TAG, "WVCAS_ACCESS_DENIED_BY_PARENTAL_CONTROL " + "mCasSession:" + mCasSession + "arg:" + arg + "data:" + data_str);
-                        } else if (event == WVCAS_AGE_RESTRICTION_UPDATED) {
-                            Log.d(TAG, "WVCAS_AGE_RESTRICTION_UPDATED " + "mCasSession:" + mCasSession + "arg:" + arg + "data:" + data_str);
-                            try {
-                                mCasSession.sendSessionEvent(WVCAS_AGE_RESTRICTION_UPDATED, 0, data);
-                            } catch (Exception ex) {
-                                Log.e(TAG, "License Renewal Request: Exception: " + ex.toString());
-                            }
-                        } else if (event == WVCAS_ERROR) {
-                            Log.d(TAG, "WVCAS_ERROR");
-                        } else {
-                            Log.e(TAG, "MediaCas session event: Not supported: " + event);
-                        }
-                    }
-                    @Override
-                    public void onPluginStatusUpdate(MediaCas mMediaCas, int status, int arg) {
-                        if (status == WVCAS_PLUGIN_STATUS_PHYSICAL_MODULE_CHANGED) {
-                            Log.d(TAG, "WVCAS_PLUGIN_STATUS_PHYSICAL_MODULE_CHANGED " + "status:" + status + "arg:" + arg);
-                        } else if (status == WVCAS_PLUGIN_STATUS_SESSION_NUMBER_CHANGED) {
-                            Log.d(TAG, "WVCAS_PLUGIN_STATUS_SESSION_NUMBER_CHANGED " + "status:" + status + "arg:" + arg);
-                        } else {
-                            Log.e(TAG, "MediaCas status: Not supported: " + status);
-                        }
-                    }
-                    @Override
-                    /**
-                     * Notify the listener that the session resources was lost.
-                     *
-                     * @param mediaCas the MediaCas object to receive this event.
-                     */
-                    public void onResourceLost(MediaCas mMediaCas) {
-                        Log.w(TAG, "Received Widevine Cas Resource Reclaim event");
-                        mMediaCas.close();
-                    }
-                };
-
                 try {
-                    Log.d(TAG, "new MediaCas");
-                    mMediaCas = new MediaCas(WV_CA_ID);
-                    Thread.sleep(10);
-                    Log.d(TAG, "MediaCas setEventListener");
-                    mMediaCas.setEventListener(mListener, null);
-                    if (mPmtInfo.mPrivateDataLen > 0) {
+                    if (mPmtInfo.mPrivateData != null) {
                         Log.d(TAG, "MediaCas provision with empty pssh");
                         mMediaCas.provision((new String(EMPTY_PSSH, "UTF-8")));
                     } else {
@@ -906,12 +893,14 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                         mMediaCas.provision((new String(GOOGLE_TEST_PSSH, "UTF-8")));
                     }
                 } catch (MediaCasException e) {
-                    Log.e(TAG, "Failed to create MediaCas: " + e.getMessage());
+                    Log.e(TAG, "startMediaCas MediaCasException: " + e.getMessage());
                     return;
-                } catch (InterruptedException e) {
-                    Log.e(TAG, "Failed to create MediaCas 2: " + e.getMessage());
                 } catch (Exception e) {
-                    Log.e(TAG, "Failed to create MediaCas 3: " + e.getMessage());
+                    Log.e(TAG, "startMediaCas Exception: " + e.getMessage());
+                    if (e.getMessage() == null) {
+                        Log.d(TAG, "startMediaCas StackTrace: " + Log.getStackTraceString(e));
+                    }
+                    return;
                 }
                 Looper.loop();  // Blocks forever until Looper.quit() is called.
             }
@@ -928,22 +917,27 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         }
         MediaCodecList mcl = new MediaCodecList(MediaCodecList.ALL_CODECS);
         if (mcl.findDecoderForFormat(format) == null) {
-            Log.i(TAG, "could not find codec for " + format);
+            Log.e(TAG, "could not find codec for " + format);
             return false;
         }
         return true;
     }
 
-    public void testWidevineCasPlayback(String MIME_TYPE) throws Exception {
-        Log.i(TAG, "Test Widevine Cas Playback");
+    public boolean setUpCasPlayback(String MIME_TYPE) throws Exception {
+        Log.i(TAG, "setUpCasPlayback");
         if (!(resolutionSupported = isResolutionSupported(MIME_TYPE, new String[0], 720, 576))) {
-            Log.i(TAG, "Device does not support "
-                    + 720 + "x" + 576 + " resolution for " + MIME_TYPE);
-            return;
+            Log.e(TAG, "Device does not support " + 720 + "x" + 576 + " resolution for " + MIME_TYPE);
+            return false;
         }
-        if (deviceHasMediaCas()) {
-            startMediaCas();
+        if (!MediaCas.isSystemIdSupported(mPmtInfo.mCaSystemId)) {
+            Log.e(TAG, "mCaSystemId is not supported! " + mPmtInfo.mCaSystemId);
+            return false;
         }
+        if (startMediaCas() == null)
+            return false;
+        setLicenseListener(SetupActivity.this);
+        Log.i(TAG, "setUpCasPlayback mMediaCas: "  + mMediaCas);
+        return true;
     }
 
     private final SurfaceHolder.Callback mSurfaceHolderCallback = new SurfaceHolder.Callback() {
@@ -1437,15 +1431,6 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
             }
             data = new byte[secLen];
             filter.read(data, 0, secLen);
-
-            if (mLicenseReceived.get() == false)
-                return;
-
-            if (mDebugFilter)
-                Log.d(TAG, "License received");
-            if (mPlayerStart.get() == false) {
-                Log.d(TAG, "mPlayerStart is false" + " filter id:" + filter.getId());
-            }
             parseEcmSectionData(data, filter.getId());
         }
 
@@ -1465,7 +1450,51 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         public static final int kAesSCTE = 5;
     }
 
-    private static int mCryptoMode = CryptoMode.kInvalid;
+    public class WvCasEventId{
+        private static final int WVCAS_INDIVIDUALIZATION_REQUEST = 1000;
+        private static final int WVCAS_INDIVIDUALIZATION_RESPONSE = 1001;
+        private static final int WVCAS_INDIVIDUALIZATION_COMPLETE = 1002;
+
+        private static final int WVCAS_LICENSE_REQUEST = 2000;
+        private static final int WVCAS_LICENSE_RESPONSE = 2001;
+        private static final int WVCAS_ERROR_DEPRECATED = 2002;
+        private static final int WVCAS_LICENSE_RENEWAL_REQUEST = 2003;
+        private static final int WVCAS_LICENSE_RENEWAL_RESPONSE = 2004;
+        private static final int WVCAS_LICENSE_RENEWAL_URL = 2005;
+        private static final int WVCAS_LICENSE_CAS_READY = 2006;
+        private static final int WVCAS_LICENSE_CAS_RENEWAL_READY = 2007;
+        private static final int WVCAS_LICENSE_REMOVAL = 2008;
+        private static final int WVCAS_LICENSE_REMOVED = 2009;
+        private static final int WVCAS_ASSIGN_LICENSE_ID = 2010;
+        private static final int WVCAS_LICENSE_ID_ASSIGNED = 2011;
+        private static final int WVCAS_LICENSE_NEW_EXPIRY_TIME = 2012;
+        private static final int WVCAS_MULTI_CONTENT_LICENSE_INFO = 2013;
+        private static final int WVCAS_GROUP_LICENSE_INFO = 2014;
+        private static final int WVCAS_LICENSE_ENTITLEMENT_PERIOD_UPDATE_REQUEST = 2015;
+        private static final int WVCAS_LICENSE_ENTITLEMENT_PERIOD_UPDATE_RESPONSE = 2016;
+        private static final int WVCAS_LICENSE_ENTITLEMENT_PERIOD_UPDATED = 2017;
+
+        private static final int WVCAS_SESSION_ID   = 3000;
+        private static final int WVCAS_SET_CAS_SOC_ID   = 3001;
+        private static final int WVCAS_SET_CAS_SOC_DATA = 3002;
+
+        private static final int WVCAS_UNIQUE_ID = 4000;
+        private static final int WVCAS_QUERY_UNIQUE_ID = 4001;
+        private static final int WVCAS_WV_CAS_PLUGIN_VERSION = 4002;
+        private static final int WVCAS_QUERY_WV_CAS_PLUGIN_VERSION = 4003;
+
+        private static final int WVCAS_ERROR = 5000;
+
+        private static final int WVCAS_SET_PARENTAL_CONTROL_AGE = 6000;
+        private static final int WVCAS_DEPRECATED_PARENTAL_CONTROL_AGE_UPDATED = 6001;
+        private static final int WVCAS_ACCESS_DENIED_BY_PARENTAL_CONTROL = 6002;
+        private static final int WVCAS_AGE_RESTRICTION_UPDATED = 6003;
+        private static final int WVCAS_FINGERPRINTING_INFO = 6100;
+        private static final int WVCAS_SESSION_FINGERPRINTING_INFO = 6101;
+        private static final int WVCAS_SERVICE_BLOCKING_INFO = 6200;
+        private static final int WVCAS_SESSION_SERVICE_BLOCKING_INFO = 6201;
+    }
+
     public class EcmDescriptor {
         public byte[] mCaId = new byte[2];
         public byte[] mVersion = new byte[1];
@@ -1512,26 +1541,27 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         }
         // Case 1: Pointer field (always set to 0); section header; ECM.
         if (cas_ecm[0] == kPointerFieldZero) {
-            Log.d(TAG, "kSectionHeaderWithPointerSize:" + kSectionHeaderWithPointerSize);
+            Log.d(TAG, "Case 1:kSectionHeaderWithPointerSize:" + kSectionHeaderWithPointerSize);
             return kSectionHeaderWithPointerSize;
         }
         // Case 2: Section header (3 bytes), ECM.
         if (cas_ecm[0] == kSectionHeader1 || cas_ecm[0] == kSectionHeader2) {
-            Log.d(TAG, "kSectionHeaderSize:" + kSectionHeaderSize);
+            Log.d(TAG, "Case 2:kSectionHeaderSize:" + kSectionHeaderSize);
             return kSectionHeaderSize;
         }
         // Case 3: ECM.
-        Log.d(TAG, "findEcmStartIndex offest is 0");
+        Log.d(TAG, "Case 3:findEcmStartIndex offest is 0");
         return 0;
     }
 
-    public boolean getCasCryptoMode(byte[] cas_ecm, int ecm_size) {
+    public int getCasCryptoMode(byte[] cas_ecm, int ecm_size) {
         Log.d(TAG, "getCasCryptoMode");
+        int mCryptoMode;
         //Detect and strip optional section header.
         int offset = findEcmStartIndex(cas_ecm, ecm_size);
         EcmDescriptor mEcmDescriptor = new EcmDescriptor();
         if (offset < 0 || (ecm_size - offset < mEcmDescriptor.getEcmDescriptorLen())) {
-            return false;
+            return CryptoMode.kInvalid;
         }
         Log.d(TAG, "EcmDescriptor len:" + mEcmDescriptor.getEcmDescriptorLen());
         byte[] ecm = new byte[ecm_size - offset];
@@ -1544,7 +1574,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
             (cas_id_val < kWidevineNewCasIdLowerBound ||
             cas_id_val > kWidevineNewCasIdUpperBound)) {
             Log.e(TAG, "Supported Widevine CAS IDs not found at the start of ECM. Found:0x" + Integer.toHexString(cas_id_val));
-            return false;
+            return CryptoMode.kInvalid;
         }
         if ((ecm[2] & 0x000000ff) == 1) {
             Log.d(TAG, "Use kCryptoModeFlags");
@@ -1555,34 +1585,27 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         }
         Log.d(TAG, "mCryptoMode:" + mCryptoMode);
 
-        return true;
+        return mCryptoMode;
     }
 
     private void parseEcmSectionData(byte[] data, int filter_id) {
-        int mCasIdx = 0;
+        int mCasIdx = -1;
         int mTableId = (int)(data[0] & 0x000000ff);
         int mSectionLen = ((((int)(data[1]))&0x0003) << 8) + (((int)data[2]) & 0xff);
         //int mProgramId = ((((int)(data[3])) & 0x00ff) << 8) + (((int)data[4]) & 0xff);
 
         if (mSectionLen > 168) {
-            Log.d(TAG, "Invalid mSectionLen!");
+            Log.d(TAG, "Invalid mSectionLen: " + mSectionLen);
             return;
         }
 
-        if (/*mTableId != WVCAS_TEST_ECM_TID_176 && mTableId != WVCAS_TEST_ECM_TID_177 && */mTableId != WVCAS_ECM_TID_128 && mTableId != WVCAS_ECM_TID_129) {
-            Log.e(TAG, "Invalid ecm table id!");
+        if (mTableId != WVCAS_TEST_ECM_TID_176 && mTableId != WVCAS_TEST_ECM_TID_177 && mTableId != WVCAS_ECM_TID_128 && mTableId != WVCAS_ECM_TID_129) {
+            Log.d(TAG, "Invalid mTableId: 0x" + Integer.toHexString(mTableId));
             return;
         }
 
         if (mDebugTsSection) {
             Log.d(TAG, "parseEcmSectionData mTableId:0x" + Integer.toHexString(mTableId) +" mSectionLen: " + mSectionLen);
-        }
-
-        if (mIsCasPlayback && mDescrambler == null) {
-            mDescrambler = mTuner.openDescrambler();
-            Log.d(TAG, "openDescrambler");
-            mDescrambler.addPid(Descrambler.PID_TYPE_T, mEsCasInfo[VIDEO_CHANNEL_INDEX].mEsPid, mVideoFilter == null ? null : mVideoFilter);
-            mDescrambler.addPid(Descrambler.PID_TYPE_T, mEsCasInfo[AUDIO_CHANNEL_INDEX].mEsPid, mAudioFilter == null ? null : mAudioFilter);
         }
 
         for (int idx = 0; idx < MAX_CAS_ECM_TID_NUM; idx++) {
@@ -1599,68 +1622,82 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                 }
             }
         }
-        byte[] ecm_data = new byte[168];
+        if (mCasIdx != VIDEO_CHANNEL_INDEX && mCasIdx != AUDIO_CHANNEL_INDEX)
+            return;
+
+        byte[] ecm_data = new byte[mSectionLen];
         System.arraycopy(data, 3, ecm_data, 0, mSectionLen);
 
-        if (mHasSetKeyToken.get() == false) {
-            if (mCasKeyToken == null) {
-                //cas session id + dsc channel number + dsc crypto mode for every channel
-                mCasKeyToken = new byte[Integer.SIZE / 8 + 1 + MAX_DSC_CHANNEL_NUM];
-                mCasKeyToken[mCasKeyTokenIdx ++] = (byte) (mCasCurSessionId & 0xff);
-                mCasKeyToken[mCasKeyTokenIdx ++] = (byte) (mCasCurSessionId >> 8 & 0xff);
-                mCasKeyToken[mCasKeyTokenIdx ++] = (byte) (mCasCurSessionId >> 16 & 0xff);
-                mCasKeyToken[mCasKeyTokenIdx ++] = (byte) (mCasCurSessionId >> 24 & 0xff);
-                mCasKeyToken[mCasKeyTokenIdx ++] = (byte) (mEcmPidNum & 0xff);
-                Log.d(TAG, "mCasCurSessionId:" + mCasCurSessionId + " mEcmPidNum:" + mEcmPidNum);
-            }
+//        if (mEsCasInfo[mCasIdx].mGetCryptoMode == false) {
+//            mEsCasInfo[mCasIdx].mCryptoMode = getCasCryptoMode(ecm_data, mSectionLen);
+//            if (mEsCasInfo[mCasIdx].mCryptoMode == CryptoMode.kInvalid) {
+//                Log.e(TAG, "getCasCryptoMode failed! mCasIdx: " + mCasIdx + " filter_id: " + filter_id);
+//                return;
+//            }
+//            mEsCasInfo[mCasIdx].mGetCryptoMode = true;
+//            if (mEsCasInfo[mCasIdx].mCryptoMode == CryptoMode.kAesCBC) {
+//                mEsCasInfo[mCasIdx].mScramblingMode = MediaCas.SCRAMBLING_MODE_AES128;
+//            } else if (mEsCasInfo[mCasIdx].mCryptoMode == CryptoMode.kDvbCsa2
+//            || mEsCasInfo[mCasIdx].mCryptoMode == CryptoMode.kDvbCsa3) {
+//                mEsCasInfo[mCasIdx].mScramblingMode = MediaCas.SCRAMBLING_MODE_DVB_CSA2;
+//            } else if (mEsCasInfo[mCasIdx].mCryptoMode == CryptoMode.kAesSCTE) {
+//                mEsCasInfo[mCasIdx].mScramblingMode = MediaCas.SCRAMBLING_MODE_AES_SCTE52;
+//            }
+//        }
 
-            if (mEsCasInfo[mCasIdx].mGetCryptoMode == false) {
-                if (getCasCryptoMode(ecm_data, mSectionLen) == false) {
-                    mEsCasInfo[mCasIdx].mGetCryptoMode = false;
-                    Log.e(TAG, "getCasCryptoMode failed! mCasIdx: " + mCasIdx + " filter_id: " + filter_id);
-                    return;
-                }
-                mEsCasInfo[mCasIdx].mGetCryptoMode = true;
+        if (!mEsCasInfo[mCasIdx].mSessionOpened.get() || !mCasLicenseReceived.get()) {
+            return;
+        }
 
-                mCasKeyToken[mCasKeyTokenIdx] = (byte) (mCryptoMode & 0xff);
-                mCasKeyTokenIdx += 1;
-                if (mEcmPidNum == mCasKeyTokenIdx - Integer.SIZE / 8 - 1) {
-                    Log.d(TAG, "mDescrambler ready to setKeyToken.");
-                    mDescrambler.setKeyToken(mCasKeyToken);
-                    mHasSetKeyToken.set(true);
+        if (mEsCasInfo[mCasIdx].mCasKeyToken == null) {
+            mEsCasInfo[mCasIdx].mCasKeyToken = new byte[4];
+            mEsCasInfo[mCasIdx].mCasKeyToken[0] = (byte) (mEsCasInfo[mCasIdx].mCasSessionId & 0xff);
+            mEsCasInfo[mCasIdx].mCasKeyToken[1] = (byte) (mEsCasInfo[mCasIdx].mCasSessionId >> 8 & 0xff);
+            mEsCasInfo[mCasIdx].mCasKeyToken[2] = (byte) (mEsCasInfo[mCasIdx].mCasSessionId >> 16 & 0xff);
+            mEsCasInfo[mCasIdx].mCasKeyToken[3] = (byte) (mEsCasInfo[mCasIdx].mCasSessionId >> 24 & 0xff);
+            Log.d(TAG, "Set KeyToken:0x" + Integer.toHexString(mEsCasInfo[mCasIdx].mCasSessionId) + " mEcmPidNum:" + mEcmPidNum);
+            mDescrambler.setKeyToken(mEsCasInfo[mCasIdx].mCasKeyToken);
+            if (mEsCasInfo[mCasIdx].mScramblingMode == MediaCas.SCRAMBLING_MODE_RESERVED) {
+                if (mEcmPidNum == 1) {
+                    mDescrambler.addPid(Descrambler.PID_TYPE_T, mEsCasInfo[VIDEO_CHANNEL_INDEX].mEsPid, mVideoFilter);
+                    mDescrambler.addPid(Descrambler.PID_TYPE_T, mEsCasInfo[AUDIO_CHANNEL_INDEX].mEsPid, mAudioFilter);
                 } else {
-                    Log.d(TAG, "mDescrambler wait to setKeyToken. mEcmPidNum: " + mEcmPidNum);
-                    return;
+                    mDescrambler.addPid(Descrambler.PID_TYPE_T, mEsCasInfo[mCasIdx].mEsPid, mCasIdx == VIDEO_CHANNEL_INDEX ? mVideoFilter : mAudioFilter);
                 }
+            }
+            try {
+                Log.d(TAG, "Process first ecm");
+                mEsCasInfo[mCasIdx].mCasSession.processEcm(ecm_data);
+            } catch (Exception ex) {
+                Log.e(TAG, "mCasIdx: " + mCasIdx + " processEcm: Exception: " + ex.toString());
+                return;
             }
         }
-        if (mHasSetKeyToken.get() == false)
-            return;
-        try {
-            //Log.d(TAG, "processEcm ecm_data[0]:" + Integer.toHexString(ecm_data[0]));
-            if (mCasCurSession != null) {
-                mCasCurSession.processEcm(ecm_data);
+
+        if (mPlayerStart.get() == false) {
+            Log.d(TAG, "Ready to start Player");
+            if (!mPassthroughMode && mDvrPlayback != null) {
+                if (mVideoFilter != null) {
+                    mDvrPlayback.attachFilter(mVideoFilter);
+                    mVideoFilter.start();
+                }
+                if (mAudioFilter != null) {
+                    mDvrPlayback.attachFilter(mAudioFilter);
+                    //mAudioFilter.start();
+                }
             }
+            playStart(false);
+            mPlayerStart.compareAndSet(false, true);
+            return;
+        }
+
+        try {
+            mEsCasInfo[mCasIdx].mCasSession.processEcm(ecm_data);
         } catch (Exception ex) {
             Log.e(TAG, "mCasIdx: " + mCasIdx + "processEcm: Exception: " + ex.toString());
             return;
         }
 
-        if (mPlayerStart.get() == false) {
-            Log.d(TAG, "Ready to start Player");
-
-            if (mDvrPlayback != null && mVideoFilter != null && !mPassthroughMode) {
-                mDvrPlayback.attachFilter(mVideoFilter);
-                mVideoFilter.start();
-            }
-
-            if (mDvrPlayback != null && mAudioFilter != null && !mPassthroughMode) {
-                mDvrPlayback.attachFilter(mAudioFilter);
-                //mAudioFilter.start();
-            }
-            playStart(false);
-            mPlayerStart.set(true);
-        }
         return;
     }
 
@@ -1877,14 +1914,15 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                int mEsDescTag = data[pos + 5];
                int mEsDescLen = data[pos + 6];
                Log.d(TAG, "esInfoLen: " + esInfoLen + " mEsDescTag:0x" + Integer.toHexString(mEsDescTag) + " mEsDescLen: " + mEsDescLen);
-                if (mEsDescLen == 0x09 && mEsDescLen >= 4) {
-                    int mEsCaSysId = ((((int)(data[pos + 7])) & 0x00ff) << 8) + (((int)data[pos + 8]) & 0xff);
-                    Log.d(TAG, "mEsCaSysId is 0x" + Integer.toHexString(mEsCaSysId));
-                    int mEcmPid = ((data[pos + 9] << 8) | data[pos + 10]) & 0x1fff;
-                    if (mIsVideo && mEsCasInfo[VIDEO_CHANNEL_INDEX].getEcmPid() != 0x1fff) {
-                        mEsCasInfo[VIDEO_CHANNEL_INDEX].setEcmPid(mEcmPid);
-                    } else if (!mIsVideo && mEsCasInfo[AUDIO_CHANNEL_INDEX].getEcmPid() != 0x1fff) {
-                        mEsCasInfo[AUDIO_CHANNEL_INDEX].setEcmPid(mEcmPid);
+                if (mEsDescTag == 0x09 && mEsDescLen >= 4) {
+                    pmtInfo.mCaSystemId = ((((int)(data[pos + 7])) & 0x00ff) << 8) + (((int)data[pos + 8]) & 0xff);
+                    //pmtInfo.mCaPid = ((data[pos + 9] << 8) | data[pos + 10]) & 0x1fff;
+                    pmtInfo.mCaPid = ((((int)(data[pos + 9])) & 0x001f) << 8) + (((int)data[pos + 10]) & 0xff);
+                    Log.d(TAG, "mCaSystemId:0x" + Integer.toHexString(pmtInfo.mCaSystemId) + " mCaPid:0x" + Integer.toHexString(pmtInfo.mCaPid));
+                    if (mIsVideo && mEsCasInfo[VIDEO_CHANNEL_INDEX].getEcmPid() == 0x1fff) {
+                        mEsCasInfo[VIDEO_CHANNEL_INDEX].setEcmPid(pmtInfo.mCaPid);
+                    } else if (!mIsVideo && mEsCasInfo[AUDIO_CHANNEL_INDEX].getEcmPid() == 0x1fff) {
+                        mEsCasInfo[AUDIO_CHANNEL_INDEX].setEcmPid(pmtInfo.mCaPid);
                     }
                     mEsDescLen -= 4;
                     if (mEsDescLen > 0) {
@@ -1899,7 +1937,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                         Log.d(TAG, "No private data, use google test pssh");
                     }
                     mIsCasPlayback = true;
-                    Log.d(TAG, "Found mEsCaSysId, cas playback");
+                    Log.d(TAG, "Found mCaSystemId, cas playback");
                 }
            }
            //skip the es descriptors' info length
@@ -2089,7 +2127,6 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                     Log.d(TAG, "Find all programs, stop pmt filter");
                     mVideoMediaFormat = MediaFormat.createVideoFormat(mVideoMimeType, 1280, 720);
                     mAudioMediaFormat = MediaFormat.createAudioFormat(mAudioMimeType, MediaCodecPlayer.AUDIO_SAMPLE_RATE, MediaCodecPlayer.AUDIO_CHANNEL_COUNT);
-
                     mTaskHandler.sendEmptyMessage(TASK_MSG_STOP_SECTION);
                 } else {
                     Log.d(TAG, "Start to parse next program");
@@ -2113,7 +2150,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                     Log.d(TAG, "mPmtStreams is empty.");
                 }
                 parsePMTSection(mPmtInfo, data);
-                Log.d(TAG, "Find programs down");
+                Log.d(TAG, "Find programs down mIsCasPlayback:" + mIsCasPlayback);
 
                 mPcrFilter = openPcrFilter(mPmtInfo.mPcrPid);
                 if (mPcrFilter != null) {
@@ -2134,6 +2171,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
             }
 
             if (mEnableLocalPlay) {
+                //Open av filters after parsing pmt section
                 if (mEsCasInfo[VIDEO_CHANNEL_INDEX].mEsPid != 0x1FFF && mEsCasInfo[VIDEO_CHANNEL_INDEX].mEsPid > 0) {
                     mVideoFilter = openVideoFilter(mEsCasInfo[VIDEO_CHANNEL_INDEX].mEsPid);
                     if (mVideoFilter == null)
@@ -2144,10 +2182,14 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                     if (mAudioFilter == null)
                         Log.e(TAG, "mAudioFilter is null!");
                 }
+
                 if (mPassthroughMode) {
                     passthroughSetup();
-                } else if (!mIsCasPlayback) {
-                    //For non-passthrough clear playback, start av filter in tuner hal
+                }
+
+                if (!mPassthroughMode && !mIsCasPlayback) {
+                    //For non-passthrough playback, start av filter here
+                    //For non-passthrough cas playback, start av filter after getting the ecm section
                     if (mVideoFilter != null) {
                         mVideoFilter.start();
                     }
@@ -2155,41 +2197,33 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                         //mAudioFilter.start();
                     }
                 }
-            }
 
-            if (!mIsCasPlayback) {
-                //For non-passthrough/passthrough clear playback, config and start mediacodec
-                playStart(false);
-                mPlayerStart.set(true);
-            } else {
-                //For non-passthrough/passthrough cas playback
-                //Create media cas instance
-                //Provision and request license
-                //Start ecm section filter
-                setLicenseListener(SetupActivity.this);
-                try {
-                    testWidevineCasPlayback(MediaCodecPlayer.TEST_MIME_TYPE);
-                } catch (Exception e) {
-                    Log.d(TAG, "Exception " + e.getMessage());
-                    if (e.getMessage() == null) {
-                        Log.d(TAG, "stacktrace: " + Log.getStackTraceString(e));
+                if (!mIsCasPlayback) {
+                    //For non-passthrough/passthrough clear playback, config and start mediacodec
+                    playStart(false);
+                    mPlayerStart.set(true);
+                } else {
+                    //For non-passthrough/passthrough cas playback
+                    //Create media cas instance
+                    //Provision and request license
+                    //Start ecm section filter
+                    try{
+                        if (setUpCasPlayback(mVideoMimeType) == false) {
+                            Log.e(TAG, "setUpCasPlayback failed!");
+                            return;
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "setUpCasPlayback Exception: " + e.getMessage());
+                        return;
+                    }
+
+                    if (mDescrambler == null) {
+                        mDescrambler = mTuner.openDescrambler();
+                        if (mDescrambler == null)
+                            return;
+                        Log.d(TAG, "openDescrambler");
                     }
                 }
-                int vEcmPid = mEsCasInfo[VIDEO_CHANNEL_INDEX].getEcmPid();
-                int aEcmPid = mEsCasInfo[AUDIO_CHANNEL_INDEX].getEcmPid();
-                if (vEcmPid != 0x1fff) {
-                    startEcmSectionFilter(VIDEO_CHANNEL_INDEX, vEcmPid, WVCAS_ECM_TID_128, 0);
-                    startEcmSectionFilter(VIDEO_CHANNEL_INDEX, vEcmPid, WVCAS_ECM_TID_129, 1);
-                    //startEcmSectionFilter(VIDEO_CHANNEL_INDEX, vEcmPid, WVCAS_TEST_ECM_TID_176, 2);
-                    //startEcmSectionFilter(VIDEO_CHANNEL_INDEX, vEcmPid, WVCAS_TEST_ECM_TID_177, 3);
-                }
-                if (aEcmPid != 0x1fff) {
-                    startEcmSectionFilter(AUDIO_CHANNEL_INDEX, aEcmPid, WVCAS_ECM_TID_128, 0);
-                    startEcmSectionFilter(AUDIO_CHANNEL_INDEX, aEcmPid, WVCAS_ECM_TID_129, 1);
-                    //startEcmSectionFilter(VIDEO_CHANNEL_INDEX, vEcmPid, WVCAS_TEST_ECM_TID_176, 2);
-                    //startEcmSectionFilter(VIDEO_CHANNEL_INDEX, vEcmPid, WVCAS_TEST_ECM_TID_177, 3);
-                }
-                Log.d(TAG, "Cas Playback");
             }
         }
     }
@@ -2283,7 +2317,8 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         .setSettings(settings)
         .build();
 
-        mEsCasInfo[esIdx].mEcmSectionFilter[ecmFilterIdx] = mTuner.openFilter(Filter.TYPE_TS, Filter.SUBTYPE_SECTION, SECTION_FILTER_BUFFER_SIZE, mExecutor, mEcmFilterCallback);
+        mEsCasInfo[esIdx].mEcmSectionFilter[ecmFilterIdx] =
+            mTuner.openFilter(Filter.TYPE_TS, Filter.SUBTYPE_SECTION, SECTION_FILTER_BUFFER_SIZE, mExecutor, mEcmFilterCallback);
         mEsCasInfo[esIdx].mEcmSectionFilter[ecmFilterIdx].configure(config);
         mEsCasInfo[esIdx].mEcmSectionFilter[ecmFilterIdx].start();
         Log.d(TAG, "Section ecm filter(0x" + Integer.toHexString(pid) + ") start");
@@ -2513,7 +2548,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                 int totalReadMBs = 0;
                 int tempMB = 0;
                 boolean mResetDvrPlayback = false;
-                 mDvrReadStart.set(true);
+                 mDvrReadStart.compareAndSet(false, true);
                  while (mDvrReadStart.get() && mDvrPlayback != null) {
                     long mReadLen = mDvrPlayback.read(mDvrOnceReadSize);
                     try {
@@ -2579,8 +2614,8 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                     }
                  }
                  Log.d(TAG, "Exit DvrPlayback read data thread.");
-                 mDvrReadStart.set(false);
-                 mDvrReadThreadExit.set(true);
+                 mDvrReadStart.compareAndSet(true, false);
+                 mDvrReadThreadExit.compareAndSet(false, true);
             }
         }).start();
     }
@@ -2696,24 +2731,29 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
 
         for (int mCasIdx = 0; mCasIdx < MAX_DSC_CHANNEL_NUM; mCasIdx ++) {
             if (mEsCasInfo[mCasIdx] != null) {
-                mEsCasInfo[mCasIdx].mGetCryptoMode = false;
+                //mEsCasInfo[mCasIdx].mGetCryptoMode = false;
                 for (int mEcmFilterIdx = 0; mEcmFilterIdx < MAX_CAS_ECM_TID_NUM; mEcmFilterIdx ++) {
                     if (mEsCasInfo[mCasIdx].mEcmSectionFilter[mEcmFilterIdx] != null)
                         mEsCasInfo[mCasIdx].mEcmSectionFilter[mEcmFilterIdx] = null;
                 }
+                if (mEsCasInfo[mCasIdx].mCasKeyToken != null)
+                    mEsCasInfo[mCasIdx].mCasKeyToken = null;
+                if (mEsCasInfo[mCasIdx].mCasSession != null) {
+                    mEsCasInfo[mCasIdx].mCasSession.close();
+                    mEsCasInfo[mCasIdx].mCasSession = null;
+                    mEsCasInfo[mCasIdx].mSessionOpened.compareAndSet(true, false);
+                }
                 mEsCasInfo[mCasIdx] = null;
             }
         }
-        mHasSetKeyToken.set(false);
-        mLicenseReceived.set(false);
+
         if (mMediaCas != null) {
-            if (mCasCurSession != null) {
-                mCasCurSession.close();
-                mCasCurSession = null;
-                mEcmPidNum = 0;
-            }
-            mCasKeyTokenIdx = 0;
-            mCasKeyToken = null;
+            mCurCasIdx.getAndSet(-1);
+            mEcmPidNum = 0;
+            mCasSessionNum.getAndSet(0);
+            mCasProvisioned.compareAndSet(true, false);
+            mCasLicenseReceived.compareAndSet(true, false);
+            mHasSetPrivateData.compareAndSet(true, false);
             mMediaCas.close();
             mMediaCas = null;
             Log.d(TAG, "mMediaCas close");
@@ -3000,14 +3040,20 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         public DscChannelInfo(int esPid, boolean isVideo) {
             mEsPid = esPid;
             mIsVideo = isVideo;
-            mEcmPid = 0x1fff;
         }
         public int mEsPid = 0x1fff;
         private int mEcmPid = 0x1fff;
         public int mEcmTableId;
         public Filter[] mEcmSectionFilter = new Filter[MAX_CAS_ECM_TID_NUM];
+        private int mCryptoMode = CryptoMode.kInvalid;
+        private int mSessionUsage = MediaCas.SESSION_USAGE_LIVE;
+        private int mScramblingMode = MediaCas.SCRAMBLING_MODE_RESERVED;
         public boolean mGetCryptoMode = false;
         public boolean mIsVideo;
+        private byte[] mCasKeyToken = null;
+        private MediaCas.Session mCasSession = null;
+        private AtomicBoolean mSessionOpened = new AtomicBoolean(false);
+        private int mCasSessionId = -1;
         public void setEcmPid(int pid) {
             mEcmPid = pid;
         }
@@ -3068,8 +3114,8 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
         public int mReserved_5;
         public int mReserved_6;
         public int mCRC_32;
-        public int mCaSystemId;
-        public int mCaPid;
+        public int mCaSystemId = -1;
+        public int mCaPid = 0x1fff;
         public int mPrivateDataLen;
         private byte[] mPrivateData = null;
     }

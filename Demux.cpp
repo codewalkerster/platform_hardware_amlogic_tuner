@@ -159,7 +159,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     vector<uint8_t> tmpSectionData;
     int sectionSize = PSI_MAX_SIZE;
     Demux *dmxDev = (Demux*)demux;
-    ALOGV("[Demux] postData fid =%d esOutput:%d passthrough:%d", fid, esOutput, passthrough);
+    ALOGV("[Demux] postData fid =%d esOutput:%d dev_no:%d", fid, esOutput, dmxDev->getAmDmxDevice()->dev_no);
 
 #ifdef TUNERHAL_DBG
     static int postDataSize = 0;
@@ -565,7 +565,22 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
 
     uint16_t pid = ((data[1] & 0x1f) << 8) | ((data[2] & 0xff));
     if (DEBUG_DEMUX)
-        ALOGD("%s/%d size:%d pid:0x%x", __FUNCTION__, __LINE__, data.size(), pid);
+        ALOGD("%s/%d write to dvr %d size:%d pid:0x%x", __FUNCTION__, __LINE__, mDemuxId, data.size(), pid);
+
+    for (auto descramblerIt = mDescramblers.begin();
+         descramblerIt != mDescramblers.end(); descramblerIt++) {
+      if (descramblerIt->second->isPidSupported(pid)) {
+        if (DEBUG_DEMUX) {
+          ALOGD("[Demux] found descrambler for pid: %d, data.size(): %d",
+                pid,
+                data.size());
+        }
+        if (!descramblerIt->second->isDescramblerReady())
+            ALOGD("[Demux] dsc isn't ready for pid: %d", pid);
+        continue;
+      }
+    }
+
     set<uint32_t>::iterator it;
     for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
         if (pid == mFilters[*it]->getTpid()) {
@@ -766,6 +781,34 @@ bool Demux::checkPesFilterId(uint32_t filterId) {
         if (*it == filterId)
             return true;
     }
+    return false;
+}
+
+bool Demux::setStbSource(const char *path, const char *value)
+{
+    int ret = 0, fd = -1, len = 0;
+
+    if (path == NULL || value == NULL)
+        goto ERROR_EXIT;
+
+    fd = open(path, O_WRONLY);
+    if (fd < 0)
+        goto ERROR_EXIT;
+
+    len = strlen(value);
+    ret = write(fd, value, len);
+    if (ret != len)
+        goto ERROR_EXIT;
+    ALOGD("[Demux] [%s/%d] Write %s ok. value:%s",
+        __FUNCTION__, __LINE__, path, value);
+    ::close(fd);
+
+    return true;
+ERROR_EXIT:
+    if (fd >= 0)
+        ::close(fd);
+    ALOGE("[Demux] [%s/%d] error ret:%d! %s path:%s value:%s",
+        __FUNCTION__, __LINE__, ret, strerror(errno), path, value);
     return false;
 }
 

@@ -21,8 +21,12 @@
 #include <android/hardware/tv/tuner/1.0/ITuner.h>
 #include <inttypes.h>
 #include "Tuner.h"
-#include "secmem_ca.h"
-
+#ifdef SUPPORT_DSM
+extern "C" {
+#include "libdsm.h"
+}
+#include "dsc_ca.h"
+#endif
 using namespace std;
 
 namespace android {
@@ -32,20 +36,21 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
-#define MAX_CHANNEL_NUM 2
-#define VIDEO_CHANNEL_INDEX 0
-#define AUDIO_CHANNEL_INDEX 1
-#define INVALID_CAS_SESSION_ID -1
+#define TUNER_DSC_ERR(number, format, ...) ALOGE("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_WRAN(number, format, ...) ALOGW("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_INFO(number, format, ...) ALOGI("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_DBG(number, format, ...) ALOGD("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_VERB(number, format, ...) ALOGV("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_TRACE(number) ALOGI("[No-%d][%s:%d] ", number, __FUNCTION__, __LINE__);
 
-typedef struct __AM_CAS_DSC_CONFIG {
-    void *mDscCtx;
-    uint32_t mCasSessionId;
-    uint32_t mDscChannelNum;
-    cas_crypto_mode mCryptoMode[MAX_CHANNEL_NUM];
-    ca_sc2_algo_type mDscAlgo[MAX_CHANNEL_NUM];
-    ca_sc2_dsc_type mDscType[MAX_CHANNEL_NUM];
-    uint16_t mPid[MAX_CHANNEL_NUM];
-} Cas_Dsc_Config;
+#define TUNER_DSC_CHECK_RES(number, expr) do { \
+    res = (expr); \
+    if (res) { \
+        ALOGE("[No-%d][%s:%d] error return 0x%x!\n", \
+            number, __FUNCTION__, __LINE__, res); \
+        return res; \
+    } \
+} while(0);
 
 class Tuner;
 
@@ -65,7 +70,17 @@ class Descrambler : public IDescrambler {
 
   virtual Return<Result> close() override;
 
-  bool IsPidSupported(uint16_t pid);
+  bool isPidSupported(uint16_t pid);
+
+  bool isDescramblerReady();
+
+  bool allocDscChannels();
+
+  bool clearDscChannels();
+
+#ifdef SUPPORT_DSM
+  bool bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle);
+#endif
 
  private:
   //const bool DEBUG_DESCRAMBLER = false;
@@ -78,7 +93,17 @@ class Descrambler : public IDescrambler {
   uint32_t mSourceDemuxId;
   bool mDemuxSet = false;
   std::mutex mDescrambleLock;
-  Cas_Dsc_Config *mCasDscConfig;
+  bool mIsReady = false;
+  uint32_t mCasSessionToken;
+
+#ifdef SUPPORT_DSM
+  int mDsmFd = -1;
+  uint32_t mDsmAlgo = CA_ALGO_UNKNOWN;
+  struct dsm_keyslot_list mKeyslotList;
+  std::map<uint16_t, uint32_t> es_pid_to_dsc_channel;
+#else
+  void *mSecmemSession = nullptr;
+#endif
 };
 
 }  // namespace implementation

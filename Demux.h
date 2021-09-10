@@ -118,6 +118,7 @@ class Demux : public IDemux {
     bool isPassthroughMediaFilterId(uint32_t filterId);
     bool checkPesFilterId(uint32_t filterId);
     void combinePesData(uint32_t filterId);
+    bool setStbSource(const char *path, const char *value);
 
   private:
     // Tuner service

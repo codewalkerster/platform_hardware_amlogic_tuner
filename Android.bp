@@ -27,6 +27,7 @@ cc_defaults {
         "MultiHwDemux/AmLinuxDvb.cpp",
         "mediasync/MediaSyncWrap.cpp",
         "dvr/AmDvr.cpp",
+        "dsc/dsc_dev.c",
         "Filter.cpp",
         "Frontend.cpp",
         "Descrambler.cpp",
@@ -55,8 +56,9 @@ cc_defaults {
         "libsystemcontrolservice",
         "vendor.amlogic.hardware.systemcontrol@1.0",
         "vendor.amlogic.hardware.systemcontrol@1.1",
-        "libsecmem",
         "libjsoncpp",
+        "libdsm",
+        //"libsecmem",
         "libmediahal_mediasync",
    ],
     header_libs: [
@@ -67,6 +69,7 @@ cc_defaults {
         "MultiHwDemux",
         "mediasync",
         "dvr",
+        "dsc",
         "utils",
     ],
 
@@ -80,6 +83,7 @@ cc_defaults {
 
     cppflags: [
        //"-DTUNERHAL_DBG",
+       "-DSUPPORT_DSM",
     ],
     include_dirs: [
        "hardware/amlogic/tuner/frontenddevices",

@@ -19,6 +19,14 @@
 #include <cutils/properties.h>
 #include "Descrambler.h"
 
+#ifdef SUPPORT_DSM
+extern "C" {
+#include "dsc_dev.h"
+}
+#else
+#include "secmem_ca.h"
+#endif
+
 namespace android {
 namespace hardware {
 namespace tv {
@@ -27,196 +35,289 @@ namespace V1_0 {
 namespace implementation {
 
 Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
-    mDescramblerId = descramblerId;
-    mTunerService = tuner;
-    mCasDscConfig = nullptr;
+  mDescramblerId = descramblerId;
+  mTunerService = tuner;
 
-    ALOGD("%s/%d mDescramblerId:%d", __FUNCTION__, __LINE__, mDescramblerId);
+#ifdef SUPPORT_DSM
+  if (ca_open(descramblerId) != CA_DSC_OK)
+    TUNER_DSC_ERR(descramblerId, "ca_open failed! %s", strerror(errno));
+
+  mDsmFd = dsm_open();
+  if (mDsmFd <= 0) {
+      TUNER_DSC_ERR(descramblerId, "dsm_open failed! %s", strerror(errno));
+  }
+#else
+  if (Dsc_OpenDev(&mSecmemSession, mDescramblerId)) {
+      TUNER_DSC_ERR(descramblerId, "Dsc_OpenDev failed!");
+  }
+#endif
+
+  TUNER_DSC_TRACE(descramblerId);
 }
 
 Descrambler::~Descrambler() {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+#ifdef SUPPORT_DSM
+  if (mDsmFd > 0) {
+    dsm_close(mDsmFd);
+    ca_close(mDescramblerId);
+  }
+#else
+  if (mSecmemSession)
+    Dsc_CloseDev(&mSecmemSession, mDescramblerId);
+#endif
+  TUNER_DSC_TRACE(mDescramblerId);
 }
 
 Return<Result> Descrambler::setDemuxSource(uint32_t demuxId) {
-    std::lock_guard<std::mutex> lock(mDescrambleLock);
+  std::lock_guard<std::mutex> lock(mDescrambleLock);
 
-    if (mDemuxSet) {
-        ALOGW("%s/%d Descrambler has already been set with a demux id %d",
-            __FUNCTION__, __LINE__, mSourceDemuxId);
-        return Result::INVALID_STATE;
-    }
-    if (mTunerService == nullptr) {
-        ALOGE("%s/%d mTunerService is null!", __FUNCTION__, __LINE__);
-        return Result::NOT_INITIALIZED;
-    }
+  TUNER_DSC_TRACE(mDescramblerId);
 
-    mDemuxSet = true;
-    mSourceDemuxId = demuxId;
-    mTunerService->attachDescramblerToDemux(mDescramblerId, demuxId);
+  if (mDemuxSet) {
+    TUNER_DSC_WRAN(mDescramblerId, "Descrambler has already been set with a demux id %d", mSourceDemuxId);
+    return Result::INVALID_STATE;
+  }
+  if (mTunerService == nullptr) {
+    TUNER_DSC_ERR(mDescramblerId, "mTunerService is null!");
+    return Result::NOT_INITIALIZED;
+  }
 
-    int mLocalMode = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, 0);
-    if (Secure_SetTSNSource(TSN_PATH, mLocalMode == 0 ? TSN_DVB : TSN_IPTV) != 0) {
-        ALOGE("%s/%d Secure_SetTSNSource failed!", __FUNCTION__, __LINE__);
-        return Result::INVALID_STATE;
-    }
-    ALOGD("%s/%d Demux id:%d Descrambler id:%d",
-        __FUNCTION__, __LINE__, demuxId, mDescramblerId);
+  mDemuxSet = true;
+  mSourceDemuxId = demuxId;
+  mTunerService->attachDescramblerToDemux(mDescramblerId, demuxId);
 
-    return Result::SUCCESS;
+  TUNER_DSC_INFO(mDescramblerId, "mSourceDemuxId:%d", mSourceDemuxId);
+
+  return Result::SUCCESS;
 }
 
 Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
-    std::lock_guard<std::mutex> lock(mDescrambleLock);
+  std::lock_guard<std::mutex> lock(mDescrambleLock);
 
-    int cas_sid_size, token_size, token_idx, channel_idx, pid_idx;
-    token_size = keyToken.size();
+  TUNER_DSC_TRACE(mDescramblerId);
 
-    if (token_size == 0) {
-        ALOGE("%s/%d Invalid key token!", __FUNCTION__, __LINE__);
-        return Result::INVALID_ARGUMENT;
-    }
+  uint32_t token_size = keyToken.size();
+  if (token_size == 0) {
+    TUNER_DSC_ERR(mDescramblerId, "Invalid keyToken!");
+    return Result::INVALID_ARGUMENT;
+  }
 
-    if (mCasDscConfig != nullptr) {
-        mCasDscConfig = (Cas_Dsc_Config*)malloc(sizeof(Cas_Dsc_Config));
-        if (!mCasDscConfig) {
-            ALOGE("%s/%d Malloc for mCasDscConfig failed!", __FUNCTION__, __LINE__);
-            return Result::OUT_OF_MEMORY;
-        } else {
-            memset(mCasDscConfig, 0, sizeof(Cas_Dsc_Config));
-        }
-    }
-    mCasDscConfig->mDscCtx = nullptr;
-    if (Secure_CreateDscCtx(&mCasDscConfig->mDscCtx) != 0) {
-        ALOGE("%s/%d Secure_CreateDscCtx failed!", __FUNCTION__, __LINE__);
-        close();
-        return Result::INVALID_STATE;
-    } else {
-        ALOGD("%s/%d Secure_CreateDscCtx success", __FUNCTION__, __LINE__);
-    }
+  for (int token_idx = sizeof(mCasSessionToken) - 1; token_idx >= 0; --token_idx) {
+    mCasSessionToken = (mCasSessionToken << 8) | keyToken[token_idx];
+  }
+  TUNER_DSC_DBG(mDescramblerId, "keyToken:0x%x", mCasSessionToken);
 
-    //Default use TSN DVB CSA2 algorithm
-    memset(mCasDscConfig->mCryptoMode, ALGO_DVB_CSA2, sizeof(mCasDscConfig->mCryptoMode));
-    memset(mCasDscConfig->mDscAlgo, CA_ALGO_CSA2, sizeof(mCasDscConfig->mDscAlgo));
-    memset(mCasDscConfig->mDscType, CA_DSC_COMMON_TYPE, sizeof(mCasDscConfig->mDscType));
-    memset(mCasDscConfig->mPid, 0x1FFF, sizeof(mCasDscConfig->mPid));
+#ifdef SUPPORT_DSM
+  if (dsm_set_token(mDsmFd, mCasSessionToken)) {
+    TUNER_DSC_ERR(mDescramblerId, "dsm_set_token failed! %s", strerror(errno));
+    return Result::INVALID_STATE;
+  }
+#else
+  if (Dsc_CreateSession(mSecmemSession, mCasSessionToken, mDescramblerId)) {
+    TUNER_DSC_ERR(mDescramblerId, "Dsc_CreateSession failed!");
+    return Result::INVALID_STATE;
+  }
+#endif
 
-    cas_sid_size = sizeof(mCasDscConfig->mCasSessionId);
-    if (token_size < cas_sid_size) {
-        ALOGE("%s/%d Invalid key token size:%d!", __FUNCTION__, __LINE__, token_size);
-        return Result::INVALID_ARGUMENT;
-    }
-
-    for (token_idx = cas_sid_size - 1; token_idx >= 0; --token_idx) {
-      mCasDscConfig->mCasSessionId = (mCasDscConfig->mCasSessionId << 8) | keyToken[token_idx];
-    }
-    token_idx = cas_sid_size;
-    ALOGD("Descrambler: mCasSessionId %u", mCasDscConfig->mCasSessionId);
-    if (token_size > cas_sid_size) {
-        mCasDscConfig->mDscChannelNum = keyToken[token_idx];
-        ALOGD("The key token contains additional information. mDscChannelNum:%d", mCasDscConfig->mDscChannelNum);
-        token_idx += 1;
-        if (mCasDscConfig->mDscChannelNum > MAX_CHANNEL_NUM) {
-            ALOGE("Invalid mDscChannelNum:%d!", mCasDscConfig->mDscChannelNum);
-            close();
-            return Result::INVALID_ARGUMENT;
-        }
-        for (channel_idx = 0; channel_idx < mCasDscConfig->mDscChannelNum; channel_idx++) {
-            mCasDscConfig->mCryptoMode[channel_idx] = (cas_crypto_mode)keyToken[token_idx];
-            Secure_GetDscParas(mCasDscConfig->mCryptoMode[channel_idx],
-                &mCasDscConfig->mDscAlgo[channel_idx],
-                &mCasDscConfig->mDscType[channel_idx]);
-            token_idx += 1;
-        }
-    }
-
-    set<uint16_t>::iterator it;
-    pid_idx = 0;
-    for (it = added_pid.begin(); it != added_pid.end(); it++) {
-        mCasDscConfig->mPid[pid_idx] = *it;
-        ALOGD("%s/%d Dsc channel pid[%d]:0x%x", __FUNCTION__, __LINE__, pid_idx, mCasDscConfig->mPid[pid_idx]);
-        pid_idx += 1;
-    }
-    if (pid_idx == 0) {
-        ALOGW("No pid has been added!");
-        return Result::SUCCESS;
-    }
-    bool mAvDiffEcm = mCasDscConfig->mDscChannelNum > 1 ? true : false;
-    if (Secure_CreateDscPipeline(mCasDscConfig->mDscCtx,
-            mDescramblerId,
-            mCasDscConfig->mPid[VIDEO_CHANNEL_INDEX],
-            mCasDscConfig->mPid[AUDIO_CHANNEL_INDEX],
-            mAvDiffEcm,
-            mCasDscConfig->mCasSessionId)) {
-        ALOGE("%s/%d Secure_CreateDscPipeline failed!", __FUNCTION__, __LINE__);
-        close();
-        return Result::INVALID_STATE;
-    }
-
-    if (Secure_StartDescrambling(mCasDscConfig->mDscCtx,
-            mCasDscConfig->mDscAlgo[VIDEO_CHANNEL_INDEX],
-            mCasDscConfig->mDscType[VIDEO_CHANNEL_INDEX],
-            mCasDscConfig->mCasSessionId,
-            INVALID_CAS_SESSION_ID)) {
-        ALOGE("%s/%d Secure_StartDescrambling failed!", __FUNCTION__, __LINE__);
-        close();
-        return Result::INVALID_STATE;
-    }
-
-    return Result::SUCCESS;
+  return Result::SUCCESS;
 }
 
 Return<Result> Descrambler::addPid(const DemuxPid& pid, const sp<IFilter>& filter/* optionalSourceFilter */) {
-    std::lock_guard<std::mutex> lock(mDescrambleLock);
-    (void)filter;
-    ALOGD("%s/%d pid:0x%x", __FUNCTION__, __LINE__, pid.tPid());
-    // Assume transport stream pid only.
-    added_pid.insert(pid.tPid());
+  std::lock_guard<std::mutex> lock(mDescrambleLock);
 
-    return Result::SUCCESS;
+  (void)filter;
+
+  uint16_t mPid = pid.tPid();
+  TUNER_DSC_INFO(mDescramblerId, "mPid:0x%x", mPid);
+  // Assume transport stream pid only.
+  added_pid.insert(mPid);
+
+return Result::SUCCESS;
 }
 
 Return<Result> Descrambler::removePid(const DemuxPid& pid, const sp<IFilter>& filter/* optionalSourceFilter */) {
-    std::lock_guard<std::mutex> lock(mDescrambleLock);
-    (void)filter;
-    ALOGD("%s/%d pid:0x%x", __FUNCTION__, __LINE__, pid.tPid());
-    added_pid.erase(pid.tPid());
+  std::lock_guard<std::mutex> lock(mDescrambleLock);
 
-    return Result::SUCCESS;
+  (void)filter;
+
+  uint16_t mPid = pid.tPid();
+  TUNER_DSC_INFO(mDescramblerId, "mPid:0x%x", mPid);
+
+#ifdef SUPPORT_DSM
+  if (es_pid_to_dsc_channel.find(mPid) != es_pid_to_dsc_channel.end()) {
+    ca_free_chan(mDescramblerId, es_pid_to_dsc_channel[mPid]);
+    es_pid_to_dsc_channel.erase(mPid);
+  }
+#else
+  if (Dsc_FreeChannel(mSecmemSession, mCasSessionToken, mPid)) {
+    TUNER_DSC_ERR(mDescramblerId, "Dsc_FreeChannel failed!");
+    return Result::INVALID_STATE;
+  }
+#endif
+
+  added_pid.erase(mPid);
+
+  return Result::SUCCESS;
 }
 
 Return<Result> Descrambler::close() {
-    std::lock_guard<std::mutex> lock(mDescrambleLock);
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
-    if (mCasDscConfig != nullptr) {
-        if (mCasDscConfig->mDscCtx != nullptr) {
-            if (Secure_StopDescrambling(mCasDscConfig->mDscCtx)) {
-                ALOGE("%s/%d Secure_StopDescrambling failed!", __FUNCTION__, __LINE__);
-            }
-            Secure_DestroyDscCtx(&mCasDscConfig->mDscCtx);
-            mCasDscConfig->mDscCtx = nullptr;
-        } else {
-            ALOGW("%s/%d mDscCtx is null!", __FUNCTION__, __LINE__);
-        }
-        free(mCasDscConfig);
-        mCasDscConfig = nullptr;
-    } else {
-        ALOGW("%s/%d mCasDscConfig is null!", __FUNCTION__, __LINE__);
-    }
+  std::lock_guard<std::mutex> lock(mDescrambleLock);
 
-    mDemuxSet = false;
-    mTunerService->detachDescramblerFromDemux(mDescramblerId, mSourceDemuxId);
+  TUNER_DSC_TRACE(mDescramblerId);
 
-    return Result::SUCCESS;
+  mDemuxSet = false;
+  mTunerService->detachDescramblerFromDemux(mDescramblerId, mSourceDemuxId);
+  clearDscChannels();
+
+#ifdef SUPPORT_DSM
+  if (mDsmFd > 0) {
+    dsm_close(mDsmFd);
+    ca_close(mDescramblerId);
+    mDsmFd = -1;
+  }
+#else
+  if (mSecmemSession) {
+    if (Dsc_ReleaseSession(mSecmemSession, mCasSessionToken))
+      TUNER_DSC_ERR(mDescramblerId, "Dsc_ReleaseSession error!");
+      Dsc_CloseDev(&mSecmemSession, mDescramblerId);
+      mSecmemSession = nullptr;
+  }
+#endif
+
+  return Result::SUCCESS;
 }
 
-bool Descrambler::IsPidSupported(uint16_t pid) {
+bool Descrambler::isPidSupported(uint16_t pid) {
   std::lock_guard<std::mutex> lock(mDescrambleLock);
-  ALOGD("%s/%d pid:0x%x", __FUNCTION__, __LINE__, pid);
+
+  TUNER_DSC_VERB(mDescramblerId, "pid:0x%x", pid);
 
   return added_pid.find(pid) != added_pid.end();
 }
+
+#ifdef SUPPORT_DSM
+bool Descrambler::bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle) {
+  //std::lock_guard<std::mutex> lock(mDescrambleLock);
+
+  for (int i = 0; i < mKeyslotList.count; i++) {
+    uint32_t kt_type = mKeyslotList.keyslots[i].type;
+    uint32_t kt_id = mKeyslotList.keyslots[i].id;
+    if (kt_type < 0 || kt_id < 0) {
+      TUNER_DSC_ERR(mDescramblerId, "Invalid paras(%d %d)!", kt_type, kt_id);
+      return false;
+    }
+    if (ca_set_key(dsc_dev_id, dsc_handle, kt_type, kt_id)) {
+      TUNER_DSC_ERR(mDescramblerId, "ca_set_key(%d %d %d) failed!", dsc_handle, kt_type, kt_id);
+      return false;
+    }
+  }
+
+  return true;
+}
+#endif
+
+bool Descrambler::clearDscChannels() {
+  //std::lock_guard<std::mutex> lock(mDescrambleLock);
+
+  TUNER_DSC_TRACE(mDescramblerId);
+
+  set<uint16_t>::iterator it;
+  for (it = added_pid.begin(); it != added_pid.end(); it++) {
+    uint16_t mPid = *it;
+#ifdef SUPPORT_DSM
+  uint32_t dsc_chan;
+  if (es_pid_to_dsc_channel.find(mPid) != es_pid_to_dsc_channel.end()) {
+    dsc_chan = es_pid_to_dsc_channel[mPid];
+    ca_free_chan(mDescramblerId, dsc_chan);
+    es_pid_to_dsc_channel.erase(mPid);
+  } else {
+    continue;
+  }
+  TUNER_DSC_DBG(mDescramblerId, "ca_free_chan(0x%x 0x%x) ok.", mPid, dsc_chan);
+#else
+  if (Dsc_FreeChannel(mSecmemSession, mCasSessionToken, mPid)) {
+    TUNER_DSC_ERR(mDescramblerId, "Dsc_FreeChannel failed!");
+    return false;
+  }
+#endif
+  }
+
+  return true;
+}
+
+bool Descrambler::allocDscChannels() {
+  //std::lock_guard<std::mutex> lock(mDescrambleLock);
+  ca_sc2_dsc_type dsc_type = CA_DSC_COMMON_TYPE;
+
+  TUNER_DSC_TRACE(mDescramblerId);
+
+  int mLocalMode = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, 0);
+  if (!mLocalMode)
+    dsc_type = CA_DSC_TSD_TYPE;
+  TUNER_DSC_DBG(mDescramblerId, "mLocalMode:%d", mLocalMode);
+
+  set<uint16_t>::iterator it;
+  for (it = added_pid.begin(); it != added_pid.end(); it++) {
+    uint16_t mPid = *it;
+#ifdef SUPPORT_DSM
+    int handle = ca_alloc_chan(mDescramblerId, mPid, mDsmAlgo, dsc_type);
+    if (handle < 0) {
+      TUNER_DSC_ERR(mDescramblerId, "ca_alloc_chan failed!");
+      return false;
+    } else {
+      if (!bindDscChannelToKeyTable(mDescramblerId, handle)) {
+        return false;
+      } else {
+        es_pid_to_dsc_channel[mPid] = handle;
+      }
+    }
+    TUNER_DSC_DBG(mDescramblerId, "ca_alloc_chan(0x%x 0x%x) ok.", mPid, es_pid_to_dsc_channel[mPid]);
+#else
+    if (Dsc_AllocChannel(mSecmemSession, mCasSessionToken, mPid)) {
+      TUNER_DSC_ERR(mDescramblerId, "Dsc_AllocChannel failed!");
+      return false;
+    }
+#endif
+  }
+
+  return true;
+}
+
+bool Descrambler::isDescramblerReady() {
+  std::lock_guard<std::mutex> lock(mDescrambleLock);
+
+  if (!mIsReady && mDsmFd > 0) {
+#ifdef SUPPORT_DSM
+    if (dsm_get_property(mDsmFd, DSM_PROP_ALGO, &mDsmAlgo)) {
+      TUNER_DSC_ERR(mDescramblerId, "dsm_get_property failed! %s", strerror(errno));
+      return mIsReady;
+    }
+
+    if (dsm_get_keyslot_list(mDsmFd, &mKeyslotList)) {
+      TUNER_DSC_ERR(mDescramblerId, "dsm_get_keyslot_list failed! %s", strerror(errno));
+      return mIsReady;
+    }
+    mIsReady = (mKeyslotList.count > 0 && mDsmAlgo != CA_ALGO_UNKNOWN) ? true : false;
+#else
+    int ret = Dsc_GetSessionInfo(mSecmemSession, mCasSessionToken);
+    if (ret) {
+      if (ret != CAS_DSC_RETRY)
+        TUNER_DSC_ERR(mDescramblerId, "Dsc_GetSessionInfo failed!");
+      return mIsReady;
+    } else {
+      mIsReady = true;
+    }
+#endif
+    if (mIsReady) {
+      if (!allocDscChannels()) {
+        clearDscChannels();
+      }
+    }
+  }
+
+  return mIsReady;
+}
+
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner
