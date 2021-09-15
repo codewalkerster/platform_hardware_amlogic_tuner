@@ -127,6 +127,7 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     struct dmx_sct_filter_params param;
                     if (mDemux->getAmDmxDevice()
                         ->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0 ) {
+                        ALOGD("%s AM_DMX_SetBufferSize fail", __FUNCTION__);
                         return Result::UNAVAILABLE;
                     }
                     memset(&param, 0, sizeof(param));
@@ -139,32 +140,38 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     if (!isRepeat) {
                         param.flags |= DMX_ONESHOT;
                     }
-
                     bool isCheckCrc = settings.ts().filterSettings.section().isCheckCrc;
+                    ALOGD("%s isCheckCrc:%d", __FUNCTION__, isCheckCrc);
                     if (isCheckCrc) {
                         param.flags |= DMX_CHECK_CRC;
                     }
 
                     bool isRaw     = settings.ts().filterSettings.section().isRaw;
+                    ALOGD("%s isRaw:%d", __FUNCTION__, isRaw);
                     if (isRaw) {
                         param.flags |= DMX_OUTPUT_RAW_MODE;
                     }
-                    if (settings.ts().filterSettings.section().condition.sectionBits().filter.size() <= DMX_FILTER_SIZE) {
-                        memcpy(param.filter.filter, settings.ts().filterSettings
-                                              .section().condition.sectionBits().filter.data(), settings.ts().filterSettings
-                                              .section().condition.sectionBits().filter.size() * sizeof(uint8_t));
+                    int size = settings.ts().filterSettings.section().condition.sectionBits().filter.size();
+                    ALOGD("%s size:%d", __FUNCTION__, size);
+                    if (size <= 0 || size > 16) {
+                        return Result::UNAVAILABLE;
+                    }
+                    param.filter.filter[0] = settings.ts().filterSettings.section().condition.sectionBits().filter[0];
+                    ALOGD("%s param.filter.filter[0] = %d", __FUNCTION__, param.filter.filter[0]);
+                    for (int i = 1; i < size - 2; i++) {
+                        param.filter.filter[i] = settings.ts().filterSettings.section().condition.sectionBits().filter[i+2];
                     }
 
-                    if (settings.ts().filterSettings.section().condition.sectionBits().mask.size() <= DMX_FILTER_SIZE) {
-                        memcpy(param.filter.mask, settings.ts().filterSettings
-                          .section().condition.sectionBits().mask.data(), settings.ts().filterSettings
-                          .section().condition.sectionBits().mask.size() * sizeof(uint8_t));
+                    size = settings.ts().filterSettings.section().condition.sectionBits().mask.size();
+                    param.filter.mask[0] = settings.ts().filterSettings.section().condition.sectionBits().mask[0];
+                    for (int i = 1; i < size - 2; i++) {
+                        param.filter.mask[i] = settings.ts().filterSettings.section().condition.sectionBits().mask[i+2];
                     }
 
-                    if (settings.ts().filterSettings.section().condition.sectionBits().mode.size() <= DMX_FILTER_SIZE) {
-                        memcpy(param.filter.mode, settings.ts().filterSettings
-                          .section().condition.sectionBits().mode.data(), settings.ts().filterSettings
-                          .section().condition.sectionBits().mode.size() * sizeof(uint8_t));
+                    size = settings.ts().filterSettings.section().condition.sectionBits().mode.size();
+                    param.filter.mode[0] = settings.ts().filterSettings.section().condition.sectionBits().mode[0];
+                    for (int i = 1; i < size - 2; i++) {
+                        param.filter.mode[i] = settings.ts().filterSettings.section().condition.sectionBits().mode[i+2];
                     }
                     ALOGD("%s tableId:0x%x", __FUNCTION__, param.filter.filter[0]);
                     if (mDemux->getAmDmxDevice()
@@ -361,9 +368,6 @@ Return<Result> Filter::releaseAvHandle(const hidl_handle& /*avMemory*/, uint64_t
 
 Return<Result> Filter::close() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
-
-    mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
-    mDemux->getAmDmxDevice()->AM_DMX_StopFilter(mFilterId);
     mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
     if (mFilterMQ.get() != NULL)
         mFilterMQ.reset();
