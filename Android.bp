@@ -93,4 +93,19 @@ cc_binary {
     vintf_fragments: ["android.hardware.tv.tuner@1.0-service.droidlogic.xml"],
     defaults: ["tuner_service_droidlogic"],
     init_rc: ["android.hardware.tv.tuner@1.0-service.droidlogic.rc"],
+
+    arch: {
+        arm: {
+            enabled: true
+        },
+        arm64: {
+            enabled: false,
+        },
+        x86: {
+            enabled: false,
+        },
+        x86_64: {
+            enabled: false,
+        },
+    },
 }
