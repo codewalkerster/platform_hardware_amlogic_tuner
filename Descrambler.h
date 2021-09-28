@@ -98,7 +98,8 @@ class Descrambler : public IDescrambler {
 
 #ifdef SUPPORT_DSM
   int mDsmFd = -1;
-  uint32_t mDsmAlgo = CA_ALGO_UNKNOWN;
+  uint32_t mDscType = CA_DSC_COMMON_TYPE;
+  uint32_t mDscAlgo = CA_ALGO_UNKNOWN;
   struct dsm_keyslot_list mKeyslotList;
   std::map<uint16_t, uint32_t> es_pid_to_dsc_channel;
 #else

@@ -42,7 +42,7 @@ Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
   if (ca_open(descramblerId) != CA_DSC_OK)
     TUNER_DSC_ERR(descramblerId, "ca_open failed! %s", strerror(errno));
 
-  mDsmFd = dsm_open();
+  mDsmFd = DSM_OpenSession(0);
   if (mDsmFd <= 0) {
       TUNER_DSC_ERR(descramblerId, "dsm_open failed! %s", strerror(errno));
   }
@@ -58,7 +58,7 @@ Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
 Descrambler::~Descrambler() {
 #ifdef SUPPORT_DSM
   if (mDsmFd > 0) {
-    dsm_close(mDsmFd);
+    DSM_CloseSession(mDsmFd);
     ca_close(mDescramblerId);
   }
 #else
@@ -108,8 +108,29 @@ Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
   TUNER_DSC_DBG(mDescramblerId, "keyToken:0x%x", mCasSessionToken);
 
 #ifdef SUPPORT_DSM
-  if (dsm_set_token(mDsmFd, mCasSessionToken)) {
-    TUNER_DSC_ERR(mDescramblerId, "dsm_set_token failed! %s", strerror(errno));
+  if (DSM_BindToken(mDsmFd, mCasSessionToken)) {
+    TUNER_DSC_ERR(mDescramblerId, "DSM_BindToken failed! %s", strerror(errno));
+    return Result::INVALID_STATE;
+  }
+
+#if BOARD_AML_SOC_TYPE == S905X4
+  int mLocalMode = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, 0);
+  if (!mLocalMode)
+    mDscType = CA_DSC_TSD_TYPE;
+  TUNER_DSC_DBG(mDescramblerId, "mLocalMode:%d", mLocalMode);
+#endif
+
+  uint32_t dsm_dsc_type = DSM_PROP_SC2_DSC_TYPE_INVALID;
+  if (mDscType == CA_DSC_COMMON_TYPE)
+    dsm_dsc_type = DSM_PROP_SC2_DSC_TYPE_TSN;
+  else if (mDscType == CA_DSC_TSD_TYPE)
+    dsm_dsc_type = DSM_PROP_SC2_DSC_TYPE_TSD;
+  else if (mDscType == CA_DSC_TSE_TYPE)
+    dsm_dsc_type = DSM_PROP_SC2_DSC_TYPE_TSE;
+  TUNER_DSC_DBG(mDescramblerId, "dsm_dsc_type:%d", dsm_dsc_type);
+
+  if (DSM_SetProperty(mDsmFd, DSM_PROP_SC2_DSC_TYPE, dsm_dsc_type)) {
+    TUNER_DSC_ERR(mDescramblerId, "DSM_SetProperty failed! %s", strerror(errno));
     return Result::INVALID_STATE;
   }
 #else
@@ -171,7 +192,7 @@ Return<Result> Descrambler::close() {
 
 #ifdef SUPPORT_DSM
   if (mDsmFd > 0) {
-    dsm_close(mDsmFd);
+    DSM_CloseSession(mDsmFd);
     ca_close(mDescramblerId);
     mDsmFd = -1;
   }
@@ -200,8 +221,18 @@ bool Descrambler::bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_han
   //std::lock_guard<std::mutex> lock(mDescrambleLock);
 
   for (int i = 0; i < mKeyslotList.count; i++) {
-    uint32_t kt_type = mKeyslotList.keyslots[i].type;
-    uint32_t kt_id = mKeyslotList.keyslots[i].id;
+    uint32_t kt_parity = mKeyslotList.keyslots[i].parity;
+    uint32_t kt_is_iv = mKeyslotList.keyslots[i].is_iv;
+    uint32_t kt_type = 0, kt_id = 0;
+    if (kt_parity == DSM_PARITY_NONE)
+        kt_type = kt_is_iv ? CA_KEY_00_IV_TYPE : CA_KEY_00_TYPE;
+    else if (kt_parity == DSM_PARITY_EVEN)
+        kt_type = kt_is_iv ? CA_KEY_EVEN_IV_TYPE : CA_KEY_EVEN_TYPE;
+    else if (kt_parity == DSM_PARITY_ODD)
+        kt_type = kt_is_iv ? CA_KEY_ODD_IV_TYPE : CA_KEY_ODD_TYPE;
+    else
+        return false;
+    kt_id = mKeyslotList.keyslots[i].id;
     if (kt_type < 0 || kt_id < 0) {
       TUNER_DSC_ERR(mDescramblerId, "Invalid paras(%d %d)!", kt_type, kt_id);
       return false;
@@ -247,20 +278,14 @@ bool Descrambler::clearDscChannels() {
 
 bool Descrambler::allocDscChannels() {
   //std::lock_guard<std::mutex> lock(mDescrambleLock);
-  ca_sc2_dsc_type dsc_type = CA_DSC_COMMON_TYPE;
 
   TUNER_DSC_TRACE(mDescramblerId);
-
-  int mLocalMode = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, 0);
-  if (!mLocalMode)
-    dsc_type = CA_DSC_TSD_TYPE;
-  TUNER_DSC_DBG(mDescramblerId, "mLocalMode:%d", mLocalMode);
 
   set<uint16_t>::iterator it;
   for (it = added_pid.begin(); it != added_pid.end(); it++) {
     uint16_t mPid = *it;
 #ifdef SUPPORT_DSM
-    int handle = ca_alloc_chan(mDescramblerId, mPid, mDsmAlgo, dsc_type);
+    int handle = ca_alloc_chan(mDescramblerId, mPid, mDscAlgo, mDscType);
     if (handle < 0) {
       TUNER_DSC_ERR(mDescramblerId, "ca_alloc_chan failed!");
       return false;
@@ -288,31 +313,40 @@ bool Descrambler::isDescramblerReady() {
 
   if (!mIsReady && mDsmFd > 0) {
 #ifdef SUPPORT_DSM
-    if (dsm_get_property(mDsmFd, DSM_PROP_ALGO, &mDsmAlgo)) {
-      TUNER_DSC_ERR(mDescramblerId, "dsm_get_property failed! %s", strerror(errno));
+    uint32_t mIsKtReady = DSM_PROP_SLOT_NOT_READY;
+    if (DSM_GetProperty(mDsmFd, DSM_PROP_DEC_SLOT_READY, &mIsKtReady)) {
+      TUNER_DSC_ERR(mDescramblerId, "DSM_GetProperty failed! %s", strerror(errno));
       return mIsReady;
     }
+    if (mIsKtReady != DSM_PROP_SLOT_IS_READY)
+        return mIsReady;
 
-    if (dsm_get_keyslot_list(mDsmFd, &mKeyslotList)) {
-      TUNER_DSC_ERR(mDescramblerId, "dsm_get_keyslot_list failed! %s", strerror(errno));
+    if (DSM_GetKeySlots(mDsmFd, &mKeyslotList)) {
+      TUNER_DSC_ERR(mDescramblerId, "DSM_GetKeySlots failed! %s", strerror(errno));
       return mIsReady;
     }
-    mIsReady = (mKeyslotList.count > 0 && mDsmAlgo != CA_ALGO_UNKNOWN) ? true : false;
+    TUNER_DSC_DBG(mDescramblerId, "mKeyslotList count:%d", mKeyslotList.count);
+    for (int i = 0; i < mKeyslotList.count; i++) {
+        if (mKeyslotList.keyslots[i].is_enc == 0) {
+            mDscAlgo = mKeyslotList.keyslots[i].algo;
+            break;
+        }
+    }
+    if (mDscAlgo == CA_ALGO_UNKNOWN)
+        return mIsReady;
 #else
     int ret = Dsc_GetSessionInfo(mSecmemSession, mCasSessionToken);
     if (ret) {
       if (ret != CAS_DSC_RETRY)
         TUNER_DSC_ERR(mDescramblerId, "Dsc_GetSessionInfo failed!");
       return mIsReady;
-    } else {
-      mIsReady = true;
     }
 #endif
-    if (mIsReady) {
-      if (!allocDscChannels()) {
-        clearDscChannels();
-      }
+    if (!allocDscChannels()) {
+      clearDscChannels();
+      return mIsReady;
     }
+    mIsReady = true;
   }
 
   return mIsReady;
