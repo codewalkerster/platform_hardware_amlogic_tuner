@@ -656,6 +656,11 @@ Result Demux::startFilterHandler(uint32_t filterId) {
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (DEBUG_DEMUX)
         ALOGD("%s/%d filterId:%d", __FUNCTION__, __LINE__, filterId);
+    for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
+        if (!descramblerIt->second->isDescramblerReady())
+            ALOGD("[Demux] Descrambler is not ready.");
+        continue;
+    }
     //Create mFilterEvent with mFilterOutput
     return mFilters[filterId]->startFilterHandler();
 }

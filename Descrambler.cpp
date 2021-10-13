@@ -315,7 +315,7 @@ bool Descrambler::isDescramblerReady() {
 #ifdef SUPPORT_DSM
     uint32_t mIsKtReady = DSM_PROP_SLOT_NOT_READY;
     if (DSM_GetProperty(mDsmFd, DSM_PROP_DEC_SLOT_READY, &mIsKtReady)) {
-      TUNER_DSC_ERR(mDescramblerId, "DSM_GetProperty failed! %s", strerror(errno));
+      TUNER_DSC_DBG(mDescramblerId, "key slots are not ready.");
       return mIsReady;
     }
     if (mIsKtReady != DSM_PROP_SLOT_IS_READY)
