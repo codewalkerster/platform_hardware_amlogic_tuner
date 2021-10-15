@@ -185,10 +185,11 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     if (settings.ts().filterSettings.av().isPassthrough) {
                         //aparam.flags |= DMX_OUTPUT_RAW_MODE;
                         // for passthrough mode, will set pes filter in media hal
+                        uint32_t tempFilterId = mFilterId;
                         uint32_t dmxId = mDemux->getAmDmxDevice()->dev_no;
                         mFilterId      = (dmxId << 16) | (uint32_t)(mTpid);
                         ALOGD("audio filter id = %d", mFilterId);
-                        mDemux->addPassthroughMediaFilterId(mFilterId);
+                        mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
                     } else {
                         struct dmx_pes_filter_params aparam;
                         memset(&aparam, 0, sizeof(aparam));
@@ -214,10 +215,11 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     if (settings.ts().filterSettings.av().isPassthrough) {
                         //vparam.flags |= DMX_OUTPUT_RAW_MODE;
                         // for passthrough mode, will set pes filter in media hal
+                        uint32_t tempFilterId = mFilterId;
                         uint32_t dmxId = mDemux->getAmDmxDevice()->dev_no;
                         mFilterId      = (dmxId << 16) | (uint32_t)(mTpid);
                         ALOGD("video filter id = %d", mFilterId);
-                        mDemux->addPassthroughMediaFilterId(mFilterId);
+                        mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
                     } else {
                         int buffSize = 0;
                         struct dmx_pes_filter_params vparam;
@@ -336,6 +338,9 @@ Return<Result> Filter::start() {
 
 Return<Result> Filter::stop() {
     ALOGD("%s/%d mFilterId:%d", __FUNCTION__, __LINE__, mFilterId);
+    if (mFilterId > DMX_FILTER_COUNT) {
+        mFilterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
+    }
     mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
     mDemux->getAmDmxDevice()->AM_DMX_StopFilter(mFilterId);
     mFilterThreadRunning = false;
@@ -367,7 +372,12 @@ Return<Result> Filter::releaseAvHandle(const hidl_handle& /*avMemory*/, uint64_t
 }
 
 Return<Result> Filter::close() {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    ALOGD("%s/%d mFilterId = %d", __FUNCTION__, __LINE__, mFilterId);
+    if (mFilterId > DMX_FILTER_COUNT) {
+        uint32_t tmpFilterId = mFilterId;
+        mFilterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
+        mDemux->eraseFakeFilterId(tmpFilterId);
+    }
     mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
     if (mFilterMQ.get() != NULL)
         mFilterMQ.reset();

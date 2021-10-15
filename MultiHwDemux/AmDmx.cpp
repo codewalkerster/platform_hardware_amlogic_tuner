@@ -22,9 +22,10 @@
 #include <AmDmx.h>
 #include <dmx.h>
 
-AM_DMX_Device::AM_DMX_Device() {
+AM_DMX_Device::AM_DMX_Device(int demuxId) {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
     drv = new AmLinuxDvb;
+    dev_no = demuxId;
     open_count = 0;
     for (int fid = 0; fid < DMX_FILTER_COUNT; fid++) {
         filters[fid].used = false;
@@ -293,7 +294,7 @@ int AM_DMX_Device::dmx_free_filter(AM_DMX_Filter *filter) {
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_Open(void) {
 
     AM_ErrorCode_t ret = AM_SUCCESS;
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    ALOGD("%s/%d demuxId = %d", __FUNCTION__, __LINE__, dev_no);
 
     if (open_count > 0) {
         ALOGI("demux device %d has already been openned", dev_no);
@@ -336,8 +337,10 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Close(void) {
         for (int i = 0; i < DMX_FILTER_COUNT; i++) {
             dmx_free_filter(&filters[i]);
         }
-        if (drv)
+        if (drv) {
             drv->dvb_close(this);
+            drv = NULL;
+        }
         pthread_mutex_destroy(&lock);
         pthread_cond_destroy(&cond);
     }
@@ -349,7 +352,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Close(void) {
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_Read(int fhandle, uint8_t* buff, int *size) {
     AM_DMX_Filter *filter;
     AM_ErrorCode_t ret = AM_SUCCESS;
-    //ALOGV("%s", __FUNCTION__);
+    //ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
     ret = dmx_get_used_filter(fhandle, &filter);
     if (ret != AM_SUCCESS) {
@@ -489,7 +492,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetSTC(int fhandle) {
 
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_FreeFilter(int fhandle) {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, dev_no);
 
     AM_DMX_Filter *filter;
     AM_ErrorCode_t ret = AM_SUCCESS;

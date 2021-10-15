@@ -94,7 +94,7 @@ using namespace android;
 class AM_DMX_Device : public RefBase{
 
 public:
-    AM_DMX_Device();
+    AM_DMX_Device(int demuxId);
     ~AM_DMX_Device();
     AM_ErrorCode_t dmx_dvr_open(dmx_input_source_t inputSource);
     AM_ErrorCode_t dmx_get_used_filter(int filter_id, AM_DMX_Filter **pf);

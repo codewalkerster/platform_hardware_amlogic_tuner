@@ -58,7 +58,7 @@ class Filter;
 class Frontend;
 class TimeFilter;
 class Tuner;
-
+#define DMX_COUNT (6)
 class Demux : public IDemux {
   public:
     Demux(uint32_t demuxId, sp<Tuner> tuner);
@@ -114,11 +114,12 @@ class Demux : public IDemux {
     void attachDescrambler(uint32_t descramblerId, sp<Descrambler> descrambler);
     void detachDescrambler(uint32_t descramblerId);
     sp<AmDvr> getAmDvrDevice();
-    void addPassthroughMediaFilterId(uint32_t filterId);
-    bool isPassthroughMediaFilterId(uint32_t filterId);
     bool checkPesFilterId(uint32_t filterId);
     void combinePesData(uint32_t filterId);
     bool setStbSource(const char *path, const char *value);
+    void mapPassthroughMediaFilter(uint32_t fakefilterId, uint32_t filterId);
+    uint32_t findFilterIdByfakeFilterId(uint32_t fakefilterId);
+    void eraseFakeFilterId(uint32_t fakefilterId);
 
   private:
     // Tuner service
@@ -218,11 +219,12 @@ class Demux : public IDemux {
     // TODO handle mulptiple Pes filters
     int mPesSizeLeft = 0;
     vector<uint8_t> mPesOutput;
-    sp<AM_DMX_Device> AmDmxDevice;
+    sp<AM_DMX_Device> AmDmxDevice[DMX_COUNT];
     const bool DEBUG_DEMUX = false;
     sp<MediaSyncWrap> mMediaSyncWrap;
     sp<AmDvr> mAmDvrDevice;
     int mAvSyncHwId = -1;
+    std::map<uint32_t, uint32_t> mMapFilter;
     //int mfd;
 };
 
