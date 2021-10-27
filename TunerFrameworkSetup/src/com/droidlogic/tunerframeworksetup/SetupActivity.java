@@ -1868,12 +1868,11 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                             Log.w(TAG, "Audio auxiliary data.");
                             break;
                         case 0x0f:
+                        case 0x11:
+                            Log.d(TAG, "aac format audio.");
                             mAudioMimeType = MediaFormat.MIMETYPE_AUDIO_AAC;
                             mAudioformat = new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_AAC_LC).setSampleRate(4001).setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                                                 .build();
-                            break;
-                        case 0x11:
-                            Log.w(TAG, "MPEG-4 LOAS multi-format framed audio.");
                             break;
                         case 0x81:
                             mAudioMimeType = MediaFormat.MIMETYPE_AUDIO_AC3;
