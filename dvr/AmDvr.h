@@ -69,6 +69,7 @@ struct AM_DVR_Device
     pthread_mutex_t         lock;    /**< 设备保护互斥体*/
     AM_DVR_StartRecPara_t    start_para;    /**< 启动参数*/
     //AM_DVR_Source_t        src;            /**< 源数据*/
+    int                   dmx_fd;
 };
 
 typedef void (*AM_DVR_DataCb) (void* device);

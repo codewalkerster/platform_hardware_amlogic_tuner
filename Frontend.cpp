@@ -68,6 +68,7 @@ Return<Result> Frontend::close() {
     mCallback = nullptr;
     mIsLocked = false;
     mFeDev->stop();
+    mTunerService->removeFrontend(mId);
 
     return Result::SUCCESS;
 }

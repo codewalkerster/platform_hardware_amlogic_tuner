@@ -232,6 +232,25 @@ typedef enum dmx_source {
 #endif
 } dmx_source_t;
 
+enum {
+    DMA_0 = 0,
+    DMA_1,
+    DMA_2,
+    DMA_3,
+    DMA_4,
+    DMA_5,
+    DMA_6,
+    DMA_7,
+    FRONTEND_TS0 = 32,
+    FRONTEND_TS1,
+    FRONTEND_TS2,
+    FRONTEND_TS3,
+    FRONTEND_TS4,
+    FRONTEND_TS5,
+    FRONTEND_TS6,
+    FRONTEND_TS7,
+};
+
 struct dmx_stc {
     unsigned int num;    /* input : which STC? 0..N */
     unsigned int base;    /* output: divisor for stc to get 90 kHz clock */
@@ -252,6 +271,7 @@ struct dmx_stc {
 #ifdef CONFIG_AMLOGIC_DVB_COMPAT
 #define DMX_SET_INPUT           _IO('o', 80)
 #define DMX_GET_MEM_INFO        _IOR('o', 81, struct dmx_mem_info)
+#define DMX_SET_HW_SOURCE       _IO('o', 82)
 #endif
 #define DMX_GET_FILTER_MEM_INFO _IOR('o', 84, struct dmx_filter_mem_info)
 

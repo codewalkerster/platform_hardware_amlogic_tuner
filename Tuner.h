@@ -84,6 +84,9 @@ class Tuner : public ITuner {
     void attachDescramblerToDemux(uint32_t descramblerId, uint32_t demuxId) const;
     void detachDescramblerFromDemux(uint32_t descramblerId, uint32_t demuxId) const;
 
+    void removeDemux(uint32_t demuxId);
+    void removeFrontend(uint32_t frontendId);
+
     typedef struct {
         int id;
         uint32_t minFreq;

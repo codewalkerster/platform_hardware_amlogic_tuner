@@ -44,11 +44,12 @@ public:
     AM_ErrorCode_t dvb_set_buf_size(AM_DMX_Device *dev, AM_DMX_Filter *filter, int size);
     AM_ErrorCode_t dvb_poll(AM_DMX_Device *dev, AM_DMX_FilterMask_t *mask, int timeout);
     AM_ErrorCode_t dvb_read(AM_DMX_Device *dev, AM_DMX_Filter *filter, uint8_t *buf, int *size,bool pollflag = true);
-    //AM_ErrorCode_t dvb_set_source(AM_DMX_Device *dev, AM_DMX_Source_t src);
+    AM_ErrorCode_t dvb_set_source(AM_DMX_Device *dev, dmx_input_source_t inputSource);
     AM_ErrorCode_t dvr_open(AM_DMX_Device *dev,dmx_input_source_t inputSource);
     int dvr_data_write(uint8_t *buf, int size,uint64_t timeout);
     AM_ErrorCode_t dvr_close(void);
 private:
+    int getDmaByDemuxId(int demuxId);
     int mDvrFd;
     int pollFailCount;
     int mFilterMemInfoFd;

@@ -339,7 +339,6 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Close(void) {
         }
         if (drv) {
             drv->dvb_close(this);
-            drv = NULL;
         }
         pthread_mutex_destroy(&lock);
         pthread_cond_destroy(&cond);

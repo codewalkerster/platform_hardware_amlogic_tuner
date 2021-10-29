@@ -476,11 +476,12 @@ Return<Result> Demux::close() {
         AmDmxDevice[mDemuxId]->AM_DMX_Close();
         AmDmxDevice[mDemuxId] = NULL;
     }
+
     if (mAmDvrDevice != NULL) {
         mAmDvrDevice->AM_DVR_Close();
         mAmDvrDevice = NULL;
     }
-
+    mTunerService->removeDemux(mDemuxId);
     return Result::SUCCESS;
 }
 

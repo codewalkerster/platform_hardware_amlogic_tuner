@@ -317,8 +317,60 @@ AM_ErrorCode_t AmLinuxDvb::dvb_read(AM_DMX_Device *dev, AM_DMX_Filter *filter, u
     return AM_SUCCESS;
 }
 
-AM_ErrorCode_t AmLinuxDvb::dvr_open(AM_DMX_Device *dev, dmx_input_source_t inputSource) {
+int AmLinuxDvb::getDmaByDemuxId(int demuxId) {
+    switch (demuxId) {
+        case 0:
+            return DMA_0;
+        case 1:
+            return DMA_1;
+        case 2:
+            return DMA_2;
+        case 3:
+            return DMA_3;
+        case 4:
+            return DMA_4;
+        case 5:
+            return DMA_5;
+        case 6:
+            return DMA_6;
+        case 7:
+            return DMA_7;
+        default:
+            assert(0);
+    }
+    return -1;
+}
+
+AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, dmx_input_source_t inputSource) {
+    DVBDmx_t *dmx = (DVBDmx_t*)dev->drv_data;
+    int fd = -1;
     int ret = 0;
+    ALOGI("%s/%d", __FUNCTION__, __LINE__);
+
+    fd = open(dmx->dev_name, O_RDWR);
+    if (fd == -1) {
+        ALOGE("cannot open \"%s\" (%s)", dmx->dev_name, strerror(errno));
+        return AM_DMX_ERR_CANNOT_OPEN_DEV;
+    }
+
+    if (inputSource == INPUT_LOCAL) {
+        ALOGI("set ---> INPUT_LOCAL \n");
+        ret = ioctl(fd, DMX_SET_INPUT, INPUT_LOCAL);
+        ALOGI("DMX_SET_INPUT ret:%d\n", ret);
+        ret = ioctl(fd, DMX_SET_HW_SOURCE, getDmaByDemuxId(dev->dev_no));
+        ALOGI("DMX_SET_HW_SOURCE ret:%d\n", ret);
+    } else if (inputSource == INPUT_DEMOD) {
+        ALOGI("set ---> INPUT_DEMOD \n" );
+        ret = ioctl(fd, DMX_SET_INPUT, INPUT_DEMOD);
+        ALOGI("DMX_SET_INPUT ret:%d\n", ret);
+        ret = ioctl(fd, DMX_SET_HW_SOURCE, FRONTEND_TS0);
+        ALOGI("DMX_SET_HW_SOURCE ret:%d\n", ret);
+    }
+    return AM_SUCCESS;
+}
+
+AM_ErrorCode_t AmLinuxDvb::dvr_open(AM_DMX_Device *dev, dmx_input_source_t inputSource) {
+    //int ret = 0;
     char name[32];
     ALOGI("%s/%d", __FUNCTION__, __LINE__);
 
@@ -329,19 +381,7 @@ AM_ErrorCode_t AmLinuxDvb::dvr_open(AM_DMX_Device *dev, dmx_input_source_t input
         return -1;
     }
     ALOGI("open %s ok mDvrFd = %d\n", name, mDvrFd);
-
-    if (inputSource == INPUT_LOCAL) {
-        ALOGI("set ---> INPUT_LOCAL \n");
-        ret = ioctl(mDvrFd, DMX_SET_INPUT, INPUT_LOCAL);
-    } else if (inputSource == INPUT_DEMOD) {
-        ALOGI("set ---> INPUT_DEMOD \n" );
-        ret = ioctl(mDvrFd, DMX_SET_INPUT, INPUT_DEMOD);
-    }
-    ALOGI("DMX_SET_INPUT ret:%d\n", ret);
-    if (ret < 0) {
-        ALOGE("dvr_open ioctl failed %s\n", strerror(errno));
-        return -1;
-    }
+    dvb_set_source(dev, inputSource);
     return AM_SUCCESS;
 }
 

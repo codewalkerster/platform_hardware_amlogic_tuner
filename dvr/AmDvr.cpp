@@ -27,9 +27,10 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
 {
     char dev_name[32];
     int fd;
-    int ret = -1;
+    //int ret = -1;
 
     snprintf(dev_name, sizeof(dev_name), "/dev/dvb0.dvr%d", dev->dev_no);
+    ALOGI("dvr_open dev_name:%s\n", dev_name);
     fd = open(dev_name, O_RDONLY);
     if (fd == -1)
     {
@@ -37,26 +38,57 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
         return AM_DVR_ERR_CANNOT_OPEN_DEV;
     }
     fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
-    if (inputSource == INPUT_DEMOD) {
-        ALOGI("set ---> INPUT_DEMOD \n" );
-        ret = ioctl(fd, DMX_SET_INPUT, INPUT_DEMOD);
-    }
-    ALOGI("DMX_SET_INPUT ret:%d\n", ret);
-    if (ret < 0) {
-        ALOGE("dvr_open ioctl failed %s\n", strerror(errno));
-        return -1;
-    }
+
     dev->drv_data = (void*)(long)fd;
     return AM_SUCCESS;
 }
 
+static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source_t inputSource) {
+    char dev_name[32];
+    int fd;
+    int ret = -1;
+
+    snprintf(dev_name, sizeof(dev_name), "/dev/dvb0.demux%d", dev->dev_no);
+    fd = open(dev_name, O_RDWR);
+    if (fd == -1)
+    {
+        ALOGD("cannot open \"%s\" (%s)", dev_name, strerror(errno));
+        return AM_DVR_ERR_CANNOT_OPEN_DEV;
+    }
+
+    if (inputSource == INPUT_DEMOD) {
+        ALOGI("set ---> INPUT_DEMOD \n" );
+        ret = ioctl(fd, DMX_SET_INPUT, INPUT_DEMOD);
+        ALOGI("DMX_SET_INPUT ret:%d\n", ret);
+        ret = ioctl(fd, DMX_SET_HW_SOURCE, FRONTEND_TS0);
+        ALOGI("DMX_SET_HW_SOURCE ret:%d\n", ret);
+    }
+    if (ret < 0) {
+        ALOGE("dvr_open ioctl failed %s\n", strerror(errno));
+        return -1;
+    }
+    dev->dmx_fd = fd;
+    return AM_SUCCESS;
+
+}
+
 static AM_ErrorCode_t dvr_close(AM_DVR_Device_t *dev)
 {
-    int fd = (long)dev->drv_data;
+    ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
-    close(fd);
-    return AM_SUCCESS;
+    int fd = (long)dev->drv_data;
+    if (fd > 0) {
+        close(fd);
+        fd = -1;
     }
+
+    int dmx_fd = dev->dmx_fd;
+    if (dmx_fd > 0) {
+        close(dmx_fd);
+        dmx_fd = -1;
+    }
+    return AM_SUCCESS;
+}
 
 static AM_ErrorCode_t dvr_poll(AM_DVR_Device_t *dev, int timeout)
 {
@@ -99,6 +131,8 @@ static AM_ErrorCode_t dvr_read(AM_DVR_Device_t *dev, uint8_t *buf, int *size)
 }
 
 AmDvr::AmDvr(uint32_t demuxId) {
+    ALOGD("%s/%d demuxId = %d", __FUNCTION__, __LINE__, demuxId);
+
     mDmxId = demuxId;
     mDvrDevice = new AM_DVR_Device_t;
     mDvrDevice->dev_no = demuxId;
@@ -108,6 +142,8 @@ AmDvr::AmDvr(uint32_t demuxId) {
 }
 
 AmDvr::~AmDvr() {
+    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+
     if (mDvrDevice != NULL) {
         delete mDvrDevice;
         mDvrDevice = NULL;
@@ -120,15 +156,15 @@ AmDvr::~AmDvr() {
 
 AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource)
 {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, mDvrDevice->dev_no);
     if (opencnt > 0) {
-        ALOGI("demux device %d has already been openned", mDvrDevice->dev_no);
+        ALOGI("dvr device %d has already been openned", mDvrDevice->dev_no);
         opencnt++;
         return AM_SUCCESS;
     }
 
-    AM_ErrorCode_t ret = dvr_open(mDvrDevice,inputSource);
-
+    AM_ErrorCode_t ret = dvr_open(mDvrDevice, inputSource);
+    ret = setDvbSource(mDvrDevice, inputSource);
     if (ret == AM_SUCCESS) {
         pthread_mutex_init(&lock, NULL);
         pthread_cond_init(&cond, NULL);
@@ -150,9 +186,12 @@ AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource)
 AM_ErrorCode_t AmDvr::AM_DVR_Close()
 {
     AM_ErrorCode_t ret = AM_SUCCESS;
+    ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
     if (opencnt == 1) {
-        ret = dvr_close(mDvrDevice);
+        if (mDvrDevice != NULL) {
+            ret = dvr_close(mDvrDevice);
+        }
         enable_thread = false;
         pthread_join(thread, NULL);
         pthread_mutex_destroy(&lock);

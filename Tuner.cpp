@@ -238,9 +238,15 @@ Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _h
 }
 
 Return<void> Tuner::openDemux(openDemux_cb _hidl_cb) {
-    ALOGV("%s/%d", __FUNCTION__, __LINE__);
+    ALOGV("%s/%d mDemuxes size = %d", __FUNCTION__, __LINE__, mDemuxes.size());
+    mLastUsedId = 0;
+    std::map<uint32_t, sp<Demux>>::iterator it = mDemuxes.find(mLastUsedId);
+    while (it != mDemuxes.end()) {
+        mLastUsedId++;
+        ALOGD("mLastUsedId = %d", mLastUsedId);
+        it = mDemuxes.find(mLastUsedId);
+    }
 
-    mLastUsedId += 1;
     if (mLastUsedId == NUMDEMX)
         mLastUsedId = 0;
 
@@ -399,6 +405,21 @@ void Tuner::detachDescramblerFromDemux(uint32_t descramblerId,
       && mDemuxes.find(demuxId) != mDemuxes.end()) {
     mDemuxes.at(demuxId)->detachDescrambler(descramblerId);
   }
+}
+
+void Tuner::removeDemux(uint32_t demuxId) {
+   map<uint32_t, uint32_t>::iterator it;
+   for (it = mFrontendToDemux.begin(); it != mFrontendToDemux.end(); it++) {
+       if (it->second == demuxId) {
+           it = mFrontendToDemux.erase(it);
+           break;
+       }
+   }
+   mDemuxes.erase(demuxId);
+}
+
+void Tuner::removeFrontend(uint32_t frontendId) {
+   mFrontendToDemux.erase(frontendId);
 }
 
 }  // namespace implementation
