@@ -13,6 +13,7 @@
 #define LOG_TAG "AM_DMX_Device"
 #include <utils/Log.h>
 #include <cutils/properties.h>
+#include <sys/prctl.h>
 
 #include <string.h>
 #include <assert.h>
@@ -24,7 +25,7 @@
 
 AM_DMX_Device::AM_DMX_Device(int demuxId) {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
-    drv = new AmLinuxDvb;
+    drv = new AmLinuxDvb();
     dev_no = demuxId;
     open_count = 0;
     for (int fid = 0; fid < DMX_FILTER_COUNT; fid++) {
@@ -191,7 +192,7 @@ void* AM_DMX_Device::dmx_data_thread(void *arg) {
     AM_DMX_Device *dev = (AM_DMX_Device*)arg;
     AM_DMX_FilterMask_t mask = 0;
     AM_ErrorCode_t ret;
-
+    prctl(PR_SET_NAME, "dmx_data_thread");
     while (dev && dev->enable_thread) {
         AM_DMX_FILTER_MASK_CLEAR(&mask);
 
@@ -310,7 +311,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Open(void) {
         enable_thread = true;
         flags = 0;
 
-        if (pthread_create(&thread, NULL, dmx_data_thread, this)) {
+        if (pthread_create(&thread, NULL, this->dmx_data_thread, this)) {
             pthread_mutex_destroy(&lock);
             pthread_cond_destroy(&cond);
             ret = AM_DMX_ERR_CANNOT_CREATE_THREAD;

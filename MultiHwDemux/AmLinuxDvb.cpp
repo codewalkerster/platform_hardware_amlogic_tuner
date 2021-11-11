@@ -86,7 +86,7 @@ AM_ErrorCode_t AmLinuxDvb::dvb_alloc_filter(AM_DMX_Device *dev, AM_DMX_Filter *f
     int fd = -1;
     ALOGI("%s/%d", __FUNCTION__, __LINE__);
 
-    fd = open(dmx->dev_name, O_RDWR);
+    fd = open(dmx->dev_name, O_RDWR | O_NONBLOCK);
     if (fd == -1) {
         ALOGE("cannot open \"%s\" (%s)", dmx->dev_name, strerror(errno));
         return AM_DMX_ERR_CANNOT_OPEN_DEV;

@@ -116,6 +116,7 @@ class Demux : public IDemux {
     sp<AmDvr> getAmDvrDevice();
     bool checkPesFilterId(uint32_t filterId);
     void combinePesData(uint32_t filterId);
+    void getSectionData(uint32_t filterId);
     bool setStbSource(const char *path, const char *value);
     void mapPassthroughMediaFilter(uint32_t fakefilterId, uint32_t filterId);
     uint32_t findFilterIdByfakeFilterId(uint32_t fakefilterId);

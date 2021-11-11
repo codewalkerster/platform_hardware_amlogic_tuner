@@ -156,10 +156,34 @@ void Demux::combinePesData(uint32_t filterId) {
     }
 }
 
+void Demux::getSectionData(uint32_t filterId) {
+    vector<uint8_t> sectionData;
+    int sectionSize = PSI_MAX_SIZE;
+
+    sectionData.resize(sectionSize);
+    int readRet = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, sectionData.data(), &sectionSize);
+    if (readRet != 0) {
+        ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
+        return;
+    } else {
+        ALOGV("fid =%d section data size:%d", filterId, sectionSize);
+        /* for debug
+        uint16_t tableId = tmpSectionData[0];
+        if (tableId == 0x0) {
+            ALOGD("received PAT table tableId = %d, fid = %d", tableId, fid);
+        }
+        if (tableId == 0x2) {
+            ALOGD("received PMT table tableId = %d, fid = %d", tableId, fid);
+        }*/
+        sectionData.resize(sectionSize);
+        updateFilterOutput(filterId, sectionData);
+        startFilterHandler(filterId);
+    }
+
+}
+
 void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     vector<uint8_t> tmpData;
-    vector<uint8_t> tmpSectionData;
-    int sectionSize = PSI_MAX_SIZE;
     Demux *dmxDev = (Demux*)demux;
     ALOGV("[Demux] postData fid =%d esOutput:%d dev_no:%d", fid, esOutput, dmxDev->getAmDmxDevice()->dev_no);
 
@@ -259,18 +283,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             ALOGD("start pes data combine fid = %d", fid);
             dmxDev->combinePesData(fid);
         } else {
-            tmpSectionData.resize(sectionSize);
-            int readRet = dmxDev->getAmDmxDevice()
-                          ->AM_DMX_Read(fid, tmpSectionData.data(), &sectionSize);
-            if (readRet != 0) {
-                ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
-                return;
-            } else {
-                ALOGV("fid =%d section data size:%d", fid, sectionSize);
-                tmpSectionData.resize(sectionSize);
-                dmxDev->updateFilterOutput(fid, tmpSectionData);
-                dmxDev->startFilterHandler(fid);
-            }
+            dmxDev->getSectionData(fid);
         }
     }
 }
