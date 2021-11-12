@@ -109,20 +109,19 @@ void FrontendDevice::stop() {
 
 void FrontendDevice::stopByHw() {
     ALOGE("[id:%d] stop for hw reclaimed.", mDev.id);
-    int state = getThreadState();
-    switch (state)
+    switch (mThreadState)
     {
         case FrontendDevice::STATE_TUNE_START:
-            mContext->sendEventCallBack(FrontendEventType::NO_SIGNAL);
-            updateThreadState(FrontendDevice::STATE_STOP);
+            //mContext->sendEventCallBack(FrontendEventType::NO_SIGNAL);
+            mThreadState = FrontendDevice::STATE_STOP;
             break;
         case FrontendDevice::STATE_SCAN_START:
-            mContext->sendScanCallBack(mDev.tuneFreq, false, true);
-            updateThreadState(FrontendDevice::STATE_STOP);
+            //mContext->sendScanCallBack(mDev.tuneFreq, false, true);
+            mThreadState = FrontendDevice::STATE_STOP;
             break;
         case FrontendDevice::STATE_TUNE_IDLE:
-            mContext->sendEventCallBack(FrontendEventType::LOST_LOCK);
-            updateThreadState(FrontendDevice::STATE_STOP);
+            //mContext->sendEventCallBack(FrontendEventType::LOST_LOCK);
+            mThreadState = FrontendDevice::STATE_STOP;
             break;
         default:
             break;
@@ -134,7 +133,7 @@ void FrontendDevice::stopByHw() {
 }
 
 bool FrontendDevice::checkOpen(bool autoOpen) {
-    ALOGE("%s", __FUNCTION__);
+    ALOGE("%s-(id:%d)", __FUNCTION__, mDev.id);
     bool ret=  true;
 
     if (unsupportSystem) return false;
@@ -482,16 +481,20 @@ bool FrontendDevice::threadLoop() {
                 stop = true;
             }
         }
+        newState = getThreadState();
+        if (mRequestTunningStop || newState == FrontendDevice::STATE_STOP) {
+            stop = true;
+        }
         if (fe_event.status != 0 && !stop) {
             bool locked = ((fe_event.status & FE_HAS_LOCK) !=0);
-            ALOGD("%s: get fe event: 0x%02x, locked=%d, dev_locked=%d", __FUNCTION__, fe_event.status, locked, mDev.islocked);
+            ALOGD("%s-(id:%d): get fe event: 0x%02x, locked=%d, dev_locked=%d", __FUNCTION__, mDev.id, fe_event.status, locked, mDev.islocked);
             if (state == STATE_SCAN_START) {
-                ALOGD("%s: send scan event.", __FUNCTION__);
+                ALOGD("%s-(id:%d): send scan event.", __FUNCTION__, mDev.id);
                 mDev.islocked = locked;
                 mContext->sendScanCallBack(mDev.tuneFreq, locked, false);
                 updateThreadState(FrontendDevice::STATE_STOP);
             } else if (state == STATE_TUNE_START) {
-                ALOGD("%s: send tune event.", __FUNCTION__);
+                ALOGD("%s-(id:%d): send tune event.", __FUNCTION__, mDev.id);
                 mDev.islocked = locked;
                 updateThreadState(FrontendDevice::STATE_TUNE_IDLE);
                 if (locked) {
@@ -501,7 +504,7 @@ bool FrontendDevice::threadLoop() {
                 }
             } else {
                 if (locked != mDev.islocked) {
-                    ALOGD("%s: send evt changed.", __FUNCTION__);
+                    ALOGD("%s-(id:%d): send evt changed.", __FUNCTION__, mDev.id);
                     mDev.islocked = locked;
                     if (locked) {
                         mContext->sendEventCallBack(FrontendEventType::LOCKED);
@@ -519,7 +522,7 @@ bool FrontendDevice::threadLoop() {
         }
     } else if (state == FrontendDevice::STATE_STOP
        || state == FrontendDevice::STATE_INITIAL_IDLE) {
-        ALOGD("%s: fe thread wait in stop state.", __FUNCTION__);
+        ALOGD("%s-(id-%d): fe thread wait in stop state.", __FUNCTION__, mDev.id);
         sem_wait(&threadSemaphore);
     } else if (state == FrontendDevice::STATE_FINISH) {
         usleep(1000*20);//wait to exit thread
@@ -550,6 +553,7 @@ void FrontendDevice::requestTuneStop(void) {
     mRequestTunningStop = true;
     while (ready == false) {
         int state = getThreadState();
+        ALOGV("%s-(id:%d): state=%d", __FUNCTION__, mDev.id, state);
         if (state == FrontendDevice::STATE_STOP
             || state == FrontendDevice::STATE_INITIAL_IDLE) {
             ready = true;
