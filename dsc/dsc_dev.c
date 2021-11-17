@@ -87,13 +87,14 @@ int ca_alloc_chan(int devno, unsigned int pid, int algo, int dsc_type)
     struct ca_sc2_descr_ex desc;
 
     pthread_mutex_lock(&lock);
-
+    memset(&desc, 0, sizeof(desc));
     ALOGI("ca_alloc_chan dev:%d, pid:0x%0x, algo:%d, dsc_type:%d\n", devno, pid, algo, dsc_type);
     desc.cmd = CA_ALLOC;
     desc.params.alloc_params.pid = pid;
     desc.params.alloc_params.algo = algo;
     desc.params.alloc_params.dsc_type = dsc_type;
     desc.params.alloc_params.ca_index = -1;
+    desc.params.alloc_params.loop = 0;
 
     if (devno >= MAX_DSC_DEV || !dvb_dsc_dev[devno].used) {
         ALOGE("ca_alloc_chan failed! devno:%d used:%d\n", devno, dvb_dsc_dev[devno].used);
