@@ -65,6 +65,7 @@ static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source_t inpu
     }
     if (ret < 0) {
         ALOGE("dvr_open ioctl failed %s\n", strerror(errno));
+        close(fd);
         return -1;
     }
     dev->dmx_fd = fd;

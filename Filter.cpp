@@ -777,6 +777,7 @@ Result Filter::startMediaFilterHandler() {
 
     native_handle_t* nativeHandle = createNativeHandle(av_fd);
     if (nativeHandle == NULL) {
+       releaseIonBuffer(avBuffer, mFilterOutput.size());
        return Result::UNKNOWN_ERROR;
     }
     hidl_handle handle;

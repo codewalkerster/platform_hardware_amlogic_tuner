@@ -53,6 +53,7 @@ private:
     int mDvrFd;
     int pollFailCount;
     int mFilterMemInfoFd;
+    int mDmxFd;
 };
 
 #endif
