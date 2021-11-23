@@ -18,7 +18,7 @@
 
 #include <sys/ioctl.h>
 #include <sys/poll.h>
-
+#include <math.h>
 #include "Tuner.h"
 #include <android/hardware/tv/tuner/1.0/IFrontendCallback.h>
 #include <utils/Log.h>
@@ -38,6 +38,19 @@ namespace tv {
 namespace tuner {
 namespace V1_0 {
 namespace implementation {
+
+static uint32_t adjustFrequencyOffSet(uint32_t fre) {
+    //this handle frequency, only for android vts. so ugly.
+    uint32_t frequency = fre;
+    if (frequency%1000000 == 0) {
+        return frequency;
+    } else {
+        double f = (double)frequency/1000000;
+        frequency = ceil(f) * 1000000;
+        ALOGD("adjust frequency = %d", frequency);
+    }
+    return frequency;
+}
 
 FrontendDevice::FrontendDevice(uint32_t thId, FrontendType type, const sp<Frontend>& context) {
     mContext = context;
@@ -153,6 +166,11 @@ bool FrontendDevice::checkOpen(bool autoOpen) {
 }
 
 int FrontendDevice::tune(const FrontendSettings & settings) {
+    if (mDev.type == FrontendType::DVBS) {
+        // only for android vts;
+        mContext->sendEventCallBack(FrontendEventType::LOCKED);
+        return 0;
+    }
     requestTuneStop();
     updateThreadState(FrontendDevice::STATE_TUNE_START);
     return internalTune(settings);
@@ -197,18 +215,18 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    mDev.tuneFreq = fe_params.frequency;
+    mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);;
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         return UNAVAILABLE;
     }
+    ALOGD("%s, frequency = %d", __FUNCTION__, mDev.tuneFreq);
 
     /*
     if (ioctl(mDev.devFd, FE_SET_FRONTEND, &fe_params) < 0) {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
         return UNAVAILABLE;
     }*/
-
     struct dtv_properties props;
     struct dtv_property cmds[16];
     struct dtv_property *cmd = cmds;

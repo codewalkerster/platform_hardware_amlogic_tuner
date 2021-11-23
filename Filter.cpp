@@ -132,9 +132,6 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     }
                     memset(&param, 0, sizeof(param));
                     param.pid = mTpid;
-                    //param.filter.filter[0] = settings.ts().filterSettings
-                     //                        .section().condition.tableInfo().tableId;
-                    //param.filter.mask[0] = 0xff;
                     bool isRepeat = settings.ts().filterSettings.section().isRepeat;
                     ALOGD("%s isRepeat:%d", __FUNCTION__, isRepeat);
                     if (!isRepeat) {
@@ -151,29 +148,36 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     if (isRaw) {
                         param.flags |= DMX_OUTPUT_RAW_MODE;
                     }
-                    int size = settings.ts().filterSettings.section().condition.sectionBits().filter.size();
-                    ALOGD("%s size:%d", __FUNCTION__, size);
-                    if (size <= 0 || size > 16) {
-                        return Result::UNAVAILABLE;
-                    }
-                    param.filter.filter[0] = settings.ts().filterSettings.section().condition.sectionBits().filter[0];
-                    ALOGD("%s param.filter.filter[0] = %d", __FUNCTION__, param.filter.filter[0]);
-                    for (int i = 1; i < size - 2; i++) {
-                        param.filter.filter[i] = settings.ts().filterSettings.section().condition.sectionBits().filter[i+2];
-                    }
 
-                    size = settings.ts().filterSettings.section().condition.sectionBits().mask.size();
-                    param.filter.mask[0] = settings.ts().filterSettings.section().condition.sectionBits().mask[0];
-                    for (int i = 1; i < size - 2; i++) {
-                        param.filter.mask[i] = settings.ts().filterSettings.section().condition.sectionBits().mask[i+2];
-                    }
+                    if (settings.ts().filterSettings.section().condition.getDiscriminator() ==
+                        DemuxFilterSectionSettings::Condition::hidl_discriminator::sectionBits) {
+                        int size = settings.ts().filterSettings.section().condition.sectionBits().filter.size();
+                        ALOGD("%s size:%d", __FUNCTION__, size);
+                        if (size > 0 && size <= 16) {
+                            param.filter.filter[0] = settings.ts().filterSettings.section().condition.sectionBits().filter[0];
+                            ALOGD("%s param.filter.filter[0] = %d", __FUNCTION__, param.filter.filter[0]);
+                            for (int i = 1; i < size - 2; i++) {
+                                param.filter.filter[i] = settings.ts().filterSettings.section().condition.sectionBits().filter[i+2];
+                            }
 
-                    size = settings.ts().filterSettings.section().condition.sectionBits().mode.size();
-                    param.filter.mode[0] = settings.ts().filterSettings.section().condition.sectionBits().mode[0];
-                    for (int i = 1; i < size - 2; i++) {
-                        param.filter.mode[i] = settings.ts().filterSettings.section().condition.sectionBits().mode[i+2];
+                            size = settings.ts().filterSettings.section().condition.sectionBits().mask.size();
+                            param.filter.mask[0] = settings.ts().filterSettings.section().condition.sectionBits().mask[0];
+                            for (int i = 1; i < size - 2; i++) {
+                                param.filter.mask[i] = settings.ts().filterSettings.section().condition.sectionBits().mask[i+2];
+                            }
+
+                            size = settings.ts().filterSettings.section().condition.sectionBits().mode.size();
+                            param.filter.mode[0] = settings.ts().filterSettings.section().condition.sectionBits().mode[0];
+                            for (int i = 1; i < size - 2; i++) {
+                                param.filter.mode[i] = settings.ts().filterSettings.section().condition.sectionBits().mode[i+2];
+                            }
+                            ALOGD("%s tableId:0x%x", __FUNCTION__, param.filter.filter[0]);
+                        }
+                    } else {
+                        param.filter.filter[0] = settings.ts().filterSettings
+                                                 .section().condition.tableInfo().tableId;
+                        param.filter.mask[0] = 0xff;
                     }
-                    ALOGD("%s tableId:0x%x", __FUNCTION__, param.filter.filter[0]);
                     if (mDemux->getAmDmxDevice()
                         ->AM_DMX_SetSecFilter(mFilterId, &param) != 0 ) {
                         return Result::UNAVAILABLE;
@@ -756,7 +760,7 @@ Result Filter::startMediaFilterHandler() {
 #ifdef TUNERHAL_DBG
     if (mFilterOutput.empty() || mFilterOutput.size() < mFilterEventSize) {
 #else
-    if (mFilterOutput.empty() || mFilterOutput.size() < 1024 * 1024 * 10) {//10MB
+    if (mFilterOutput.empty() /*|| mFilterOutput.size() < 1024 * 1024 * 10*/) {//10MB
 #endif
         return Result::SUCCESS;
     }

@@ -312,19 +312,20 @@ Return<Result> Demux::setFrontendDataSource(uint32_t frontendId) {
 Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
                                const sp<IFilterCallback>& cb, openFilter_cb _hidl_cb) {
     int dmxFilterIdx;
-    DemuxTsFilterType tsFilterType = type.subType.tsFilterType();
+    DemuxTsFilterType tsFilterType;
     std::lock_guard<std::mutex> lock(mFilterLock);
+    bool hasTsFilterType = (DemuxFilterType::DemuxFilterSubType::hidl_discriminator::tsFilterType
+                            == type.subType.getDiscriminator());
 
-    if (tsFilterType == DemuxTsFilterType::UNDEFINED) {
+    if (hasTsFilterType) {
+        tsFilterType = type.subType.tsFilterType();
+    }
+
+    if (hasTsFilterType && tsFilterType == DemuxTsFilterType::UNDEFINED) {
         ALOGE("[Demux] Invalid filter type!");
-        _hidl_cb(Result::INVALID_ARGUMENT, nullptr);
-        return Void();
-    }
-    if (cb == nullptr) {
-        ALOGE("[Demux] Filter callback is null!");
-        _hidl_cb(Result::INVALID_ARGUMENT, nullptr);
-        return Void();
-    }
+         _hidl_cb(Result::INVALID_ARGUMENT, nullptr);
+         return Void();
+     }
 
     AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&dmxFilterIdx);
     ALOGD("[%s/%d] Allocate filter subType:%d filterIdx:%d", __FUNCTION__, __LINE__, tsFilterType, dmxFilterIdx);
@@ -339,44 +340,45 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         return Void();
     }
 
-    if (tsFilterType == DemuxTsFilterType::SECTION
-        || tsFilterType == DemuxTsFilterType::VIDEO
-        || tsFilterType == DemuxTsFilterType::AUDIO
-        || tsFilterType == DemuxTsFilterType::PES) {
-        AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, this->postData, this);
-    } else if (tsFilterType == DemuxTsFilterType::PCR) {
-        AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
-    } else if (tsFilterType == DemuxTsFilterType::RECORD) {
-        mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
-    }
-
-    if (tsFilterType == DemuxTsFilterType::VIDEO) {
-        if (mVideoMediaSync != nullptr) {
-            mVideoMediaSync = nullptr;
-            mAvSyncHwId = -1;
+    if (hasTsFilterType) {
+        if (tsFilterType == DemuxTsFilterType::SECTION
+            || tsFilterType == DemuxTsFilterType::VIDEO
+            || tsFilterType == DemuxTsFilterType::AUDIO
+            || tsFilterType == DemuxTsFilterType::PES) {
+            AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, this->postData, this);
+        } else if (tsFilterType == DemuxTsFilterType::PCR) {
+            AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
+        } else if (tsFilterType == DemuxTsFilterType::RECORD) {
+            mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
         }
-        mVideoMediaSync = new MediaSyncWrap();
-    }
-    if (tsFilterType == DemuxTsFilterType::AUDIO) {
-        if (mAudioMediaSync != nullptr) {
-            mAudioMediaSync = nullptr;
-            mAvSyncHwId = -1;
+        if (tsFilterType == DemuxTsFilterType::VIDEO) {
+            if (mVideoMediaSync != nullptr) {
+                mVideoMediaSync = nullptr;
+                mAvSyncHwId = -1;
+            }
+            mVideoMediaSync = new MediaSyncWrap();
         }
-        mAudioMediaSync = new MediaSyncWrap();
+        if (tsFilterType == DemuxTsFilterType::AUDIO) {
+            if (mAudioMediaSync != nullptr) {
+                mAudioMediaSync = nullptr;
+                mAvSyncHwId = -1;
+            }
+            mAudioMediaSync = new MediaSyncWrap();
+        }
     }
 
     mFilters[dmxFilterIdx] = filter;
-    if (tsFilterType == DemuxTsFilterType::PES) {
+    if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PES) {
         mPesFilterIds.insert(dmxFilterIdx);
         ALOGD("Insert PES filter");
     }
-    if (tsFilterType == DemuxTsFilterType::PCR) {
+    if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PCR) {
         mPcrFilterIds.insert(dmxFilterIdx);
         ALOGD("Insert pcr filter");
     }
     bool result = true;
 
-    if (tsFilterType != DemuxTsFilterType::RECORD && tsFilterType != DemuxTsFilterType::PCR) {
+    if (hasTsFilterType && tsFilterType != DemuxTsFilterType::RECORD && tsFilterType != DemuxTsFilterType::PCR) {
         // Only save non-record filters for now. Record filters are saved when the
         // IDvr.attacheFilter is called.
         mPlaybackFilterIds.insert(dmxFilterIdx);
@@ -730,9 +732,10 @@ void* Demux::__threadLoopFrontend(void* user) {
 void Demux::frontendInputThreadLoop() {
     std::lock_guard<std::mutex> lock(mFrontendInputThreadLock);
     mFrontendInputThreadRunning = true;
-    ALOGI("%s/%d readPlaybackFMQ and startFilterDispatcher", __FUNCTION__, __LINE__);
-    if (mDvrPlayback == nullptr) {
-        ALOGE("DvrPlayback didn't open, no need to start frontend input thread");
+
+    if (!mDvrPlayback) {
+        ALOGW("[Demux] No software Frontend input configured. Ending Frontend thread loop.");
+        mFrontendInputThreadRunning = false;
         return;
     }
 
@@ -762,7 +765,6 @@ void Demux::stopFrontendInput() {
     ALOGD("[Demux] stop frontend on demux");
     mKeepFetchingDataFromFrontend = false;
     mFrontendInputThreadRunning = false;
-    pthread_join(mFrontendInputThread, NULL);
     std::lock_guard<std::mutex> lock(mFrontendInputThreadLock);
 }
 

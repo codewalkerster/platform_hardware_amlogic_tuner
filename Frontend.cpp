@@ -291,10 +291,10 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
     FrontendScanMessage msg;
     msg.isLocked(isLocked);
     mCallback->onScanMessage(FrontendScanMessageType::LOCKED, msg);
-    msg.isEnd(isEnd);
-    mCallback->onScanMessage(FrontendScanMessageType::END, msg);
     msg.frequencies({freq});
     mCallback->onScanMessage(FrontendScanMessageType::FREQUENCY, msg);
+    msg.isEnd(isEnd);
+    mCallback->onScanMessage(FrontendScanMessageType::END, msg);
 }
 
 void Frontend::sendEventCallBack(FrontendEventType locked) {
