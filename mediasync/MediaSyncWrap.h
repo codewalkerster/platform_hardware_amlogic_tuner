@@ -18,7 +18,7 @@ public:
     ~MediaSyncWrap();
     int getAvSyncHwId(int dmxId, int pid);
     int64_t getAvSyncTime();
-    void bindAvSyncId(uint32_t avSyncHwId);
+    void bindAvSyncId(uint32_t avSyncHwId, bool bVideo);
 
 private:
     void* mMediaSync;

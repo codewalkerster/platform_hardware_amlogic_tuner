@@ -54,7 +54,6 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     AmDmxDevice[mDemuxId] = new AM_DMX_Device(mDemuxId);
     ALOGD("mDemuxId:%d", mDemuxId);
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
-    mMediaSyncWrap = new MediaSyncWrap();
     mAmDvrDevice = new AmDvr(mDemuxId);
      //dump ts file
     //mfd = ::open("/data/local/tmp/media_demux.ts",  O_WRONLY|O_CREAT, 0666);
@@ -348,6 +347,21 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
     }
 
+    if (tsFilterType == DemuxTsFilterType::VIDEO) {
+        if (mVideoMediaSync != nullptr) {
+            mVideoMediaSync = nullptr;
+            mAvSyncHwId = -1;
+        }
+        mVideoMediaSync = new MediaSyncWrap();
+    }
+    if (tsFilterType == DemuxTsFilterType::AUDIO) {
+        if (mAudioMediaSync != nullptr) {
+            mAudioMediaSync = nullptr;
+            mAvSyncHwId = -1;
+        }
+        mAudioMediaSync = new MediaSyncWrap();
+    }
+
     mFilters[dmxFilterIdx] = filter;
     if (tsFilterType == DemuxTsFilterType::PES) {
         mPesFilterIds.insert(dmxFilterIdx);
@@ -385,13 +399,7 @@ Return<void> Demux::openTimeFilter(openTimeFilter_cb _hidl_cb) {
 Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _hidl_cb) {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
     Result status;
-
-    int fid;
-
-    if (mAvSyncHwId != -1) {
-        _hidl_cb(Result::SUCCESS, mAvSyncHwId);
-        return Void();
-    }
+    int fid = -1;;
 
     if (filter == nullptr) {
         ALOGE("[Demux] filter is null!");
@@ -417,8 +425,18 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     ALOGD("%s/%d fid = %d", __FUNCTION__, __LINE__, fid);
     if (mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty()) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
-        mAvSyncHwId = mMediaSyncWrap->getAvSyncHwId(mDemuxId, avPid);
-        mMediaSyncWrap->bindAvSyncId(mAvSyncHwId);
+        DemuxFilterType type = mFilters[fid]->getFilterType();
+        if (type.subType.tsFilterType() == DemuxTsFilterType::AUDIO) {
+            if (mAvSyncHwId == -1) {
+                mAvSyncHwId = mAudioMediaSync->getAvSyncHwId(mDemuxId, avPid);
+            }
+            mAudioMediaSync->bindAvSyncId(mAvSyncHwId, false);
+        } else if (type.subType.tsFilterType() == DemuxTsFilterType::VIDEO){
+            if (mAvSyncHwId == -1) {
+                mAvSyncHwId = mVideoMediaSync->getAvSyncHwId(mDemuxId, avPid);
+            }
+            mVideoMediaSync->bindAvSyncId(mAvSyncHwId, true);
+        }
         ALOGD("[Demux] mAvFilterId:%d avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
@@ -426,8 +444,8 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     } else if (mFilters[fid]->isPcrFilter() && !mPcrFilterIds.empty()) {
         // Return the lowest pcr filter id in the default implementation as the av sync id
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
-        mAvSyncHwId = mMediaSyncWrap->getAvSyncHwId(mDemuxId, pcrPid);
-        mMediaSyncWrap->bindAvSyncId(mAvSyncHwId);
+        mAvSyncHwId = mVideoMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
+        mVideoMediaSync->bindAvSyncId(mAvSyncHwId, true);
         ALOGD("[Demux] mPcrFilterId:%d pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
@@ -452,9 +470,9 @@ Return<void> Demux::getAvSyncTime(AvSyncHwId avSyncHwId, getAvSyncTime_cb _hidl_
         return Void();
     }*/
 
-    if (mMediaSyncWrap != NULL) {
+    if (mAudioMediaSync != nullptr) {
         int64_t time = -1;
-        time = mMediaSyncWrap->getAvSyncTime();
+        time = mAudioMediaSync->getAvSyncTime();
         avSyncTime = 0x1FFFFFFFF & ((9*time)/100);
     }
     //ALOGD("%s/%d avSyncTime = %llu", __FUNCTION__, __LINE__, avSyncTime);
@@ -481,8 +499,11 @@ Return<Result> Demux::close() {
 
     mDvrPlayback = nullptr;
 
-    if (mMediaSyncWrap != NULL) {
-        mMediaSyncWrap = NULL;
+    if (mVideoMediaSync != nullptr) {
+        mVideoMediaSync = nullptr;
+    }
+    if (mAudioMediaSync != nullptr) {
+        mAudioMediaSync = nullptr;
     }
 
     if (AmDmxDevice[mDemuxId] != NULL) {

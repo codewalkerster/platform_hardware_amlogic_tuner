@@ -1041,6 +1041,11 @@ void Filter::releaseIonBuffer(uint8_t* avBuf, int size) {
         mIonFd = -1;
     }
 }
+
+DemuxFilterType Filter::getFilterType() {
+    return mType;
+}
+
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner

@@ -93,6 +93,7 @@ class Filter : public IFilter {
     bool isPcrFilter() { return mIsPcrFilter; };
     bool isRecordFilter() { return mIsRecordFilter; };
     void fillDataToDecoder();
+    DemuxFilterType getFilterType();
 
   private:
     // Tuner service

@@ -6,6 +6,8 @@
  *
  * Description:
  */
+#define LOG_TAG "MediaSyncWrap"
+#include <utils/Log.h>
 #include "MediaSyncWrap.h"
 extern "C"  {
 #include "MediaSyncInterface.h"
@@ -19,10 +21,12 @@ extern mediasync_result MediaSync_bindInstance(void* handle, uint32_t SyncInsId,
 }
 
 MediaSyncWrap::MediaSyncWrap() {
+    ALOGD("%s/%d", __FUNCTION__, __LINE__);
     mMediaSync = MediaSync_create();
 }
 
 MediaSyncWrap::~MediaSyncWrap() {
+    ALOGD("%s/%d", __FUNCTION__, __LINE__);
     if (mMediaSync != nullptr) {
         MediaSync_destroy(mMediaSync);
     }
@@ -40,7 +44,7 @@ int64_t MediaSyncWrap::getAvSyncTime() {
     return avSyncTime;
 }
 
-void MediaSyncWrap::bindAvSyncId(uint32_t avSyncHwId) {
-    MediaSync_bindInstance(mMediaSync, avSyncHwId, MEDIA_VIDEO);
+void MediaSyncWrap::bindAvSyncId(uint32_t avSyncHwId, bool bVideo) {
+    MediaSync_bindInstance(mMediaSync, avSyncHwId, bVideo ? MEDIA_VIDEO : MEDIA_AUDIO);
 }
 
