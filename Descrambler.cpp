@@ -108,10 +108,9 @@ Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
   TUNER_DSC_DBG(mDescramblerId, "keyToken:0x%x", mCasSessionToken);
 
 #ifdef SUPPORT_DSM
-  if (DSM_BindToken(mDsmFd, mCasSessionToken)) {
-    TUNER_DSC_ERR(mDescramblerId, "DSM_BindToken failed! %s", strerror(errno));
-    return Result::INVALID_STATE;
-  }
+  int ret = DSM_BindToken(mDsmFd, mCasSessionToken);
+  if (ret)
+    TUNER_DSC_WRAN(mDescramblerId, "DSM_BindToken exception! %s", strerror(errno));
 
 #if BOARD_AML_SOC_TYPE == S905X4
   int mLocalMode = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, 0);
@@ -129,7 +128,7 @@ Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
     dsm_dsc_type = DSM_PROP_SC2_DSC_TYPE_TSE;
   TUNER_DSC_DBG(mDescramblerId, "dsm_dsc_type:%d", dsm_dsc_type);
 
-  if (DSM_SetProperty(mDsmFd, DSM_PROP_SC2_DSC_TYPE, dsm_dsc_type)) {
+  if (!ret && DSM_SetProperty(mDsmFd, DSM_PROP_SC2_DSC_TYPE, dsm_dsc_type)) {
     TUNER_DSC_ERR(mDescramblerId, "DSM_SetProperty failed! %s", strerror(errno));
     return Result::INVALID_STATE;
   }
