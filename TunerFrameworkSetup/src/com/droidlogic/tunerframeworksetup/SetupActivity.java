@@ -3,6 +3,8 @@ package com.droidlogic.tunerframeworksetup;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
+import android.content.Context;
+import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
@@ -262,8 +264,9 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
     private boolean mEnableFlowCtl = false;
     private int mAvSyncHwId = 0;
     private int mDemuxId = 0;
-    public int mVideoFilterId = 0;
-    public int mAudioFilterId = 0;
+    private int mVideoFilterId = 0;
+    private int mAudioFilterId = 0;
+    private int mAudioSessionId = 0;
     private AtomicLong mDecoderFreeBufPercentage = new AtomicLong(100);
 
     MediaFormat mVideoMediaFormat = null;
@@ -1965,6 +1968,14 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
 
     private void passthroughSetup() {
         Log.d(TAG, "passthroughSetup");
+        // for tunneled playing
+        AudioManager audioManager =
+                (AudioManager) getApplicationContext().getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager != null) {
+            int audioSessionId = audioManager.generateAudioSessionId();
+            mVideoMediaFormat.setInteger(
+                    MediaFormat.KEY_AUDIO_SESSION_ID, audioSessionId);
+        }
         if (mVideoFilter != null) {
             mVideoFilterId = mVideoFilter.getId();
             Log.d(TAG, "mVideoFilterId:" + mVideoFilterId);

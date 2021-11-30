@@ -673,17 +673,20 @@ public class MediaCodecPlayer {
             if (codecInfo.isEncoder())
                 continue;
             Log.d(TAG, "    " + codecInfo.getName());
+            String codecName = codecInfo.getName().toLowerCase();
             if (codecInfo.isAlias()) {
                 continue;
             }
             if (isAmlogic(codecInfo.getName())) {
                 if (isGoog)
                     continue;
-            }
-            if (isGoogle(codecInfo.getName()) != isGoog) {
+            } else if (isGoogle(codecInfo.getName())) {
+                if (!isGoog)
+                    continue;
+            } else {
+                Log.d(TAG, "    Not support " + codecInfo.getName());
                 continue;
             }
-
             for (MediaFormat format : formats) {
                 String mime = format.getString(MediaFormat.KEY_MIME);
 
@@ -720,7 +723,7 @@ public class MediaCodecPlayer {
 
     private boolean isAmlogic(String codecName) {
         codecName = codecName.toLowerCase();
-        return codecName.startsWith("omx.amlogic.");
+        return (codecName.startsWith("omx.amlogic.") || codecName.startsWith("c2.amlogic."));
     }
 
     private static void assertTrue(String message, boolean condition) {
