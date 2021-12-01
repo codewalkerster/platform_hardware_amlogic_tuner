@@ -274,6 +274,7 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                 case DemuxTsFilterType::PCR: {
                     ALOGD("%s subType:PCR", __FUNCTION__);
                     struct dmx_pes_filter_params pcrParam;
+                    uint32_t filterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
                     memset(&pcrParam, 0, sizeof(pcrParam));
                     pcrParam.pid = mTpid;
                     pcrParam.pes_type = DMX_PES_PCR0;
@@ -282,11 +283,11 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     pcrParam.flags = 0;
                     pcrParam.flags |= DMX_ES_OUTPUT;
                     if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0 ) {
+                        ->AM_DMX_SetBufferSize(filterId, mBufferSize) != 0 ) {
                         return Result::UNAVAILABLE;
                     }
                     if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetPesFilter(mFilterId, &pcrParam) != 0 ) {
+                        ->AM_DMX_SetPesFilter(filterId, &pcrParam) != 0 ) {
                         return Result::UNAVAILABLE;
                     }
                     break;
@@ -386,6 +387,14 @@ Return<Result> Filter::close() {
     if (mFilterMQ.get() != NULL)
         mFilterMQ.reset();
     return mDemux->removeFilter(mFilterId);
+}
+
+int Filter::updatePCRFilterId(int avSyncId) {
+    int tempFilterId = mFilterId;
+    mFilterId = (tempFilterId << 16) | (uint32_t)(avSyncId);
+    ALOGD("PCR filter id = %d", mFilterId);
+    mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
+    return mFilterId;
 }
 
 bool Filter::createFilterMQ() {

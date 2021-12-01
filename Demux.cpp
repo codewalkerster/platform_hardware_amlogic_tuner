@@ -333,6 +333,11 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
     //Use demux fd as the tuner hal filter id
     sp<Filter> filter = new Filter(type, dmxFilterIdx, bufferSize, cb, this);
 
+    if (tsFilterType == DemuxTsFilterType::PCR) {
+        mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, -1);
+        mAvSyncHwId = filter->updatePCRFilterId(mAvSyncHwId);
+    }
+
     if (!filter->createFilterMQ()) {
         ALOGE("[Demux] filter %d createFilterMQ error!", dmxFilterIdx);
         AmDmxDevice[mDemuxId]->AM_DMX_FreeFilter(dmxFilterIdx);
@@ -351,19 +356,12 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         } else if (tsFilterType == DemuxTsFilterType::RECORD) {
             mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
         }
-        if (tsFilterType == DemuxTsFilterType::VIDEO) {
-            if (mVideoMediaSync != nullptr) {
-                mVideoMediaSync = nullptr;
+        if (tsFilterType == DemuxTsFilterType::VIDEO || tsFilterType == DemuxTsFilterType::AUDIO) {
+            if (mMediaSync != nullptr) {
+                mMediaSync = nullptr;
                 mAvSyncHwId = -1;
             }
-            mVideoMediaSync = new MediaSyncWrap();
-        }
-        if (tsFilterType == DemuxTsFilterType::AUDIO) {
-            if (mAudioMediaSync != nullptr) {
-                mAudioMediaSync = nullptr;
-                mAvSyncHwId = -1;
-            }
-            mAudioMediaSync = new MediaSyncWrap();
+            mMediaSync = new MediaSyncWrap();
         }
     }
 
@@ -431,26 +429,20 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     if (mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty()) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
         DemuxFilterType type = mFilters[fid]->getFilterType();
-        if (type.subType.tsFilterType() == DemuxTsFilterType::AUDIO) {
-            if (mAvSyncHwId == -1) {
-                mAvSyncHwId = mAudioMediaSync->getAvSyncHwId(mDemuxId, avPid);
-            }
-            mAudioMediaSync->bindAvSyncId(mAvSyncHwId, false);
-        } else if (type.subType.tsFilterType() == DemuxTsFilterType::VIDEO){
-            if (mAvSyncHwId == -1) {
-                mAvSyncHwId = mVideoMediaSync->getAvSyncHwId(mDemuxId, avPid);
-            }
-            mVideoMediaSync->bindAvSyncId(mAvSyncHwId, true);
+        if (mAvSyncHwId == -1) {
+            mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
         }
+        mMediaSync->bindAvSyncId(mAvSyncHwId);
         ALOGD("[Demux] mAvFilterId:%d avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
-
     } else if (mFilters[fid]->isPcrFilter() && !mPcrFilterIds.empty()) {
         // Return the lowest pcr filter id in the default implementation as the av sync id
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
-        mAvSyncHwId = mVideoMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
-        mVideoMediaSync->bindAvSyncId(mAvSyncHwId, true);
+        if (mAvSyncHwId == -1) {
+            mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
+        }
+        mMediaSync->bindAvSyncId(mAvSyncHwId);
         ALOGD("[Demux] mPcrFilterId:%d pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
@@ -475,9 +467,9 @@ Return<void> Demux::getAvSyncTime(AvSyncHwId avSyncHwId, getAvSyncTime_cb _hidl_
         return Void();
     }*/
 
-    if (mAudioMediaSync != nullptr) {
+    if (mMediaSync != nullptr) {
         int64_t time = -1;
-        time = mAudioMediaSync->getAvSyncTime();
+        time = mMediaSync->getAvSyncTime();
         avSyncTime = 0x1FFFFFFFF & ((9*time)/100);
     }
     //ALOGD("%s/%d avSyncTime = %llu", __FUNCTION__, __LINE__, avSyncTime);
@@ -504,12 +496,11 @@ Return<Result> Demux::close() {
 
     mDvrPlayback = nullptr;
 
-    if (mVideoMediaSync != nullptr) {
-        mVideoMediaSync = nullptr;
+    if (mMediaSync != nullptr) {
+        mMediaSync = nullptr;
     }
-    if (mAudioMediaSync != nullptr) {
-        mAudioMediaSync = nullptr;
-    }
+
+    mAvSyncHwId = -1;
 
     if (AmDmxDevice[mDemuxId] != NULL) {
         AmDmxDevice[mDemuxId]->AM_DMX_Close();
@@ -875,6 +866,7 @@ void Demux::detachDescrambler(uint32_t descramblerId) {
   ALOGD("%s/%d", __FUNCTION__, __LINE__);
   mDescramblers.erase(descramblerId);
 }
+
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner

@@ -94,6 +94,7 @@ class Filter : public IFilter {
     bool isRecordFilter() { return mIsRecordFilter; };
     void fillDataToDecoder();
     DemuxFilterType getFilterType();
+    int updatePCRFilterId(int avSyncId);
 
   private:
     // Tuner service

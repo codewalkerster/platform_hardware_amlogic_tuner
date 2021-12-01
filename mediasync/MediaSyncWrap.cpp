@@ -44,7 +44,8 @@ int64_t MediaSyncWrap::getAvSyncTime() {
     return avSyncTime;
 }
 
-void MediaSyncWrap::bindAvSyncId(uint32_t avSyncHwId, bool bVideo) {
-    MediaSync_bindInstance(mMediaSync, avSyncHwId, bVideo ? MEDIA_VIDEO : MEDIA_AUDIO);
+void MediaSyncWrap::bindAvSyncId(uint32_t avSyncHwId) {
+    //Bind is only for set param, not for sync
+    MediaSync_bindInstance(mMediaSync, avSyncHwId, MEDIA_DMXPCR);
 }
 

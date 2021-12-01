@@ -222,8 +222,7 @@ class Demux : public IDemux {
     vector<uint8_t> mPesOutput;
     sp<AM_DMX_Device> AmDmxDevice[DMX_COUNT] = { NULL };
     const bool DEBUG_DEMUX = false;
-    sp<MediaSyncWrap> mVideoMediaSync = nullptr;
-    sp<MediaSyncWrap> mAudioMediaSync = nullptr;
+    sp<MediaSyncWrap> mMediaSync = nullptr;
     sp<AmDvr> mAmDvrDevice = NULL;
     int mAvSyncHwId = -1;
     std::map<uint32_t, uint32_t> mMapFilter;

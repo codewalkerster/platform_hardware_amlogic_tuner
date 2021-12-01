@@ -215,10 +215,10 @@ AM_ErrorCode_t AmDvr::AM_DVR_Close()
 
     if (opencnt == 1) {
         enable_thread = false;
+        pthread_join(thread, NULL);
         if (mDvrDevice != NULL) {
             ret = dvr_close(mDvrDevice);
         }
-        pthread_join(thread, NULL);
         pthread_mutex_destroy(&lock);
         pthread_cond_destroy(&cond);
     }
