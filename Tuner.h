@@ -86,6 +86,7 @@ class Tuner : public ITuner {
 
     void removeDemux(uint32_t demuxId);
     void removeFrontend(uint32_t frontendId);
+    uint32_t getTsInput();
 
     typedef struct {
         int id;
@@ -117,6 +118,7 @@ class Tuner : public ITuner {
     uint32_t mLastUsedId = -1;
     vector<sp<Lnb>> mLnbs;
     vector<sp<HwFeState>> mHwFes;
+    uint32_t mTsInput = -1;
 };
 
 }  // namespace implementation

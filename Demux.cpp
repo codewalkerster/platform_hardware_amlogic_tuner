@@ -55,6 +55,9 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     ALOGD("mDemuxId:%d", mDemuxId);
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
     mAmDvrDevice = new AmDvr(mDemuxId);
+    if (mDemuxId == 0) {
+        mAmDvrDevice->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput());
+    }
      //dump ts file
     //mfd = ::open("/data/local/tmp/media_demux.ts",  O_WRONLY|O_CREAT, 0666);
     //ALOGD("need dump ts file: ts file fd =%d %d", mfd, errno);
@@ -554,8 +557,8 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
         case DvrType::RECORD:
             ALOGD("DvrType::RECORD");
             mDvrRecord = new Dvr(type, bufferSize, cb, this);
-            ALOGD("[Demux] dmx_dvr_open INPUT_DEMOD");
-            mAmDvrDevice->AM_DVR_Open(INPUT_DEMOD);
+            //ALOGD("[Demux] dmx_dvr_open INPUT_DEMOD");
+            //mAmDvrDevice->AM_DVR_Open(INPUT_DEMOD);
             if (!mDvrRecord->createDvrMQ()) {
                 _hidl_cb(Result::UNKNOWN_ERROR, mDvrRecord);
                 return Void();

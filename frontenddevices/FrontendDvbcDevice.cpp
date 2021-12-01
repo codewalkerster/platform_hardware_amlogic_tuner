@@ -51,7 +51,7 @@ int FrontendDvbcDevice::getFrontendSettings(FrontendSettings *settings, void * f
     }
 
     p_fe_params->frequency = settings->dvbc().frequency;
-    p_fe_params->u.qam.symbol_rate = settings->dvbc().symbolRate / 1000;
+    p_fe_params->u.qam.symbol_rate = settings->dvbc().symbolRate;
     if (settings->dvbc().modulation == FrontendDvbcModulation::UNDEFINED) {
         settings->dvbc().modulation = FrontendDvbcModulation::AUTO;
     }

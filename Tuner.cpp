@@ -32,10 +32,11 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
+#define TUNER_CONFIG_FILE "/vendor/etc/tuner_hal/frontendinfos.json"
 using ::android::hardware::tv::tuner::V1_0::DemuxId;
 
 Tuner::Tuner() {
-    const char* tuner_config_file = "/vendor/etc/tuner_hal/frontendinfos.json";
+    const char* tuner_config_file = TUNER_CONFIG_FILE;
     FILE* fp = fopen(tuner_config_file, "r");
     if (fp != NULL) {
         fseek(fp, 0L, SEEK_END);
@@ -52,6 +53,7 @@ Tuner::Tuner() {
         if (reader.parse(data, root)) {
             auto& arrayHwFes = root["hwfe"];
             auto& arrayFronts = root["frontends"];
+            auto& dmxSetting = root["dmxsetting"];
             for (int i = 0; i < arrayHwFes.size(); i ++) {
                 if (!arrayHwFes[i]["id"].isNull()) {
                     int hwId = arrayHwFes[i]["id"].asInt();
@@ -188,6 +190,11 @@ Tuner::Tuner() {
                     mFrontendInfos.push_back(fes);
                     mFrontendSize ++;
                 }
+            }
+
+            if (!dmxSetting["ts_input"].isNull()) {
+                mTsInput = dmxSetting["ts_input"].asInt();
+                ALOGD("ts_input = %d", mTsInput);
             }
         }
         root.clear();
@@ -420,6 +427,10 @@ void Tuner::removeDemux(uint32_t demuxId) {
 
 void Tuner::removeFrontend(uint32_t frontendId) {
    mFrontendToDemux.erase(frontendId);
+}
+
+uint32_t Tuner::getTsInput() {
+    return mTsInput;
 }
 
 }  // namespace implementation

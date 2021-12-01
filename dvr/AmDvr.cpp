@@ -43,7 +43,7 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
     return AM_SUCCESS;
 }
 
-static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source_t inputSource) {
+static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source_t inputSource, int ts_input) {
     char dev_name[32];
     int fd;
     int ret = -1;
@@ -60,7 +60,7 @@ static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source_t inpu
         ALOGI("set ---> INPUT_DEMOD \n" );
         ret = ioctl(fd, DMX_SET_INPUT, INPUT_DEMOD);
         ALOGI("DMX_SET_INPUT ret:%d\n", ret);
-        ret = ioctl(fd, DMX_SET_HW_SOURCE, FRONTEND_TS0);
+        ret = ioctl(fd, DMX_SET_HW_SOURCE, ts_input);
         ALOGI("DMX_SET_HW_SOURCE ret:%d\n", ret);
     }
     if (ret < 0) {
@@ -131,6 +131,30 @@ static AM_ErrorCode_t dvr_read(AM_DVR_Device_t *dev, uint8_t *buf, int *size)
     return AM_SUCCESS;
 }
 
+static int getTsInputById(uint32_t tsInputId) {
+    switch (tsInputId) {
+        case 32:
+            return FRONTEND_TS0;
+        case 33:
+            return FRONTEND_TS1;
+        case 34:
+            return FRONTEND_TS2;
+        case 35:
+            return FRONTEND_TS3;
+        case 36:
+            return FRONTEND_TS4;
+        case 37:
+            return FRONTEND_TS5;
+        case 38:
+            return FRONTEND_TS6;
+        case 39:
+            return FRONTEND_TS7;
+        default:
+            assert(0);
+    }
+    return -1;
+}
+
 AmDvr::AmDvr(uint32_t demuxId) {
     ALOGD("%s/%d demuxId = %d", __FUNCTION__, __LINE__, demuxId);
 
@@ -155,7 +179,7 @@ AmDvr::~AmDvr() {
     }
 }
 
-AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource)
+AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_input)
 {
     ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, mDvrDevice->dev_no);
     if (opencnt > 0) {
@@ -165,7 +189,7 @@ AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource)
     }
 
     AM_ErrorCode_t ret = dvr_open(mDvrDevice, inputSource);
-    ret = setDvbSource(mDvrDevice, inputSource);
+    ret = setDvbSource(mDvrDevice, inputSource, getTsInputById(ts_input));
     if (ret == AM_SUCCESS) {
         pthread_mutex_init(&lock, NULL);
         pthread_cond_init(&cond, NULL);
@@ -190,10 +214,10 @@ AM_ErrorCode_t AmDvr::AM_DVR_Close()
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
     if (opencnt == 1) {
+        enable_thread = false;
         if (mDvrDevice != NULL) {
             ret = dvr_close(mDvrDevice);
         }
-        enable_thread = false;
         pthread_join(thread, NULL);
         pthread_mutex_destroy(&lock);
         pthread_cond_destroy(&cond);
