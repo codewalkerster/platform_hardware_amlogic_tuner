@@ -1973,6 +1973,7 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
             mAudioFilterId = mAudioFilter.getId();
             Log.d(TAG, "mAudioFilterId:" + mAudioFilterId);
         }
+        mAvSyncHwId = mTuner.getAvSyncHwId(mPcrFilter);
         Log.d(TAG, "mAvSyncHwId:" + mAvSyncHwId);
         mVideoMediaFormat.setInteger(VIDEO_FILTER_ID_KEY, mVideoFilterId);
         mVideoMediaFormat.setInteger(HW_AV_SYNC_ID_KEY, mAvSyncHwId);
@@ -2154,7 +2155,6 @@ public class SetupActivity extends Activity implements OnTuneEventListener, Scan
                 mPcrFilter = openPcrFilter(mPmtInfo.mPcrPid);
                 if (mPcrFilter != null) {
                     Log.d(TAG, "Open pcr filter success");
-                    mAvSyncHwId = mTuner.getAvSyncHwId(mPcrFilter);
                 } else
                     Log.e(TAG, "mPcrFilter is null!");
 
