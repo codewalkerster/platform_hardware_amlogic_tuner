@@ -12,7 +12,4 @@ PRODUCT_COPY_FILES += \
 ifeq ($(USE_TH_TEST_SETUP), true)
 PRODUCT_PACKAGES += \
     TunerFrameworkSetup
-
-PRODUCT_COPY_FILES += \
-    device/amlogic/ohm/prebuilt/privapp-permissions-amlogic.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/privapp-permissions-amlogic.xml
 endif
