@@ -162,7 +162,9 @@ AmDvr::AmDvr(uint32_t demuxId) {
     mDvrDevice = new AM_DVR_Device_t;
     mDvrDevice->dev_no = demuxId;
     mDvrDevice->dmx_no = demuxId;
-    mData = new AM_DVR_Data;
+    mData = new AM_DVR_Data();
+    mData->cb = NULL;
+    mData->user_data = NULL;
     opencnt = 0;
 }
 

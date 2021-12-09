@@ -112,7 +112,7 @@ Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
   if (ret)
     TUNER_DSC_WRAN(mDescramblerId, "DSM_BindToken exception! %s", strerror(errno));
 
-#if BOARD_AML_SOC_TYPE == S905X4
+#ifdef SUPPORT_TSD
   int mLocalMode = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, 0);
   if (!mLocalMode)
     mDscType = CA_DSC_TSD_TYPE;

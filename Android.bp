@@ -1,6 +1,27 @@
+bootstrap_go_package {
+    name: "soong-droidlogic_tuner_hal",
+    pkgPath: "android/soong/droidlogic_tuner_hal",
+    deps: [
+    "blueprint",
+    "blueprint-pathtools",
+    "soong",
+    "soong-android",
+    "soong-cc",
+    "soong-genrule",
+    ],
+    srcs: [
+        "droidlogic_tuner_hal.go",
+    ],
+    pluginFor: ["soong_build"],
+}
+
+droidlogic_tuner_hal_defaults {
+    name: "droidlogic_tuner_hal_defaults",
+}
+
 cc_defaults {
     name: "tuner_service_droidlogic",
-    defaults: ["hidl_defaults"],
+    defaults: ["hidl_defaults", "droidlogic_tuner_hal_defaults"],
     vendor: true,
     relative_install_path: "hw",
     srcs: [
