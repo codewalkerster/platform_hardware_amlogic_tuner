@@ -429,20 +429,24 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     if (mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty()) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
         DemuxFilterType type = mFilters[fid]->getFilterType();
-        if (mAvSyncHwId == -1) {
-            mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
+        if (mMediaSync != nullptr) {
+            if (mAvSyncHwId == -1) {
+                mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
+            }
+            mMediaSync->bindAvSyncId(mAvSyncHwId);
         }
-        mMediaSync->bindAvSyncId(mAvSyncHwId);
         ALOGD("[Demux] mAvFilterId:%d avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
     } else if (mFilters[fid]->isPcrFilter() && !mPcrFilterIds.empty()) {
         // Return the lowest pcr filter id in the default implementation as the av sync id
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
-        if (mAvSyncHwId == -1) {
-            mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
+        if (mMediaSync != nullptr) {
+            if (mAvSyncHwId == -1) {
+                mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
+            }
+            mMediaSync->bindAvSyncId(mAvSyncHwId);
         }
-        mMediaSync->bindAvSyncId(mAvSyncHwId);
         ALOGD("[Demux] mPcrFilterId:%d pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
