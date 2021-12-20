@@ -334,6 +334,9 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
     sp<Filter> filter = new Filter(type, dmxFilterIdx, bufferSize, cb, this);
 
     if (tsFilterType == DemuxTsFilterType::PCR) {
+        if (mMediaSync == nullptr) {
+            mMediaSync = new MediaSyncWrap();
+        }
         mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, -1);
         mAvSyncHwId = filter->updatePCRFilterId(mAvSyncHwId);
     }
@@ -357,11 +360,9 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
             mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
         }
         if (tsFilterType == DemuxTsFilterType::VIDEO || tsFilterType == DemuxTsFilterType::AUDIO) {
-            if (mMediaSync != nullptr) {
-                mMediaSync = nullptr;
-                mAvSyncHwId = -1;
+            if (mMediaSync == nullptr) {
+                mMediaSync = new MediaSyncWrap();
             }
-            mMediaSync = new MediaSyncWrap();
         }
     }
 
@@ -871,6 +872,12 @@ void Demux::detachDescrambler(uint32_t descramblerId) {
   mDescramblers.erase(descramblerId);
 }
 
+void Demux::DestroyMediaSync() {
+    if (mMediaSync != nullptr) {
+        mMediaSync = nullptr;
+        mAvSyncHwId = -1;
+    }
+}
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner
