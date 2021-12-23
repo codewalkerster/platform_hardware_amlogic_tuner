@@ -394,7 +394,7 @@ Return<Result> Filter::close() {
 
 int Filter::updatePCRFilterId(int avSyncId) {
     int tempFilterId = mFilterId;
-    mFilterId = (tempFilterId << 16) | (uint32_t)(avSyncId);
+    mFilterId = avSyncId;
     ALOGD("PCR filter id = %d", mFilterId);
     mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
     return mFilterId;
