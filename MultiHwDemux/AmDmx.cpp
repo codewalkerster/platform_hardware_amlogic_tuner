@@ -656,7 +656,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Sync()
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_WriteTs(uint8_t* data,int32_t size,uint64_t timeout) {
-    if (drv->dvr_data_write(data,size,timeout) != size) {
+    if (drv->dvr_data_write(data, size, timeout) != size) {
         ALOGE("%s/%d dvr_data_write error!", __FUNCTION__, __LINE__);
         return AM_FAILURE;
     }

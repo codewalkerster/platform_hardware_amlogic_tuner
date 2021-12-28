@@ -427,7 +427,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     }
 
     ALOGD("%s/%d fid = %d", __FUNCTION__, __LINE__, fid);
-    if (mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty()) {
+    if (mFilters[fid] != nullptr && mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty()) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
         DemuxFilterType type = mFilters[fid]->getFilterType();
         if (mMediaSync != nullptr) {
@@ -439,7 +439,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
         ALOGD("[Demux] mAvFilterId:%d avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
-    } else if (mFilters[fid]->isPcrFilter() && !mPcrFilterIds.empty()) {
+    } else if (mFilters[fid] != nullptr && mFilters[fid]->isPcrFilter() && !mPcrFilterIds.empty()) {
         // Return the lowest pcr filter id in the default implementation as the av sync id
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
         if (mMediaSync != nullptr) {
@@ -627,7 +627,10 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
     for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
         if (pid == mFilters[*it]->getTpid()) {
             if (1) {
-                AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000);
+                while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
+                    ALOGD("[Demux] wait for 100ms to write dvr device");
+                    usleep(100 * 1000);
+                }
             } else {
                 mFilters[*it]->updateFilterOutput(data);
             }
@@ -706,7 +709,11 @@ void Demux::updateFilterOutput(uint16_t filterId, vector<uint8_t> data) {
     if (DEBUG_DEMUX)
         ALOGD("%s/%d filterId:%d", __FUNCTION__, __LINE__, filterId);
     //Copy data to mFilterOutput
-    mFilters[filterId]->updateFilterOutput(data);
+    if (mFilters[filterId] != nullptr) {
+        mFilters[filterId]->updateFilterOutput(data);
+    } else {
+        ALOGW("[DEMUX] filterId = %d may be removed", filterId);
+    }
 }
 
 uint16_t Demux::getFilterTpid(uint32_t filterId) {
