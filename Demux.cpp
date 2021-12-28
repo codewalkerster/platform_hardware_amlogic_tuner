@@ -612,18 +612,14 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
     if (DEBUG_DEMUX)
         ALOGD("%s/%d write to dvr %d size:%d pid:0x%x", __FUNCTION__, __LINE__, mDemuxId, data.size(), pid);
 
-    for (auto descramblerIt = mDescramblers.begin();
-         descramblerIt != mDescramblers.end(); descramblerIt++) {
-      if (descramblerIt->second->isPidSupported(pid)) {
-        if (DEBUG_DEMUX) {
-          ALOGD("[Demux] found descrambler for pid: %d, data.size(): %d",
-                pid,
-                data.size());
+    for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
+        if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
+            if (DEBUG_DEMUX)
+                ALOGD("[Demux] found descrambler for pid: 0x%x", pid);
+            if (!descramblerIt->second->isDescramblerReady())
+                ALOGV("[Demux] dsc isn't ready for pid: %d", pid);
+            continue;
         }
-        if (!descramblerIt->second->isDescramblerReady())
-            ALOGD("[Demux] dsc isn't ready for pid: %d", pid);
-        continue;
-      }
     }
 
     set<uint32_t>::iterator it;
@@ -699,8 +695,8 @@ Result Demux::startFilterHandler(uint32_t filterId) {
     if (DEBUG_DEMUX)
         ALOGD("%s/%d filterId:%d", __FUNCTION__, __LINE__, filterId);
     for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
-        if (!descramblerIt->second->isDescramblerReady())
-            ALOGD("[Demux] Descrambler is not ready.");
+        if (descramblerIt->second && !descramblerIt->second->isDescramblerReady())
+            ALOGV("[Demux] dsc isn't ready.");
         continue;
     }
     //Create mFilterEvent with mFilterOutput
@@ -873,11 +869,13 @@ ERROR_EXIT:
 
 void Demux::attachDescrambler(uint32_t descramblerId,
                               sp<Descrambler> descrambler) {
+  std::lock_guard<std::mutex> lock(mFilterLock);
   ALOGD("%s/%d", __FUNCTION__, __LINE__);
   mDescramblers[descramblerId] = descrambler;
 }
 
 void Demux::detachDescrambler(uint32_t descramblerId) {
+  std::lock_guard<std::mutex> lock(mFilterLock);
   ALOGD("%s/%d", __FUNCTION__, __LINE__);
   mDescramblers.erase(descramblerId);
 }
