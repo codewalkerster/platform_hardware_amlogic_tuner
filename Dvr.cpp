@@ -150,7 +150,7 @@ Return<Result> Dvr::flush() {
 }
 
 Return<Result> Dvr::close() {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    ALOGD("%s/%d  mType = %hhu", __FUNCTION__, __LINE__, mType);
     if (mDvrMQ.get() != NULL)
        mDvrMQ.reset();
 

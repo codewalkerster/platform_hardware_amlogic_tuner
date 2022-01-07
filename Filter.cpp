@@ -384,9 +384,6 @@ Return<Result> Filter::close() {
         mDemux->eraseFakeFilterId(tmpFilterId);
     }
     mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
-    if (mIsPcrFilter || mIsMediaFilter) {
-        mDemux->DestroyMediaSync();
-    }
     if (mFilterMQ.get() != NULL)
         mFilterMQ.reset();
     return mDemux->removeFilter(mFilterId);
