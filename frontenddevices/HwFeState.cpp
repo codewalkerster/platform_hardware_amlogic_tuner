@@ -46,8 +46,12 @@ HwFeState::~HwFeState() {
 int HwFeState::acquire(sp<FrontendDevice> device) {
     char fe_name[32];
 
+    if (device == nullptr)
+        return -1;
+
+    ALOGI("acquire hw frontend from fontendId(%d)", device->getFrontendId());
     if (fd != -1) {
-        if (owner == device) {
+        if (owner->getFrontendId() == device->getFrontendId()) {
             return fd;
         } else {
             if (owner != nullptr) {
@@ -61,18 +65,22 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
         if ((fd = open(fe_name, O_RDWR | O_NONBLOCK)) != -1) {
             ALOGD("open hw tuner with fd(%d)", fd);
             owner = device;
+        } else {
+            ALOGW("open %s failed: %s", fe_name, strerror(errno));
         }
     }
     return fd;
 }
 
 void HwFeState::release(int fd, sp<FrontendDevice> device) {
-    if (fd != this->fd || fd == -1) {
+    if (device == nullptr || fd != this->fd || fd == -1) {
         //should not happen
         return;
     }
-    if (this->fd != -1 && owner == device) {
-        close(this->fd);
+
+    if (this->fd != -1 && owner->getFrontendId() == device->getFrontendId()) {
+        int ret = close(this->fd);
+        ALOGI("release hw frontend fd(%d) with fontendId(%d), ret(%d)", fd, device->getFrontendId(), ret);
         this->fd = -1;
         owner = nullptr;
     }

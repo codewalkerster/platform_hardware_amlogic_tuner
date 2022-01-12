@@ -57,6 +57,7 @@ public:
     virtual int getFrontendSettings(FrontendSettings *settings, void* fe_params) {return -1;};
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
     void setHwFe(const sp<HwFeState>& hwFe);
+    int getFrontendId();
 
     typedef struct {
         uint32_t          id;

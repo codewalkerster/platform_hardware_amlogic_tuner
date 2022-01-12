@@ -92,7 +92,13 @@ void FrontendDevice::setHwFe(const sp<HwFeState>& hwFe) {
     mDev.mHw = hwFe;
 }
 
+int FrontendDevice::getFrontendId() {
+    return mDev.id;
+}
+
 void FrontendDevice::release() {
+    ALOGI("%s (id:%d).", __FUNCTION__, mDev.id);
+    requestTuneStop();
     updateThreadState(FrontendDevice::STATE_FINISH);
     sem_post(&threadSemaphore);
     clearTuner();
@@ -106,7 +112,7 @@ void FrontendDevice::release() {
 }
 
 void FrontendDevice::stop() {
-    updateThreadState(FrontendDevice::STATE_STOP);
+    requestTuneStop();
     mDev.tuneFreq  = 0;
     clearTuner();
     if (mDev.mHw != nullptr)
@@ -117,11 +123,11 @@ void FrontendDevice::stop() {
         mDev.devFd = -1;
     }
 
-    ALOGE("%s finish (id:%d).", __FUNCTION__, mDev.id);
+    ALOGI("%s finish (id:%d).", __FUNCTION__, mDev.id);
 }
 
 void FrontendDevice::stopByHw() {
-    ALOGE("[id:%d] stop for hw reclaimed.", mDev.id);
+    ALOGW("[id:%d] stop for hw reclaimed.", mDev.id);
     switch (mThreadState)
     {
         case FrontendDevice::STATE_TUNE_START:
@@ -146,7 +152,7 @@ void FrontendDevice::stopByHw() {
 }
 
 bool FrontendDevice::checkOpen(bool autoOpen) {
-    ALOGE("%s-(id:%d)", __FUNCTION__, mDev.id);
+    ALOGD("%s-(id:%d)", __FUNCTION__, mDev.id);
     bool ret=  true;
 
     if (unsupportSystem) return false;
@@ -212,12 +218,14 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
     mDev.feSettings = &tuneSettings;
     if (getFrontendSettings(&tuneSettings, &fe_params) <0) {
         ALOGE("[id:%d] Wrong delivery system in FrontendSetgings, or not support it.", mDev.id);
+        sem_post(&threadSemaphore);
         return INVALID_ARGUMENT;
     }
 
     mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);;
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
+        sem_post(&threadSemaphore);
         return UNAVAILABLE;
     }
     ALOGD("%s, frequency = %d", __FUNCTION__, mDev.tuneFreq);
@@ -369,7 +377,7 @@ uint16_t FrontendDevice::getSingnalStrenth() {
 }
 
 int FrontendDevice::setFeSystem() {
-    ALOGE("%s, id(%d)", __FUNCTION__, mDev.id);
+    ALOGI("%s, id(%d)", __FUNCTION__, mDev.id);
     if (mDev.devFd != -1) {
         int sys = getFeDeliverySystem(mDev.type);
         struct dtv_property p =
@@ -444,12 +452,12 @@ int FrontendDevice::stopScan() {
 }
 
 status_t FrontendDevice::readyToRun() {
-    ALOGE("%s with frontendType(%d), id(%d)", __FUNCTION__, mDev.type, mDev.id);
-    mThreadState = STATE_INITIAL_IDLE;
+    ALOGI("%s with frontendType(%d), id(%d)", __FUNCTION__, mDev.type, mDev.id);
     return NO_ERROR;
 }
 
 void FrontendDevice::onFirstRef(void) {
+    mThreadState = STATE_INITIAL_IDLE;
     run("DroidFeTask");
 }
 
@@ -505,14 +513,14 @@ bool FrontendDevice::threadLoop() {
         }
         if (fe_event.status != 0 && !stop) {
             bool locked = ((fe_event.status & FE_HAS_LOCK) !=0);
-            ALOGD("%s-(id:%d): get fe event: 0x%02x, locked=%d, dev_locked=%d", __FUNCTION__, mDev.id, fe_event.status, locked, mDev.islocked);
+            ALOGI("%s-(id:%d): get fe event: 0x%02x, locked=%d, dev_locked=%d", __FUNCTION__, mDev.id, fe_event.status, locked, mDev.islocked);
             if (state == STATE_SCAN_START) {
                 ALOGD("%s-(id:%d): send scan event.", __FUNCTION__, mDev.id);
                 mDev.islocked = locked;
                 mContext->sendScanCallBack(mDev.tuneFreq, locked, false);
                 updateThreadState(FrontendDevice::STATE_STOP);
             } else if (state == STATE_TUNE_START) {
-                ALOGD("%s-(id:%d): send tune event.", __FUNCTION__, mDev.id);
+                ALOGI("%s-(id:%d): send tune event.", __FUNCTION__, mDev.id);
                 mDev.islocked = locked;
                 updateThreadState(FrontendDevice::STATE_TUNE_IDLE);
                 if (locked) {
@@ -522,7 +530,7 @@ bool FrontendDevice::threadLoop() {
                 }
             } else {
                 if (locked != mDev.islocked) {
-                    ALOGD("%s-(id:%d): send evt changed.", __FUNCTION__, mDev.id);
+                    ALOGI("%s-(id:%d): send evt changed.", __FUNCTION__, mDev.id);
                     mDev.islocked = locked;
                     if (locked) {
                         mContext->sendEventCallBack(FrontendEventType::LOCKED);
