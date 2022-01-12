@@ -12,23 +12,22 @@
 
 #ifdef ANDROID
 
-android::SystemControlClient *mSystemControl;
+static android::SystemControlClient *mSystemControl = NULL;
 
 size_t FileSystem_create() {
-    mSystemControl = android::SystemControlClient::getInstance();
     if (mSystemControl == NULL)
+        mSystemControl = android::SystemControlClient::getInstance();
         return -1;
-    return 0;
+    return mSystemControl == NULL ? -1 : 0;
 }
 
-size_t FileSystem_readFile(const char *name, char *value) {
+size_t FileSystem_readFile(const char *name, char *value, size_t len) {
     std::string strvalue;
     if (mSystemControl == NULL || name == NULL || value == NULL)
         return -1;
 
     mSystemControl->readSysfs(name, strvalue);
-    strncpy(value, strvalue.c_str(),
-            std::min(sizeof(value), sizeof(strvalue.c_str())));
+    strncpy(value, strvalue.c_str(), len);
     return 0;
 }
 

@@ -28,6 +28,7 @@
 #define CONFIG_AMLOGIC_DVB_COMPAT
 
 #define TSN_SOURCE  "/sys/class/stb/tsn_source"
+#define TSN_DMX_VER  "/sys/class/stb/dmx_ver"
 #define TSN_LOCAL   "local"
 #define TSN_DEMOD   "demod"
 

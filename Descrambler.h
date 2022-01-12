@@ -95,6 +95,7 @@ class Descrambler : public IDescrambler {
   std::mutex mDescrambleLock;
   bool mIsReady = false;
   uint32_t mCasSessionToken;
+  int mDefaultMode;
 
 #ifdef SUPPORT_DSM
   int mDsmFd = -1;

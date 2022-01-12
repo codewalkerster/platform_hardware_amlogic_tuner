@@ -20,7 +20,7 @@ extern "C" {
 
 size_t FileSystem_create();
 
-size_t FileSystem_readFile(const char *name, char *value);
+size_t FileSystem_readFile(const char *name, char *value, size_t len);
 size_t FileSystem_writeFile(const char *name, const char *value);
 size_t FileSystem_getPropertyInt(const char *name, int32_t def);
 

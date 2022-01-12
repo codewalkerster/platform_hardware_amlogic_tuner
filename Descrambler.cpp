@@ -18,6 +18,7 @@
 #include <utils/Log.h>
 #include <cutils/properties.h>
 #include "Descrambler.h"
+#include "FileSystemIo.h"
 
 #ifdef SUPPORT_DSM
 extern "C" {
@@ -35,9 +36,20 @@ namespace V1_0 {
 namespace implementation {
 
 Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
+  char dmx_ver[32] = {0};
   mDescramblerId = descramblerId;
   mTunerService = tuner;
-
+  mDefaultMode = 1;
+  FileSystem_create();
+  if (!FileSystem_readFile(TSN_DMX_VER, dmx_ver, sizeof(dmx_ver))) {
+    if (!strncmp(dmx_ver, "sc2-a", 5)
+      || !strncmp(dmx_ver, "sc2-b", 5)
+      || !strncmp(dmx_ver, "sc2-c", 5))
+    mDefaultMode = 0;
+  } else {
+    TUNER_DSC_ERR(descramblerId, "dmx_ver read failed");
+  }
+  TUNER_DSC_DBG(descramblerId, "dmx_ver %s, mDefaultMode %d", dmx_ver, mDefaultMode);
 #ifdef SUPPORT_DSM
   if (ca_open(descramblerId) != CA_DSC_OK)
     TUNER_DSC_ERR(descramblerId, "ca_open failed! %s", strerror(errno));
@@ -113,7 +125,7 @@ Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
     TUNER_DSC_WRAN(mDescramblerId, "DSM_BindToken exception! %s", strerror(errno));
 
 #ifdef SUPPORT_TSD
-  int mLocalMode = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, 0);
+  int mLocalMode = property_get_int32(TF_DEBUG_ENABLE_LOCAL_PLAY, mDefaultMode);
   if (!mLocalMode)
     mDscType = CA_DSC_TSD_TYPE;
   TUNER_DSC_DBG(mDescramblerId, "mLocalMode:%d", mLocalMode);
