@@ -18,6 +18,7 @@
 
 #include "Dvr.h"
 #include <utils/Log.h>
+#include <sys/prctl.h>
 
 namespace android {
 namespace hardware {
@@ -39,6 +40,11 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux
      //dump ts file
     //mFd = ::open("/data/local/tmp/media_dvr.ts",  O_WRONLY|O_CREAT, 0666);
     //ALOGD("need dump ts file: ts file fd =%d %d", mFd, errno);
+    if (mType == DvrType::PLAYBACK) {
+        mStartDvrThread = true;
+        pthread_create(&mDvrThread, NULL, __threadLoopPlayback, this);
+        pthread_setname_np(mDvrThread, "playback_waiting_loop");
+    }
 }
 
 Dvr::~Dvr() {
@@ -116,8 +122,7 @@ Return<Result> Dvr::start() {
     }
 
     if (mType == DvrType::PLAYBACK) {
-        pthread_create(&mDvrThread, NULL, __threadLoopPlayback, this);
-        pthread_setname_np(mDvrThread, "playback_waiting_loop");
+        mDvrThreadRunning = true;
     } else if (mType == DvrType::RECORD) {
         mRecordStatus = RecordStatus::DATA_READY;
         mDemux->setIsRecording(mType == DvrType::RECORD);
@@ -129,12 +134,9 @@ Return<Result> Dvr::start() {
 }
 
 Return<Result> Dvr::stop() {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
-
+    ALOGD("%s/%d mType = %hhu", __FUNCTION__, __LINE__,mType);
     mDvrThreadRunning = false;
-
-    std::lock_guard<std::mutex> lock(mDvrThreadLock);
-
+    //std::lock_guard<std::mutex> lock(mDvrThreadLock);
     mIsRecordStarted = false;
     mDemux->setIsRecording(false);
 
@@ -143,6 +145,10 @@ Return<Result> Dvr::stop() {
 
 Return<Result> Dvr::flush() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    int size = mDvrMQ->availableToRead();
+    char* buffer = new char[size];
+    mDvrMQ->read((unsigned char*)&buffer[0], size);
+    delete[] buffer;
 
     mRecordStatus = RecordStatus::DATA_READY;
 
@@ -151,6 +157,10 @@ Return<Result> Dvr::flush() {
 
 Return<Result> Dvr::close() {
     ALOGD("%s/%d  mType = %hhu", __FUNCTION__, __LINE__, mType);
+    if (mType == DvrType::PLAYBACK) {
+        mStartDvrThread = false;
+        pthread_join(mDvrThread, NULL);
+    }
     if (mDvrMQ.get() != NULL)
        mDvrMQ.reset();
 
@@ -190,24 +200,28 @@ void* Dvr::__threadLoopPlayback(void* user) {
 void Dvr::playbackThreadLoop() {
     ALOGI("[Dvr] playback threadLoop start.");
     std::lock_guard<std::mutex> lock(mDvrThreadLock);
-    mDvrThreadRunning = true;
+    //mDvrThreadRunning = true;
+    prctl(PR_SET_NAME, "playbackThread");
 
-    while (mDvrThreadRunning) {
-        uint32_t efState = 0;
-        status_t status =
-                mDvrEventFlag->wait(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY),
-                                    &efState, WAIT_TIMEOUT, true /* retry on spurious wake */);
-        if (status != OK) {
-            ALOGD("[Dvr] wait for data ready on the playback FMQ");
-            continue;
+    while (mStartDvrThread) {
+        if (mDvrThreadRunning) {
+            uint32_t efState = 0;
+            status_t status =
+                    mDvrEventFlag->wait(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY),
+                                        &efState, WAIT_TIMEOUT, true /* retry on spurious wake */);
+            if (status != OK) {
+                ALOGD("[Dvr] wait for data ready on the playback FMQ");
+                continue;
+            }
+            // Our current implementation filter the data and write it into the filter FMQ immediately
+            // after the DATA_READY from the VTS/framework
+            if (!readPlaybackFMQ(true /*isVirtualFrontend*/, false /*isRecording*/)) {
+                ALOGE("[Dvr] playback data failed to be filtered. Ending thread");
+                break;
+            }
+            maySendPlaybackStatusCallback();
         }
-        // Our current implementation filter the data and write it into the filter FMQ immediately
-        // after the DATA_READY from the VTS/framework
-        if (!readPlaybackFMQ(true /*isVirtualFrontend*/, false /*isRecording*/)) {
-            ALOGE("[Dvr] playback data failed to be filtered. Ending thread");
-            break;
-        }
-        maySendPlaybackStatusCallback();
+        usleep(100* 1000);
     }
 
     mDvrThreadRunning = false;

@@ -135,7 +135,7 @@ class Dvr : public IDvr {
     /**
      * If a specific filter's writing loop is still running
      */
-    bool mDvrThreadRunning;
+    bool mDvrThreadRunning = false;
     bool mKeepFetchingDataFromFrontend;
     /**
      * Lock to protect writes to the FMQs
@@ -153,6 +153,7 @@ class Dvr : public IDvr {
     // Booleans to check if recording is running.
     // Recording is ready when both of the following are set to true.
     bool mIsRecordStarted = false;
+    bool mStartDvrThread = false;
     //int mFd;
 };
 
