@@ -33,6 +33,7 @@ HwFeState::HwFeState(int dev_no) {
     this->hwId = dev_no;
     fd = -1;
     owner = nullptr;
+    lnbUsing = false;
 }
 
 HwFeState::~HwFeState() {
@@ -49,8 +50,12 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
     if (device == nullptr)
         return -1;
 
-    ALOGI("acquire hw frontend from fontendId(%d)", device->getFrontendId());
+    ALOGI("[HWFE(%d)]:acquire hw frontend from fontendId(%d)", this->hwId, device->getFrontendId());
     if (fd != -1) {
+        if (owner == nullptr && lnbUsing) {
+            owner = device;
+            return fd;
+        }
         if (owner->getFrontendId() == device->getFrontendId()) {
             return fd;
         } else {
@@ -63,10 +68,29 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
         snprintf(fe_name, sizeof(fe_name),
                  "/dev/dvb0.frontend%d", hwId);
         if ((fd = open(fe_name, O_RDWR | O_NONBLOCK)) != -1) {
-            ALOGD("open hw tuner with fd(%d)", fd);
+            ALOGD("[HWFE(%d)]:open hw tuner with fd(%d)", this->hwId, fd);
             owner = device;
         } else {
-            ALOGW("open %s failed: %s", fe_name, strerror(errno));
+            ALOGW("[HWFE(%d)]:open %s failed: %s", this->hwId, fe_name, strerror(errno));
+        }
+    }
+    return fd;
+}
+
+int HwFeState::acquireForLnb() {
+    char fe_name[32];
+
+    if (fd != -1) {
+        lnbUsing = true;
+        return fd;
+    } else {
+        snprintf(fe_name, sizeof(fe_name),
+                 "/dev/dvb0.frontend%d", hwId);
+        if ((fd = open(fe_name, O_RDWR | O_NONBLOCK)) != -1) {
+            ALOGD("[HWFE(%d)]:open hw tuner with fd(%d)", this->hwId, fd);
+            lnbUsing = true;
+        } else {
+            ALOGW("[HWFE(%d)]:open %s failed: %s", this->hwId, fe_name, strerror(errno));
         }
     }
     return fd;
@@ -83,6 +107,13 @@ void HwFeState::release(int fd, sp<FrontendDevice> device) {
         ALOGI("release hw frontend fd(%d) with fontendId(%d), ret(%d)", fd, device->getFrontendId(), ret);
         this->fd = -1;
         owner = nullptr;
+    }
+}
+
+void HwFeState::releaseFromLnb() {
+    if (fd != -1 && lnbUsing && owner == nullptr) {
+        close(fd);
+        lnbUsing = false;
     }
 }
 

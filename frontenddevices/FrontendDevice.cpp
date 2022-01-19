@@ -39,19 +39,6 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
-static uint32_t adjustFrequencyOffSet(uint32_t fre) {
-    //this handle frequency, only for android vts. so ugly.
-    uint32_t frequency = fre;
-    if (frequency%1000000 == 0) {
-        return frequency;
-    } else {
-        double f = (double)frequency/1000000;
-        frequency = ceil(f) * 1000000;
-        ALOGD("adjust frequency = %d", frequency);
-    }
-    return frequency;
-}
-
 FrontendDevice::FrontendDevice(uint32_t thId, FrontendType type, const sp<Frontend>& context) {
     mContext = context;
     mDev.id  = thId;
@@ -172,11 +159,6 @@ bool FrontendDevice::checkOpen(bool autoOpen) {
 }
 
 int FrontendDevice::tune(const FrontendSettings & settings) {
-    if (mDev.type == FrontendType::DVBS) {
-        // only for android vts;
-        mContext->sendEventCallBack(FrontendEventType::LOCKED);
-        return 0;
-    }
     requestTuneStop();
     updateThreadState(FrontendDevice::STATE_TUNE_START);
     return internalTune(settings);
@@ -222,7 +204,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);;
+    mDev.tuneFreq = fe_params.frequency;
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);
@@ -327,6 +309,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
 
     if (ioctl(mDev.devFd, FE_SET_PROPERTY, &props) == -1) {
          ALOGE("tune failed, (%s)", strerror(errno));
+         sem_post(&threadSemaphore);
          return UNAVAILABLE;
     }
 

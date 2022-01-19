@@ -19,6 +19,7 @@
 
 #include <android/hardware/tv/tuner/1.0/ILnb.h>
 #include <android/hardware/tv/tuner/1.0/ITuner.h>
+#include "HwFeState.h"
 
 using namespace std;
 
@@ -38,7 +39,7 @@ using ::android::hardware::tv::tuner::V1_0::Result;
 class Lnb : public ILnb {
   public:
     Lnb();
-    Lnb(int id);
+    Lnb(int id, const sp<HwFeState>& hwFe, const char* name);
 
     virtual Return<Result> setCallback(const sp<ILnbCallback>& callback) override;
 
@@ -56,7 +57,10 @@ class Lnb : public ILnb {
 
   private:
     int mId;
+    sp<HwFeState> mHw;
+    const char* name;
     virtual ~Lnb();
+    int acquireLnbDevice();
 };
 
 }  // namespace implementation

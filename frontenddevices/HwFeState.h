@@ -34,12 +34,15 @@ class HwFeState : public RefBase {
   public:
    HwFeState(int hwId);
    int acquire(sp<FrontendDevice> device);
+   int acquireForLnb();
    void release(int fd, sp<FrontendDevice> device);
+   void releaseFromLnb();
 
   private:
    virtual ~HwFeState();
    int hwId;
    int fd;
+   bool lnbUsing;
    sp<FrontendDevice> owner;
 };
 

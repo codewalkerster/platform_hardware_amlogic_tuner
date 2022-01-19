@@ -203,9 +203,12 @@ Tuner::Tuner() {
         fclose(fp);
     }
 
-    mLnbs.resize(2);
-    mLnbs[0] = new Lnb(0);
-    mLnbs[1] = new Lnb(1);
+    mLnbs.resize(1);
+    if (mHwFes.size() > 0) {
+        mLnbs[0] = new Lnb(0, mHwFes[0], "hardware_lnb");
+    } else {
+        mLnbs[0] = new Lnb(0, nullptr, "virtual_lnb");
+    }
 }
 
 Tuner::~Tuner() {}
@@ -345,12 +348,19 @@ sp<Frontend> Tuner::getFrontendById(uint32_t frontendId) {
     return mFrontendInfos[frontendId].mFrontend;
 }
 
-Return<void> Tuner::openLnbByName(const hidl_string& /*lnbName*/, openLnbByName_cb _hidl_cb) {
+Return<void> Tuner::openLnbByName(const hidl_string& lnbName, openLnbByName_cb _hidl_cb) {
     ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
-    sp<ILnb> lnb = new Lnb();
+    if (mHwFes.size() == 0) {
+        ALOGE("%s: no hardware, cannot create lnb for client.", __FUNCTION__);
+        _hidl_cb(Result::UNAVAILABLE, -1, nullptr);
+    }
+    int id = mLnbs.size();
+    sp<Lnb> lnb = new Lnb(id, mHwFes[0], lnbName.c_str());
+    mLnbs.resize(id + 1);
+    mLnbs.push_back(lnb);
 
-    _hidl_cb(Result::SUCCESS, 1234, lnb);
+    _hidl_cb(Result::SUCCESS, id, lnb);
     return Void();
 }
 

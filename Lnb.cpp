@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "android.hardware.tv.tuner@1.0-Lnb"
+#define LOG_TAG "droidlogic_lnb"
 
 #include "Lnb.h"
+#include "FrontendDevice.h"
 #include <utils/Log.h>
+#include <sys/ioctl.h>
 
 namespace android {
 namespace hardware {
@@ -26,45 +28,128 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
-Lnb::Lnb() {}
-Lnb::Lnb(int id) {
+Lnb::Lnb(int id, const sp<HwFeState>& hwFe, const char* name) {
     mId = id;
+    mHw = hwFe;
+    this->name = name;
 }
 
 Lnb::~Lnb() {}
 
-Return<Result> Lnb::setCallback(const sp<ILnbCallback>& /* callback */) {
+int Lnb::acquireLnbDevice() {
+    if (mHw == nullptr)
+        return -1;
+    return mHw->acquireForLnb();
+}
+
+Return<Result> Lnb::setCallback(const sp<ILnbCallback>& callback) {
     ALOGV("%s", __FUNCTION__);
+    //hardware diseqc version < 2.0, not support diseqc event
+    return Result::SUCCESS;
+}
+
+Return<Result> Lnb::setVoltage(LnbVoltage voltage) {
+    fe_sec_voltage_t devVoltage;
+
+    switch (voltage) {
+        case LnbVoltage::VOLTAGE_5V:
+        case LnbVoltage::VOLTAGE_11V:
+        case LnbVoltage::VOLTAGE_12V:
+        case LnbVoltage::VOLTAGE_13V:
+        case LnbVoltage::VOLTAGE_14V:
+            devVoltage = SEC_VOLTAGE_13;
+            break;
+        case LnbVoltage::VOLTAGE_15V:
+        case LnbVoltage::VOLTAGE_18V:
+        case LnbVoltage::VOLTAGE_19V:
+            devVoltage = SEC_VOLTAGE_18;
+            break;
+        case LnbVoltage::NONE:
+            devVoltage = SEC_VOLTAGE_OFF;
+            break;
+    }
+
+    ALOGD("%s: %d(0:13,1:18,2:off)", __FUNCTION__, devVoltage);
+    int devFd = acquireLnbDevice();
+    if (devFd != -1) {
+        if (ioctl(devFd, FE_SET_VOLTAGE, devVoltage) == -1)
+        {
+            ALOGE("%s failed.", __FUNCTION__);
+            return Result::UNAVAILABLE;
+        }
+    }
+    return Result::SUCCESS;
+}
+
+Return<Result> Lnb::setTone(LnbTone tone) {
+    fe_sec_tone_mode_t devTone;
+
+    devTone = (tone == LnbTone::CONTINUOUS) ? SEC_TONE_ON : SEC_TONE_OFF;
+    ALOGD("%s: %d(0:on,1:off)", __FUNCTION__, devTone);
+
+    int devFd = acquireLnbDevice();
+    if (devFd != -1) {
+        if (ioctl(devFd, FE_SET_TONE, devTone) == -1)
+        {
+            ALOGE("%s failed.", __FUNCTION__);
+            return Result::UNAVAILABLE;
+        }
+    }
 
     return Result::SUCCESS;
 }
 
-Return<Result> Lnb::setVoltage(LnbVoltage /* voltage */) {
-    ALOGV("%s", __FUNCTION__);
+Return<Result> Lnb::setSatellitePosition(LnbPosition position) {
+    fe_sec_mini_cmd_t cmd;
+
+    if (position == LnbPosition::UNDEFINED) {
+        ALOGW("%s, not a valid mini cmd value.", __FUNCTION__);
+        return Result::UNAVAILABLE;
+    }
+
+    cmd = (position == LnbPosition::POSITION_A) ? SEC_MINI_A : SEC_MINI_B;
+    ALOGD("%s: %d(0:a,1:b)", __FUNCTION__, cmd);
+
+    int devFd = acquireLnbDevice();
+    if (devFd != -1) {
+        if (ioctl(devFd, FE_DISEQC_SEND_BURST, cmd) == -1)
+        {
+            ALOGE("%s failed.", __FUNCTION__);
+            return Result::UNAVAILABLE;
+        }
+    }
 
     return Result::SUCCESS;
 }
 
-Return<Result> Lnb::setTone(LnbTone /* tone */) {
-    ALOGV("%s", __FUNCTION__);
+Return<Result> Lnb::sendDiseqcMessage(const hidl_vec<uint8_t>& diseqcMessage) {
+    struct dvb_diseqc_master_cmd cmd;
+    memset(&cmd, 0, sizeof(struct dvb_diseqc_master_cmd));
 
-    return Result::SUCCESS;
-}
+    for (int i = 0; i < diseqcMessage.size(); i++)
+    {
+        cmd.msg[i] = diseqcMessage[i];
+        ALOGD("%s cmd[%d]:%u", __FUNCTION__, i, diseqcMessage[i]);
+    }
 
-Return<Result> Lnb::setSatellitePosition(LnbPosition /* position */) {
-    ALOGV("%s", __FUNCTION__);
+    cmd.msg_len = diseqcMessage.size();
 
-    return Result::SUCCESS;
-}
-
-Return<Result> Lnb::sendDiseqcMessage(const hidl_vec<uint8_t>& /* diseqcMessage */) {
-    ALOGV("%s", __FUNCTION__);
+    int devFd = acquireLnbDevice();
+    if (ioctl(devFd, FE_DISEQC_SEND_MASTER_CMD, &cmd) == -1)
+    {
+        ALOGE("%s failed.", __FUNCTION__);
+        return Result::UNAVAILABLE;
+    }
 
     return Result::SUCCESS;
 }
 
 Return<Result> Lnb::close() {
-    ALOGV("%s", __FUNCTION__);
+    ALOGD("%s", __FUNCTION__);
+
+    if (mHw != nullptr) {
+        mHw->releaseFromLnb();
+    }
 
     return Result::SUCCESS;
 }
