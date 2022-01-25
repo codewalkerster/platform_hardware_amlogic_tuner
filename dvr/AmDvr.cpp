@@ -18,6 +18,7 @@
 #include <utils/Log.h>
 #include <poll.h>
 #include <unistd.h>
+#include <sys/prctl.h>
 
 /****************************************************************************
 * Static functions
@@ -246,6 +247,7 @@ void* AmDvr::dvr_data_thread(void *arg) {
     AM_ErrorCode_t ret;
     //int cnt;
     //uint8_t buf[256*1024];
+    prctl(PR_SET_NAME, "dvr_data_thread");
 
     while (dev->enable_thread) {
         ret = dvr_poll(dev->mDvrDevice, 1000);
@@ -264,8 +266,8 @@ void* AmDvr::dvr_data_thread(void *arg) {
         }*/
 
         }
-
     }
+
     return NULL;
 }
 

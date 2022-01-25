@@ -980,7 +980,7 @@ bool Filter::writeSectionsAndCreateEvent(vector<uint8_t> data) {
 
 bool Filter::writeDataToFilterMQ(const std::vector<uint8_t>& data) {
     std::lock_guard<std::mutex> lock(mWriteLock);
-    if (mFilterMQ->write(data.data(), data.size())) {
+    if (mFilterMQ.get() != NULL && mFilterMQ->write(data.data(), data.size())) {
         return true;
     }
     return false;

@@ -217,7 +217,7 @@ void Dvr::playbackThreadLoop() {
             // after the DATA_READY from the VTS/framework
             if (!readPlaybackFMQ(true /*isVirtualFrontend*/, false /*isRecording*/)) {
                 ALOGE("[Dvr] playback data failed to be filtered. Ending thread");
-                break;
+                continue;
             }
             maySendPlaybackStatusCallback();
         }
@@ -260,6 +260,10 @@ PlaybackStatus Dvr::checkPlaybackStatusChange(uint32_t availableToWrite, uint32_
 }
 
 bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
+    if (mDvrMQ.get() == NULL) {
+        ALOGD("DvrMQ is null");
+        return false;
+    }
     // Read playback data from the input FMQ
     int size = mDvrMQ->availableToRead();
     int playbackPacketSize = mDvrSettings.playback().packetSize;//188 bytes

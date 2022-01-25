@@ -27,6 +27,15 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
+namespace {
+constexpr int kTsPacketSize = 188;
+
+bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
+  return tsPacket.size() == kTsPacketSize && tsPacket[0] == 0x47;
+}
+
+}  // namespace
+
 #define WAIT_TIMEOUT 3000000000
 #define PSI_MAX_SIZE 4096
 
@@ -313,7 +322,6 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
                                const sp<IFilterCallback>& cb, openFilter_cb _hidl_cb) {
     int dmxFilterIdx;
     DemuxTsFilterType tsFilterType;
-    std::lock_guard<std::mutex> lock(mFilterLock);
     bool hasTsFilterType = (DemuxFilterType::DemuxFilterSubType::hidl_discriminator::tsFilterType
                             == type.subType.getDiscriminator());
 
@@ -327,6 +335,7 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
          return Void();
      }
 
+    std::lock_guard<std::mutex> lock(mFilterLock);
     AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&dmxFilterIdx);
     ALOGD("[%s/%d] Allocate filter subType:%d filterIdx:%d", __FUNCTION__, __LINE__, tsFilterType, dmxFilterIdx);
 
@@ -361,7 +370,6 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         }
     }
 
-    mFilters[dmxFilterIdx] = filter;
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PES) {
         mPesFilterIds.insert(dmxFilterIdx);
         ALOGD("Insert PES filter");
@@ -382,6 +390,7 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         }
     }
 
+    mFilters[dmxFilterIdx] = filter;
     _hidl_cb(result ? Result::SUCCESS : Result::INVALID_ARGUMENT, filter);
     return Void();
 }
@@ -583,20 +592,16 @@ Return<Result> Demux::disconnectCiCam() {
 }
 
 Result Demux::removeFilter(uint32_t filterId) {
-
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    ALOGD("%s/%d filterId = %d", __FUNCTION__, __LINE__, filterId);
     std::lock_guard<std::mutex> lock(mFilterLock);
+    mFilters.erase(filterId);
+    mPlaybackFilterIds.erase(filterId);
+    mRecordFilterIds.erase(filterId);
+    mPesFilterIds.erase(filterId);
 
     if (mDvrPlayback != nullptr) {
         mDvrPlayback->removePlaybackFilter(filterId);
     }
-    if (checkPesFilterId(filterId)) {
-        mPesFilterIds.erase(filterId);
-        ALOGD("%s/%d fid = %d", __FUNCTION__, __LINE__, filterId);
-    }
-    mPlaybackFilterIds.erase(filterId);
-    mRecordFilterIds.erase(filterId);
-    mFilters.erase(filterId);
 
     ALOGD("%s/%d mFilters size = %d", __FUNCTION__, __LINE__, mFilters.size());
     if (mFilters.size() == 0) {
@@ -626,9 +631,13 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
     for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
         if (pid == mFilters[*it]->getTpid()) {
             if (1) {
-                while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
-                    ALOGD("[Demux] wait for 100ms to write dvr device");
-                    usleep(100 * 1000);
+                if (isValidTsPacket(data)) {
+                    while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
+                        ALOGD("[Demux] wait for 100ms to write dvr device");
+                        usleep(100 * 1000);
+                    }
+                } else {
+                    ALOGD("[Demux] data[0] = 0x%x", data[0]);
                 }
             } else {
                 mFilters[*it]->updateFilterOutput(data);
@@ -700,7 +709,12 @@ Result Demux::startFilterHandler(uint32_t filterId) {
         continue;
     }
     //Create mFilterEvent with mFilterOutput
-    return mFilters[filterId]->startFilterHandler();
+    if (mFilters[filterId] != nullptr) {
+        mFilters[filterId]->startFilterHandler();
+    } else {
+        ALOGW("%s/%d filterId = %d may be removed", __FUNCTION__, __LINE__, filterId);
+    }
+    return Result::SUCCESS;
 }
 
 void Demux::updateFilterOutput(uint16_t filterId, vector<uint8_t> data) {
@@ -711,7 +725,7 @@ void Demux::updateFilterOutput(uint16_t filterId, vector<uint8_t> data) {
     if (mFilters[filterId] != nullptr) {
         mFilters[filterId]->updateFilterOutput(data);
     } else {
-        ALOGW("[DEMUX] filterId = %d may be removed", filterId);
+        ALOGW("%s/%d filterId = %d may be removed", __FUNCTION__, __LINE__, filterId);
     }
 }
 
