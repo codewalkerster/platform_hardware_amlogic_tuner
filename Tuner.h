@@ -48,7 +48,6 @@ class HwFeState;
 #define NUMPESFILTER 32
 #define NUMPCRFILTER 32
 #define NUMBYTESINSECTIONFILTER 16
-#define TF_DEBUG_ENABLE_LOCAL_PLAY "vendor.tf.enable.localplay"
 
 class Tuner : public ITuner {
   public:
@@ -87,6 +86,8 @@ class Tuner : public ITuner {
     void removeDemux(uint32_t demuxId);
     void removeFrontend(uint32_t frontendId);
     uint32_t getTsInput();
+    void setTsnSource();
+    uint32_t getDscMode();
 
     typedef struct {
         int id;
@@ -119,6 +120,7 @@ class Tuner : public ITuner {
     vector<sp<Lnb>> mLnbs;
     vector<sp<HwFeState>> mHwFes;
     uint32_t mTsInput = -1;
+    uint32_t mDscMode = -1;
 };
 
 }  // namespace implementation

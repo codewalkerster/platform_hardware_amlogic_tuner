@@ -24,8 +24,8 @@
 #ifdef SUPPORT_DSM
 extern "C" {
 #include "libdsm.h"
+#include "dsc_dev.h"
 }
-#include "dsc_ca.h"
 #endif
 using namespace std;
 
@@ -51,6 +51,8 @@ namespace implementation {
         return res; \
     } \
 } while(0);
+
+#define TUNERHAL_DSC_TYPE_PROP "vendor.media.tunerhal.dsc_type"
 
 class Tuner;
 
@@ -81,6 +83,7 @@ class Descrambler : public IDescrambler {
 #ifdef SUPPORT_DSM
   bool bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle);
 #endif
+  bool getTsnSourceStatus(bool *enableLocalMode);
 
  private:
   //const bool DEBUG_DESCRAMBLER = false;
@@ -95,16 +98,14 @@ class Descrambler : public IDescrambler {
   std::mutex mDescrambleLock;
   bool mIsReady = false;
   uint32_t mCasSessionToken;
-  int mDefaultMode;
+  bool mEnableLocalMode;
 
 #ifdef SUPPORT_DSM
   int mDsmFd = -1;
-  uint32_t mDscType = CA_DSC_COMMON_TYPE;
+  uint32_t mDscType = -1;
   uint32_t mDscAlgo = CA_ALGO_UNKNOWN;
   struct dsm_keyslot_list mKeyslotList;
   std::map<uint16_t, uint32_t> es_pid_to_dsc_channel;
-#else
-  void *mSecmemSession = nullptr;
 #endif
 };
 

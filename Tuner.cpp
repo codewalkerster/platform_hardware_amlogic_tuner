@@ -24,6 +24,7 @@
 #include "Frontend.h"
 #include "Lnb.h"
 #include <json/json.h>
+#include "FileSystemIo.h"
 
 namespace android {
 namespace hardware {
@@ -209,6 +210,7 @@ Tuner::Tuner() {
     } else {
         mLnbs[0] = new Lnb(0, nullptr, "virtual_lnb");
     }
+    setTsnSource();
 }
 
 Tuner::~Tuner() {}
@@ -441,6 +443,42 @@ void Tuner::removeFrontend(uint32_t frontendId) {
 
 uint32_t Tuner::getTsInput() {
     return mTsInput;
+}
+
+void Tuner::setTsnSource() {
+    mDscMode = CA_DSC_COMMON_TYPE;
+    char dmx_ver[32] = {0};
+    char tsn_source[32] = {0};
+    FileSystem_create();
+    if (!FileSystem_readFile(TSN_DMX_VER, dmx_ver, sizeof(dmx_ver))) {
+        ALOGI("dmx_ver is %s", dmx_ver);
+        if (!strncmp(dmx_ver, "sc2-a", 5)
+          || !strncmp(dmx_ver, "sc2-b", 5)
+          || !strncmp(dmx_ver, "sc2-c", 5))
+        mDscMode = CA_DSC_TSD_TYPE;
+    } else {
+        ALOGW("can't read dmx_ver! %s", strerror(errno));
+    }
+    if (!FileSystem_readFile(TSN_SOURCE, tsn_source, sizeof(tsn_source))) {
+        ALOGI("tsn_source is %s", tsn_source);
+    } else {
+        ALOGW("can't read tsn_source! %s", strerror(errno));
+    }
+    if (mDscMode == CA_DSC_COMMON_TYPE) {
+        if (strncmp(tsn_source, TSN_LOCAL, 5) != 0) {
+            ALOGD("set tsn_source to local");
+            FileSystem_writeFile(TSN_SOURCE, TSN_LOCAL);
+        }
+    } else if (mDscMode == CA_DSC_TSD_TYPE) {
+        if (strncmp(tsn_source, TSN_DEMOD, 5) != 0) {
+            ALOGD("set tsn_source to demod");
+            FileSystem_writeFile(TSN_SOURCE, TSN_DEMOD);
+        }
+    }
+}
+
+uint32_t Tuner::getDscMode() {
+    return mDscMode;
 }
 
 }  // namespace implementation
