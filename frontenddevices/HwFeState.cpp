@@ -50,7 +50,7 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
     if (device == nullptr)
         return -1;
 
-    ALOGI("[HWFE(%d)]:acquire hw frontend from fontendId(%d)", this->hwId, device->getFrontendId());
+    ALOGI("[HWFE(%d)]:acquire hw frontend from fontendId(%d) lnbUsing = %d fd = %d", this->hwId, device->getFrontendId(), lnbUsing, fd);
     if (fd != -1) {
         if (owner == nullptr && lnbUsing) {
             owner = device;
@@ -113,6 +113,7 @@ void HwFeState::release(int fd, sp<FrontendDevice> device) {
 void HwFeState::releaseFromLnb() {
     if (fd != -1 && lnbUsing && owner == nullptr) {
         close(fd);
+        fd = -1;
         lnbUsing = false;
     }
 }

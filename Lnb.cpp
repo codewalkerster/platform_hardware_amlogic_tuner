@@ -104,7 +104,7 @@ Return<Result> Lnb::setSatellitePosition(LnbPosition position) {
 
     if (position == LnbPosition::UNDEFINED) {
         ALOGW("%s, not a valid mini cmd value.", __FUNCTION__);
-        return Result::UNAVAILABLE;
+        return Result::SUCCESS;
     }
 
     cmd = (position == LnbPosition::POSITION_A) ? SEC_MINI_A : SEC_MINI_B;

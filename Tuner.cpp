@@ -359,7 +359,6 @@ Return<void> Tuner::openLnbByName(const hidl_string& lnbName, openLnbByName_cb _
     }
     int id = mLnbs.size();
     sp<Lnb> lnb = new Lnb(id, mHwFes[0], lnbName.c_str());
-    mLnbs.resize(id + 1);
     mLnbs.push_back(lnb);
 
     _hidl_cb(Result::SUCCESS, id, lnb);
