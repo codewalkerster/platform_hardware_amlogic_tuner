@@ -113,6 +113,7 @@ class Filter : public IFilter {
     bool mIsMediaFilter = false;
     bool mIsPcrFilter = false;
     bool mIsRecordFilter = false;
+    bool mIsNSKEmmFilter = false;
     DemuxFilterSettings mFilterSettings;
 
     uint16_t mTpid;
@@ -180,6 +181,8 @@ class Filter : public IFilter {
     uint8_t* getIonBuffer(int fd, int size);
     native_handle_t* createNativeHandle(int fd);
     void releaseIonBuffer(uint8_t* avBuf, int size);
+
+    bool postFilteredEmmSection(vector<uint8_t> data);
 
     /**
      * Lock to protect writes to the FMQs

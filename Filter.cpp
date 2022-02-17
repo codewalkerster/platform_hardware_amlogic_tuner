@@ -34,6 +34,159 @@ namespace implementation {
 #define TF_FILTER_PROP_VBUFSIZE "vendor.tf.vfilter.bufsize"
 #endif
 
+#define NDS_EMM_DISABLE_TID 0x00U
+#define NDS_EMM_ENABLE_TID 0x01U
+#define NDS_EMM_ENABLE_TID_NDS 0x02U
+
+static void dhexdump(vector<uint8_t> data, int data_size)
+{
+    char str_buf[64];
+    char *buf_ptr = str_buf;
+    enum BUF_LEN
+    {
+        BUF_LEN = 64
+    };
+
+    for (int idx = 0; idx < data_size; idx++) {
+        if (idx % 16 == 0) {
+            buf_ptr = str_buf;
+            buf_ptr += sprintf(str_buf, "%04X: ", idx);
+        }
+
+        buf_ptr += sprintf(buf_ptr, "%02x ", data[idx]);
+
+        if (idx % 16 == 15 || idx >= data_size - 1) {
+            ALOGD("%s\n", str_buf);
+        }
+    }
+}
+
+static Return<Result>
+GetNskEmmFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_params &param)
+{
+    /*
+    filter =
+    [filter1_4b],[filter2_4b],[filter3_4b],[padding_00_22b]
+    mask = [mask1_4b],[mask2_4b],[mask3_4b],[padding_00_22b]
+    mode = [emm_pid_2b],[table_id_16b],[table_id_flag_16b]
+    */
+    if (settings.ts().filterSettings.section().condition.getDiscriminator()
+        == DemuxFilterSectionSettings::Condition::hidl_discriminator::sectionBits) {
+        ALOGD("NSK EMM Filter Descriptors");
+        ALOGD(
+            "Filter[%d]",
+            settings.ts().filterSettings.section().condition.sectionBits().filter.size());
+        dhexdump(
+            settings.ts().filterSettings.section().condition.sectionBits().filter,
+            settings.ts().filterSettings.section().condition.sectionBits().filter.size());
+        ALOGD(
+            "Mask[%d]", settings.ts().filterSettings.section().condition.sectionBits().mask.size());
+        dhexdump(
+            settings.ts().filterSettings.section().condition.sectionBits().mask,
+            settings.ts().filterSettings.section().condition.sectionBits().mask.size());
+        ALOGD(
+            "mode[%d]", settings.ts().filterSettings.section().condition.sectionBits().mode.size());
+        dhexdump(
+            settings.ts().filterSettings.section().condition.sectionBits().mode,
+            settings.ts().filterSettings.section().condition.sectionBits().filter.size());
+    }
+
+    // NSK Specific EMM Filter request
+    if (settings.ts().filterSettings.section().condition.getDiscriminator()
+        == DemuxFilterSectionSettings::Condition::hidl_discriminator::sectionBits) {
+        param.pid = (unsigned short)((settings.ts().filterSettings.section().condition.sectionBits()
+            .mode[0] << 8) | (settings.ts().filterSettings.section().condition.sectionBits().mode[1]));
+
+        int size = settings.ts().filterSettings.section().condition.sectionBits().filter.size();
+        ALOGI("NSK EMM filtering descriptor size = %d", size);
+        ALOGI("Filtering request for PID 0x%04x", param.pid);
+
+        bool isCheckCrc = settings.ts().filterSettings.section().isCheckCrc;
+        ALOGD("%s isCheckCrc:%d", __FUNCTION__, isCheckCrc);
+        if (isCheckCrc) {
+            param.flags |= DMX_CHECK_CRC;
+        }
+
+        bool isRaw = settings.ts().filterSettings.section().isRaw;
+        ALOGD("%s isRaw:%d", __FUNCTION__, isRaw);
+        if (isRaw) {
+            param.flags |= DMX_OUTPUT_RAW_MODE;
+        }
+
+        // get 0x80 to 0x8f
+
+        param.filter.filter[0] = 0x80;
+        param.filter.mask[0] = 0xf0;
+        param.filter.mode[0] = 0x00;
+    } else {
+        // error: not possible in NSK case.
+        ALOGE("Emm requested without emm filter description.");
+        return Result::UNAVAILABLE;
+    }
+
+    return Result::SUCCESS;
+}
+
+static Return<Result>
+GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_params &param)
+{
+    /* match with CBS, don't set repeat flag, CBS will filter the same section data.
+                    bool isRepeat = settings.ts().filterSettings.section().isRepeat;
+                    ALOGD("%s isRepeat:%d", __FUNCTION__, isRepeat);
+                    if (!isRepeat) {
+                        param.flags |= DMX_ONESHOT;
+                    }*/
+    bool isCheckCrc = settings.ts().filterSettings.section().isCheckCrc;
+    ALOGD("%s isCheckCrc:%d", __FUNCTION__, isCheckCrc);
+    if (isCheckCrc) {
+        param.flags |= DMX_CHECK_CRC;
+    }
+
+    bool isRaw = settings.ts().filterSettings.section().isRaw;
+    ALOGD("%s isRaw:%d", __FUNCTION__, isRaw);
+    if (isRaw) {
+        param.flags |= DMX_OUTPUT_RAW_MODE;
+    }
+
+    if (settings.ts().filterSettings.section().condition.getDiscriminator()
+        == DemuxFilterSectionSettings::Condition::hidl_discriminator::sectionBits) {
+        int size = settings.ts().filterSettings.section().condition.sectionBits().filter.size();
+        ALOGD("%s size:%d", __FUNCTION__, size);
+        if (size > 0 && size <= 16) {
+            param.filter.filter[0] =
+                settings.ts().filterSettings.section().condition.sectionBits().filter[0];
+            ALOGD("%s param.filter.filter[0] = %d", __FUNCTION__, param.filter.filter[0]);
+            for (int i = 1; i < size - 2; i++) {
+                param.filter.filter[i] =
+                    settings.ts().filterSettings.section().condition.sectionBits().filter[i + 2];
+            }
+
+            size = settings.ts().filterSettings.section().condition.sectionBits().mask.size();
+            param.filter.mask[0] =
+                settings.ts().filterSettings.section().condition.sectionBits().mask[0];
+            for (int i = 1; i < size - 2; i++) {
+                param.filter.mask[i] =
+                    settings.ts().filterSettings.section().condition.sectionBits().mask[i + 2];
+            }
+
+            size = settings.ts().filterSettings.section().condition.sectionBits().mode.size();
+            param.filter.mode[0] =
+                settings.ts().filterSettings.section().condition.sectionBits().mode[0];
+            for (int i = 1; i < size - 2; i++) {
+                param.filter.mode[i] =
+                    settings.ts().filterSettings.section().condition.sectionBits().mode[i + 2];
+            }
+            ALOGD("%s tableId:0x%x", __FUNCTION__, param.filter.filter[0]);
+        }
+    } else {
+        param.filter.filter[0] =
+            settings.ts().filterSettings.section().condition.tableInfo().tableId;
+        param.filter.mask[0] = 0xff;
+    }
+
+    return Result::SUCCESS;
+}
+
 Filter::Filter() {}
 
 Filter::Filter(DemuxFilterType type, uint32_t filterId, uint32_t bufferSize,
@@ -114,219 +267,185 @@ Return<void> Filter::getQueueDesc(getQueueDesc_cb _hidl_cb) {
     return Void();
 }
 
-Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
+Return<Result> Filter::configure(const DemuxFilterSettings &settings)
+{
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
     mFilterSettings = settings;
     switch (mType.mainType) {
-        case DemuxFilterMainType::TS:
-            mTpid = settings.ts().tpid;
-            ALOGD("%s mainType:TS mTpid:0x%x", __FUNCTION__, mTpid);
-            switch (mType.subType.tsFilterType()) {
-                case DemuxTsFilterType::SECTION: {
-                    ALOGD("%s subType:SECTION", __FUNCTION__);
-                    struct dmx_sct_filter_params param;
-                    if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0 ) {
-                        ALOGD("%s AM_DMX_SetBufferSize fail", __FUNCTION__);
-                        return Result::UNAVAILABLE;
-                    }
-                    memset(&param, 0, sizeof(param));
-                    param.pid = mTpid;
-                    /* match with CBS, don't set repeat flag, CBS will filter the same section data.
-                    bool isRepeat = settings.ts().filterSettings.section().isRepeat;
-                    ALOGD("%s isRepeat:%d", __FUNCTION__, isRepeat);
-                    if (!isRepeat) {
-                        param.flags |= DMX_ONESHOT;
-                    }*/
-                    bool isCheckCrc = settings.ts().filterSettings.section().isCheckCrc;
-                    ALOGD("%s isCheckCrc:%d", __FUNCTION__, isCheckCrc);
-                    if (isCheckCrc) {
-                        param.flags |= DMX_CHECK_CRC;
-                    }
+    case DemuxFilterMainType::TS:
+        mTpid = settings.ts().tpid;
+        ALOGD("%s mainType:TS mTpid:0x%x", __FUNCTION__, mTpid);
 
-                    bool isRaw     = settings.ts().filterSettings.section().isRaw;
-                    ALOGD("%s isRaw:%d", __FUNCTION__, isRaw);
-                    if (isRaw) {
-                        param.flags |= DMX_OUTPUT_RAW_MODE;
-                    }
+        switch (mType.subType.tsFilterType()) {
+        case DemuxTsFilterType::SECTION: {
+            ALOGD("%s subType:SECTION", __FUNCTION__);
+            struct dmx_sct_filter_params param;
+            if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0) {
+                ALOGD("%s AM_DMX_SetBufferSize fail", __FUNCTION__);
+                return Result::UNAVAILABLE;
+            }
+            memset(&param, 0, sizeof(param));
 
-                    if (settings.ts().filterSettings.section().condition.getDiscriminator() ==
-                        DemuxFilterSectionSettings::Condition::hidl_discriminator::sectionBits) {
-                        int size = settings.ts().filterSettings.section().condition.sectionBits().filter.size();
-                        ALOGD("%s size:%d", __FUNCTION__, size);
-                        if (size > 0 && size <= 16) {
-                            param.filter.filter[0] = settings.ts().filterSettings.section().condition.sectionBits().filter[0];
-                            ALOGD("%s param.filter.filter[0] = %d", __FUNCTION__, param.filter.filter[0]);
-                            for (int i = 1; i < size - 2; i++) {
-                                param.filter.filter[i] = settings.ts().filterSettings.section().condition.sectionBits().filter[i+2];
-                            }
+            // Special Value for NSK Emm Filtering.
+            if (mTpid == 0xfffe) {
+                Return<Result> result = GetNskEmmFltParam(settings, param);
+                if (result != Result::SUCCESS) {
+                    return result;
+                }
 
-                            size = settings.ts().filterSettings.section().condition.sectionBits().mask.size();
-                            param.filter.mask[0] = settings.ts().filterSettings.section().condition.sectionBits().mask[0];
-                            for (int i = 1; i < size - 2; i++) {
-                                param.filter.mask[i] = settings.ts().filterSettings.section().condition.sectionBits().mask[i+2];
-                            }
+                mIsNSKEmmFilter = true;
+            } else {
+                param.pid = mTpid;
+                Return<Result> result = GetSectionFltParam(settings, param);
+                if (result != Result::SUCCESS) {
+                    return result;
+                }
+            }
 
-                            size = settings.ts().filterSettings.section().condition.sectionBits().mode.size();
-                            param.filter.mode[0] = settings.ts().filterSettings.section().condition.sectionBits().mode[0];
-                            for (int i = 1; i < size - 2; i++) {
-                                param.filter.mode[i] = settings.ts().filterSettings.section().condition.sectionBits().mode[i+2];
-                            }
-                            ALOGD("%s tableId:0x%x", __FUNCTION__, param.filter.filter[0]);
-                        }
-                    } else {
-                        param.filter.filter[0] = settings.ts().filterSettings
-                                                 .section().condition.tableInfo().tableId;
-                        param.filter.mask[0] = 0xff;
-                    }
-                    if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetSecFilter(mFilterId, &param) != 0 ) {
-                        return Result::UNAVAILABLE;
-                    }
-                    break;
-                }
-                case DemuxTsFilterType::AUDIO: {
-                    ALOGD("%s subType:AUDIO", __FUNCTION__);
-                    if (settings.ts().filterSettings.av().isPassthrough) {
-                        //aparam.flags |= DMX_OUTPUT_RAW_MODE;
-                        // for passthrough mode, will set pes filter in media hal
-                        uint32_t tempFilterId = mFilterId;
-                        uint32_t dmxId = mDemux->getAmDmxDevice()->dev_no;
-                        mFilterId      = (dmxId << 16) | (uint32_t)(mTpid);
-                        ALOGD("audio filter id = %d", mFilterId);
-                        mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
-                    } else {
-                        struct dmx_pes_filter_params aparam;
-                        memset(&aparam, 0, sizeof(aparam));
-                        aparam.pid = mTpid;
-                        aparam.pes_type = DMX_PES_AUDIO0;
-                        aparam.input = DMX_IN_FRONTEND;
-                        aparam.output = DMX_OUT_TAP;
-                        aparam.flags = 0;
-                        aparam.flags |= DMX_ES_OUTPUT;
-                        if (mDemux->getAmDmxDevice()
-                            ->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0 ) {
-                            return Result::UNAVAILABLE;
-                        }
-                        if (mDemux->getAmDmxDevice()
-                            ->AM_DMX_SetPesFilter(mFilterId, &aparam) != 0 ) {
-                            return Result::UNAVAILABLE;
-                        }
-                    }
-                    break;
-                }
-                case DemuxTsFilterType::VIDEO: {
-                    ALOGD("%s subType:VIDEO", __FUNCTION__);
-                    if (settings.ts().filterSettings.av().isPassthrough) {
-                        //vparam.flags |= DMX_OUTPUT_RAW_MODE;
-                        // for passthrough mode, will set pes filter in media hal
-                        uint32_t tempFilterId = mFilterId;
-                        uint32_t dmxId = mDemux->getAmDmxDevice()->dev_no;
-                        mFilterId      = (dmxId << 16) | (uint32_t)(mTpid);
-                        ALOGD("video filter id = %d", mFilterId);
-                        mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
-                    } else {
-                        int buffSize = 0;
-                        struct dmx_pes_filter_params vparam;
-                        memset(&vparam, 0, sizeof(vparam));
-                        vparam.pid = mTpid;
-                        vparam.pes_type = DMX_PES_VIDEO0;
-                        vparam.input = DMX_IN_FRONTEND;
-                        vparam.output = DMX_OUT_TAP;
-                        vparam.flags = 0;
-                        vparam.flags |= DMX_ES_OUTPUT;
-#ifdef TUNERHAL_DBG
-                        buffSize = mVideoFilterSize;
-#else
-                        buffSize = mBufferSize;
-#endif
-                        ALOGD("%s AM_DMX_SetBufferSize:%d MB", __FUNCTION__, buffSize/1024/1024);
-                        if (mDemux->getAmDmxDevice()
-                            ->AM_DMX_SetBufferSize(mFilterId, buffSize) != 0 ) {
-                            return Result::UNAVAILABLE;
-                        }
-                        if (mDemux->getAmDmxDevice()
-                            ->AM_DMX_SetPesFilter(mFilterId, &vparam) != 0 ) {
-                            return Result::UNAVAILABLE;
-                        }
-                    }
-                    break;
-                }
-                case DemuxTsFilterType::RECORD: {
-                    ALOGD("%s subType:RECORD", __FUNCTION__);
-                    struct dmx_pes_filter_params pparam;
-                    memset(&pparam, 0, sizeof(pparam));
-                    pparam.pid = mTpid;
-                    pparam.input = DMX_IN_FRONTEND;
-                    pparam.output = DMX_OUT_TS_TAP;
-                    pparam.pes_type = DMX_PES_OTHER;
-                    if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetBufferSize(mFilterId, 10 * 1024 * 1024) != 0 ) {
-                        return Result::UNAVAILABLE;
-                    }
-                    if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetPesFilter(mFilterId, &pparam) != 0 ) {
-                        ALOGE("record AM_DMX_SetPesFilter");
-                        return Result::UNAVAILABLE;
-                    }
-                    ALOGD("stream(pid = %d) start recording, filter = %d", mTpid, mFilterId);
-                    break;
-                }
-                case DemuxTsFilterType::PCR: {
-                    ALOGD("%s subType:PCR", __FUNCTION__);
-                    struct dmx_pes_filter_params pcrParam;
-                    uint32_t filterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
-                    memset(&pcrParam, 0, sizeof(pcrParam));
-                    pcrParam.pid = mTpid;
-                    pcrParam.pes_type = DMX_PES_PCR0;
-                    pcrParam.input = DMX_IN_FRONTEND;
-                    pcrParam.output = DMX_OUT_TAP;
-                    pcrParam.flags = 0;
-                    pcrParam.flags |= DMX_ES_OUTPUT;
-                    if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetBufferSize(filterId, mBufferSize) != 0 ) {
-                        return Result::UNAVAILABLE;
-                    }
-                    if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetPesFilter(filterId, &pcrParam) != 0 ) {
-                        return Result::UNAVAILABLE;
-                    }
-                    break;
-                }
-                case DemuxTsFilterType::PES: {
-                    ALOGD("%s subType:PES", __FUNCTION__);
-                    bIsRaw = settings.ts().filterSettings.pesData().isRaw;
-                    ALOGD("%s bIsRaw:%d", __FUNCTION__, bIsRaw);
-                    struct dmx_pes_filter_params pesp;
-                    memset(&pesp, 0, sizeof(pesp));
-                    pesp.pid = mTpid;
-                    pesp.output = DMX_OUT_TAP;
-                    pesp.pes_type = DMX_PES_SUBTITLE;
-                    pesp.input = DMX_IN_FRONTEND;
-                    if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0 ) {
-                        return Result::UNAVAILABLE;
-                    }
-                    if (mDemux->getAmDmxDevice()
-                        ->AM_DMX_SetPesFilter(mFilterId, &pesp) != 0 ) {
-                        return Result::UNAVAILABLE;
-                    }
-                    break;
-                }
-                default:
-                    break;
+            if (mDemux->getAmDmxDevice()->AM_DMX_SetSecFilter(mFilterId, &param) != 0) {
+                ALOGE("Failed to set Section Filter");
+                return Result::UNAVAILABLE;
             }
             break;
-        case DemuxFilterMainType::MMTP:
+        }
+
+        case DemuxTsFilterType::AUDIO: {
+            ALOGD("%s subType:AUDIO", __FUNCTION__);
+            if (settings.ts().filterSettings.av().isPassthrough) {
+                // aparam.flags |= DMX_OUTPUT_RAW_MODE;
+                // for passthrough mode, will set pes filter in media hal
+                uint32_t tempFilterId = mFilterId;
+                uint32_t dmxId = mDemux->getAmDmxDevice()->dev_no;
+                mFilterId = (dmxId << 16) | (uint32_t)(mTpid);
+                ALOGD("audio filter id = %d", mFilterId);
+                mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
+            } else {
+                struct dmx_pes_filter_params aparam;
+                memset(&aparam, 0, sizeof(aparam));
+                aparam.pid = mTpid;
+                aparam.pes_type = DMX_PES_AUDIO0;
+                aparam.input = DMX_IN_FRONTEND;
+                aparam.output = DMX_OUT_TAP;
+                aparam.flags = 0;
+                aparam.flags |= DMX_ES_OUTPUT;
+                if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0) {
+                    return Result::UNAVAILABLE;
+                }
+                if (mDemux->getAmDmxDevice()->AM_DMX_SetPesFilter(mFilterId, &aparam) != 0) {
+                    return Result::UNAVAILABLE;
+                }
+            }
             break;
-        case DemuxFilterMainType::IP:
+        }
+
+        case DemuxTsFilterType::VIDEO: {
+            ALOGD("%s subType:VIDEO", __FUNCTION__);
+            if (settings.ts().filterSettings.av().isPassthrough) {
+                // vparam.flags |= DMX_OUTPUT_RAW_MODE;
+                // for passthrough mode, will set pes filter in media hal
+                uint32_t tempFilterId = mFilterId;
+                uint32_t dmxId = mDemux->getAmDmxDevice()->dev_no;
+                mFilterId = (dmxId << 16) | (uint32_t)(mTpid);
+                ALOGD("video filter id = %d", mFilterId);
+                mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
+            } else {
+                int buffSize = 0;
+                struct dmx_pes_filter_params vparam;
+                memset(&vparam, 0, sizeof(vparam));
+                vparam.pid = mTpid;
+                vparam.pes_type = DMX_PES_VIDEO0;
+                vparam.input = DMX_IN_FRONTEND;
+                vparam.output = DMX_OUT_TAP;
+                vparam.flags = 0;
+                vparam.flags |= DMX_ES_OUTPUT;
+#ifdef TUNERHAL_DBG
+                buffSize = mVideoFilterSize;
+#else
+                buffSize = mBufferSize;
+#endif
+                ALOGD("%s AM_DMX_SetBufferSize:%d MB", __FUNCTION__, buffSize / 1024 / 1024);
+                if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(mFilterId, buffSize) != 0) {
+                    return Result::UNAVAILABLE;
+                }
+                if (mDemux->getAmDmxDevice()->AM_DMX_SetPesFilter(mFilterId, &vparam) != 0) {
+                    return Result::UNAVAILABLE;
+                }
+            }
             break;
-        case DemuxFilterMainType::TLV:
+        }
+
+        case DemuxTsFilterType::RECORD: {
+            ALOGD("%s subType:RECORD", __FUNCTION__);
+            struct dmx_pes_filter_params pparam;
+            memset(&pparam, 0, sizeof(pparam));
+            pparam.pid = mTpid;
+            pparam.input = DMX_IN_FRONTEND;
+            pparam.output = DMX_OUT_TS_TAP;
+            pparam.pes_type = DMX_PES_OTHER;
+            if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(mFilterId, 10 * 1024 * 1024) != 0) {
+                return Result::UNAVAILABLE;
+            }
+            if (mDemux->getAmDmxDevice()->AM_DMX_SetPesFilter(mFilterId, &pparam) != 0) {
+                ALOGE("record AM_DMX_SetPesFilter");
+                return Result::UNAVAILABLE;
+            }
+            ALOGD("stream(pid = %d) start recording, filter = %d", mTpid, mFilterId);
             break;
-        case DemuxFilterMainType::ALP:
+        }
+
+        case DemuxTsFilterType::PCR: {
+            ALOGD("%s subType:PCR", __FUNCTION__);
+            struct dmx_pes_filter_params pcrParam;
+            uint32_t filterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
+            memset(&pcrParam, 0, sizeof(pcrParam));
+            pcrParam.pid = mTpid;
+            pcrParam.pes_type = DMX_PES_PCR0;
+            pcrParam.input = DMX_IN_FRONTEND;
+            pcrParam.output = DMX_OUT_TAP;
+            pcrParam.flags = 0;
+            pcrParam.flags |= DMX_ES_OUTPUT;
+            if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(filterId, mBufferSize) != 0) {
+                return Result::UNAVAILABLE;
+            }
+            if (mDemux->getAmDmxDevice()->AM_DMX_SetPesFilter(filterId, &pcrParam) != 0) {
+                return Result::UNAVAILABLE;
+            }
             break;
+        }
+
+        case DemuxTsFilterType::PES: {
+            ALOGD("%s subType:PES", __FUNCTION__);
+            bIsRaw = settings.ts().filterSettings.pesData().isRaw;
+            ALOGD("%s bIsRaw:%d", __FUNCTION__, bIsRaw);
+            struct dmx_pes_filter_params pesp;
+            memset(&pesp, 0, sizeof(pesp));
+            pesp.pid = mTpid;
+            pesp.output = DMX_OUT_TAP;
+            pesp.pes_type = DMX_PES_SUBTITLE;
+            pesp.input = DMX_IN_FRONTEND;
+            if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0) {
+                return Result::UNAVAILABLE;
+            }
+            if (mDemux->getAmDmxDevice()->AM_DMX_SetPesFilter(mFilterId, &pesp) != 0) {
+                return Result::UNAVAILABLE;
+            }
+            break;
+        }
         default:
             break;
+        }
+        break;
+
+    case DemuxFilterMainType::MMTP:
+        break;
+    case DemuxFilterMainType::IP:
+        break;
+    case DemuxFilterMainType::TLV:
+        break;
+    case DemuxFilterMainType::ALP:
+        break;
+    default:
+        break;
     }
 
     return Result::SUCCESS;
@@ -576,11 +695,206 @@ uint16_t Filter::getTpid() {
     return mTpid;
 }
 
-void Filter::updateFilterOutput(vector<uint8_t> data) {
+bool Filter::postFilteredEmmSection(vector<uint8_t> data)
+{
+    int tIdFlagCount = 0;
+    int tIdMatchedIndex = 0xFF;
+    bool addBuf = false;
+    uint8_t tableIdFlag = 0xFF;
+
+    // mode [0..1] emm pid
+    // mode [2..17] table IDs
+    // mode [18..33] table ID Flags
+    if (mFilterSettings.ts().filterSettings.section().condition.getDiscriminator()
+        == DemuxFilterSectionSettings::Condition::hidl_discriminator::sectionBits) {
+        for (int flagIndex = 18; flagIndex < 18 + 16;
+             flagIndex++) { // mode 0..1 is reserved for emm pid
+            if (mFilterSettings.ts().filterSettings.section().condition.sectionBits().mode
+                    [flagIndex]
+                != 0) { // count flags
+                tIdFlagCount++;
+            }
+        }
+
+        for (int tidIndex = 2; tidIndex < 2 + 16; tidIndex++) {
+            if (mFilterSettings.ts().filterSettings.section().condition.sectionBits().mode[tidIndex]
+                == data[0]) {
+                tIdMatchedIndex = tidIndex;
+                tableIdFlag = mFilterSettings.ts()
+                                  .filterSettings.section()
+                                  .condition.sectionBits()
+                                  .mode[tidIndex + 16];
+            }
+        }
+
+        if (tIdMatchedIndex == 0xFF) {
+            if (tIdFlagCount == 0) { // ignore table Id map
+                ALOGD("Table ID array would be ignored\n");
+                addBuf = true;
+            } else {
+                ALOGD("No allocation information for table ID 0x%02X\n", data[0]);
+                addBuf = false;
+            }
+        } else { // Find
+            ALOGD(
+                "Found matched table ID index = %d, FlagIndex = %d, ID = 0x%02X", tIdMatchedIndex,
+                tIdMatchedIndex + 16,
+                mFilterSettings.ts().filterSettings.section().condition.sectionBits().mode
+                    [tIdMatchedIndex]);
+
+            vector<uint8_t> filterAddressMap =
+                mFilterSettings.ts().filterSettings.section().condition.sectionBits().filter;
+            vector<uint8_t> filterAddressMask =
+                mFilterSettings.ts().filterSettings.section().condition.sectionBits().mask;
+
+            ALOGD("Table ID = 0x%02X, flag = 0x%02X", data[0], tableIdFlag);
+            switch (tableIdFlag) {
+            case NDS_EMM_DISABLE_TID: //  ignore this section
+                // do nothing
+                ALOGI("NDS_EMM_DISABLE_TID, Discard the section");
+                addBuf = false;
+                break;
+
+            case NDS_EMM_ENABLE_TID: //  table ID filtering
+                // post this section to emm buf
+                ALOGI("NDS_EMM_ENABLE_TID, Post the section");
+                addBuf = true;
+                break;
+
+            case NDS_EMM_ENABLE_TID_NDS: //  NDS proprietary filtering
+            {
+                uint8_t idx_filter_def, addr_idx;
+                uint8_t label_type = (data[3] & 0xC0) >> 6;
+                uint8_t num_of_packet = ((data[3] & 0x30) >> 4) + 1;
+
+                ALOGD("label_type: 0x%X\n", label_type);
+                ALOGD("num of address: %d\n", num_of_packet);
+
+                /* General Addressing: Accept EMM. */
+                if (label_type == 0) {
+                    ALOGI("label: General Addressing, accept EMM, post the section");
+                    addBuf = true;
+                    break;
+                }
+
+                // for (i = 0; i < 8; i++) {     //from NSK2 Harmonizer, it will look
+                // for the same lable first.
+                // For a new android DemuxfilterSetting with special Magic value, it is
+                // assumed to use fixed label in order.
+                idx_filter_def = label_type - 1;
+                {
+                    ALOGD("filter def [%d]", idx_filter_def + 1);
+                    /*
+                                            NSK2HDX_EMM_FILTER_DEF *filter_def =
+                                                &(emmDevInfo->filter_allocation.emmfl.filter_def[i]);
+
+                                            if (filter_def->filter_type != label_type) {
+                                                continue;
+                                            }
+                    */
+                    for (addr_idx = 0; addr_idx < num_of_packet; addr_idx++) {
+                        uint8_t size_address = 4;
+                        uint8_t addressing_mode = (data[3] & 0x08) >> 3;
+
+                        /* ID addressing */
+                        if (addressing_mode == 0) {
+                            int idx;
+                            uint8_t address_ca[4], address_requested[4];
+
+                            for (idx = 0; idx < 4; idx++) {
+                                address_ca[idx] = filterAddressMask[idx_filter_def * 4 + idx]
+                                    & data[4 + idx + addr_idx * size_address];
+                                address_requested[idx] = filterAddressMask[idx_filter_def * 4 + idx]
+                                    & filterAddressMap[idx_filter_def * 4 + idx];
+                            }
+
+                            if (memcmp(address_ca, address_requested, sizeof(uint8_t) * 4) == 0) {
+                                ALOGI("Address mode: 0x%X\n", addressing_mode);
+                                ALOGD(
+                                    "ca address: %02x %02x %02x %02x\n", address_ca[0],
+                                    address_ca[1], address_ca[2], address_ca[3]);
+                                ALOGD(
+                                    "Reg Data: %02x %02x %02x %02x\n", address_requested[0],
+                                    address_requested[1], address_requested[2],
+                                    address_requested[3]);
+
+                                ALOGI("ID addressing matched, post the section");
+
+                                addBuf = true;
+                                break;
+                            }
+                        }
+                        /* Bitmap addressing */
+                        else if (addressing_mode == 1) {
+                            int idx;
+                            uint8_t address_ca[4];
+
+                            for (idx = 0; idx < 4; idx++) {
+                                address_ca[idx] = filterAddressMap[idx_filter_def * 4 + idx]
+                                    & data[4 + idx + addr_idx * size_address];
+                            }
+
+                            if (*(uint32_t *)address_ca != 0) {
+                                ALOGI("Address mode: 0x%X\n", addressing_mode);
+                                ALOGD(
+                                    "ca address: %02x %02x %02x %02x\n", address_ca[0],
+                                    address_ca[1], address_ca[2], address_ca[3]);
+                                ALOGI("Bitmap addressing Matched: post the section");
+                                addBuf = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!addBuf) {
+                    ALOGI("Not found matched address map, ignored");
+                }
+                break;
+            }
+            }
+        }
+    }
+
+    return addBuf;
+}
+
+void Filter::updateFilterOutput(vector<uint8_t> data)
+{
     std::lock_guard<std::mutex> lock(mFilterOutputLock);
-    if (DEBUG_FILTER)
-        ALOGD("%s/%d mFilterId:%d data size:%d output size:%dKB", __FUNCTION__, __LINE__,
-        mFilterId, data.size(), mFilterOutput.size()/1024);
+
+    if (DEBUG_FILTER) {
+        ALOGD(
+            "%s/%d mFilterId:%d data size:%d output size:%dKB", __FUNCTION__, __LINE__, mFilterId,
+            data.size(), mFilterOutput.size() / 1024);
+    }
+
+    if (mIsNSKEmmFilter) {
+        char str_buf[64];
+        char *buf_ptr = str_buf;
+        enum BUF_LEN
+        {
+            BUF_LEN = 64
+        };
+
+        ALOGD("Filtered EMM %d bytes", data.size());
+
+        for (int idx = 0; idx < data.size(); idx++) {
+            if (idx % 16 == 0) {
+                buf_ptr = str_buf;
+                buf_ptr += sprintf(str_buf, "%04X: ", idx);
+            }
+
+            buf_ptr += sprintf(buf_ptr, "%02x ", data[idx]);
+
+            if (idx % 16 == 15 || idx >= data.size() - 1) {
+                ALOGD("%s\n", str_buf);
+            }
+        }
+
+        if (!postFilteredEmmSection(data)) {
+            return;
+        }
+    }
 
     mFilterOutput.insert(mFilterOutput.end(), data.begin(), data.end());
 }
