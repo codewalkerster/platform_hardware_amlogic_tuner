@@ -17,8 +17,8 @@
 
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string-array name="stream_modes">
-        <item>Tuner</item>
         <item>Local</item>
+        <item>Tuner</item>
     </string-array>
 
     <string-array name="scan_modes">

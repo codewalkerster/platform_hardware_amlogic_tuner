@@ -221,7 +221,7 @@ public class MediaCodecPlayer {
         return result;
     }
 
-    public boolean WriteTunerInputVideoData(SetupActivity.LinearInputBlock1 linearBlock, long timestampUs, int offset, int length) {
+    public boolean WriteTunerInputVideoData(SetupInstance.LinearInputBlock1 linearBlock, long timestampUs, int offset, int length) {
         boolean result = true;
         SlotEvent event = null;
         Log.d(TAG, "WriteTunerInputVideoData... ...");
@@ -242,7 +242,7 @@ public class MediaCodecPlayer {
         return result;
     }
 
-    public boolean WriteTunerInputAudioData(SetupActivity.LinearInputBlock1 linearBlock, long timestampUs, int offset, int length) {
+    public boolean WriteTunerInputAudioData(SetupInstance.LinearInputBlock1 linearBlock, long timestampUs, int offset, int length) {
         boolean result = true;
         Log.d(TAG, "WriteTunerInputAudioData... ...");
         SlotEvent event = null;
@@ -364,9 +364,10 @@ public class MediaCodecPlayer {
                 mAudioMediaCodec.setCallback(mAudioMediaCodecCallback);
             }
         }
-
-        startFixedTunerInAndOutListener();
-        initTunerLinearBlock();
+        if (!mIsPassthrough) {
+            startFixedTunerInAndOutListener();
+            initTunerLinearBlock();
+        }
 
         if (!mIsPassthrough)
             startAudioMediaCodec();
@@ -687,6 +688,7 @@ public class MediaCodecPlayer {
                 Log.d(TAG, "    Not support " + codecInfo.getName());
                 continue;
             }
+
             for (MediaFormat format : formats) {
                 String mime = format.getString(MediaFormat.KEY_MIME);
 
@@ -786,7 +788,7 @@ public class MediaCodecPlayer {
     }
 
     private interface InputSlotListener {
-        void onInputSlot(MediaCodec codec, int index, long timestampUs, int offset, int length, LinearInputBlock input, SetupActivity.LinearInputBlock1 linearBlock);
+        void onInputSlot(MediaCodec codec, int index, long timestampUs, int offset, int length, LinearInputBlock input, SetupInstance.LinearInputBlock1 linearBlock);
     }
 
     private static class ExtractorInputSlotListener implements InputSlotListener {
@@ -844,7 +846,7 @@ public class MediaCodecPlayer {
         }
 
         @Override
-        public void onInputSlot(MediaCodec codec, int index, long timestampUs, int offset, int length, LinearInputBlock input, SetupActivity.LinearInputBlock1 linearBlock) {
+        public void onInputSlot(MediaCodec codec, int index, long timestampUs, int offset, int length, LinearInputBlock input, SetupInstance.LinearInputBlock1 linearBlock) {
             // Try to feed more data into the codec.
             if (mExtractor.getSampleTrackIndex() == -1 || mSignaledEos) {
                 Log.d(TAG, "onInputSlot getSampleTrackIndex = " + mExtractor.getSampleTrackIndex() + ", mSignaledEos = " + mSignaledEos);
@@ -1019,7 +1021,7 @@ public class MediaCodecPlayer {
         }
 
         @Override
-        public void onInputSlot(MediaCodec codec, int index, long timestampUs, int offset, int length, LinearInputBlock input, SetupActivity.LinearInputBlock1 linearBlock) {
+        public void onInputSlot(MediaCodec codec, int index, long timestampUs, int offset, int length, LinearInputBlock input, SetupInstance.LinearInputBlock1 linearBlock) {
             // Try to feed more data into the codec.
             if (tSignaledEos) {
                 Log.d(TAG, "onInputSlot tSignaledEos = " + tSignaledEos);

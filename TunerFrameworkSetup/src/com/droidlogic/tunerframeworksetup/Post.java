@@ -1,6 +1,3 @@
-/**
- * Copyright Amlogic
- **/
 package com.droidlogic.tunerframeworksetup;
 
 import android.util.Log;
@@ -56,8 +53,8 @@ public class Post {
 
         //add request header
         con.setRequestMethod("POST");
-		if (SetupActivity.mContentType != null)
-			con.setRequestProperty("content-type", SetupActivity.mContentType +"; charset=utf-8");
+        if (SetupInstance.mContentType != null)
+            con.setRequestProperty("content-type", SetupInstance.mContentType +"; charset=utf-8");
         //con.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
         //con.setRequestProperty("User-Agent", "Widevine CDM v1.0");
         Iterator iterator = this.mProperties.keySet().iterator();
@@ -67,7 +64,7 @@ public class Post {
             Log.d(TAG, "get(key) is :" + this.mProperties.get(key));
             con.setRequestProperty(key.toString(), this.mProperties.get(key));
         }
-//        con.setRequestProperty("Content-Length", "0");
+        //con.setRequestProperty("Content-Length", "0");
         con.setRequestProperty("Connection", "close");
         con.setReadTimeout(10000 /* milliseconds */);
         con.setConnectTimeout(15000 /* milliseconds */);

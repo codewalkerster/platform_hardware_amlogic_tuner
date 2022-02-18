@@ -4,23 +4,43 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:autofillHints="Frequency Mhz"
-    android:background="#009688"
+    android:background="#808080"
     android:orientation="horizontal">
 
-    <SurfaceView
-        android:id="@+id/play_view"
+    <RelativeLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_margin="10dp"
-        android:layout_weight="7" />
+        android:layout_margin="0dp"
+        android:layout_weight="7">
+        <RelativeLayout
+            android:id="@+id/rl_main"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+            <SurfaceView
+                android:id="@+id/play_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+        </RelativeLayout>
+        <RelativeLayout
+            android:id="@+id/rl_flt"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentLeft="true">
+            <SurfaceView
+                android:id="@+id/play_view_flt"
+                android:layout_width="420dp"
+                android:layout_height="270dp" />
+        </RelativeLayout>
+    </RelativeLayout>
 
     <LinearLayout
         android:id="@+id/button_container"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_margin="5dp"
+        android:layout_margin="0dp"
         android:layout_weight="2"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:background="@drawable/right_panel_selector">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -32,7 +52,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="StreamMode:"/>
+                android:text="Stream Mode:"
+                android:textColor="#FF000000"/>
 
             <Spinner
                 android:id="@+id/spinner_stream_mode"
@@ -55,7 +76,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="frequency:"/>
+                android:text="Frequency:"
+                android:textColor="#FF000000"/>
 
             <EditText
                 android:id="@+id/frequency"
@@ -81,7 +103,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="video pid:"/>
+                android:text="Video Pid:"
+                android:textColor="#FF000000"/>
 
             <EditText
                 android:id="@+id/video_pid"
@@ -107,36 +130,11 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="audio_pid:"/>
+                android:text="Audio Pid:"
+                android:textColor="#FF000000"/>
 
             <EditText
                 android:id="@+id/audio_pid"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ems="10"
-                android:gravity="center"
-                android:hint="number"
-                android:inputType="number"
-                android:text=""/>
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/text_pcr_pid"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="pcr_pid:"/>
-
-            <EditText
-                android:id="@+id/pcr_pid"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -160,7 +158,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="ts_file:"/>
+                android:text="TS File:"
+                android:textColor="#FF000000"/>
 
             <EditText
                 android:id="@+id/ts_file"
@@ -170,6 +169,34 @@
                 android:gravity="center"
                 android:hint="text"
                 android:inputType="text"
+                android:text=""/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layout_channel_id"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/text_channel_id"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Channel Id:"
+                android:textColor="#FF000000"/>
+
+            <EditText
+                android:id="@+id/channel_id"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ems="10"
+                android:gravity="center"
+                android:hint="number"
+                android:inputType="number"
                 android:text=""/>
         </LinearLayout>
 
@@ -185,7 +212,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Symbol:"/>
+                android:text="Symbol:"
+                android:textColor="#FF000000"/>
 
             <EditText
                 android:id="@+id/edit_symbol"
@@ -210,7 +238,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Scan Mode:"/>
+                android:text="Scan Mode:"
+                android:textColor="#FF000000"/>
 
             <Spinner
                 android:id="@+id/spinner_scan_mode"
@@ -262,13 +291,81 @@
             android:text="local play stop"
             android:visibility="gone"/>
 
+       <LinearLayout
+            android:id="@+id/layout_local_file2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/text_ts_file2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="TS File:"
+                android:textColor="#FF000000"/>
+
+            <EditText
+                android:id="@+id/ts_file2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:hint="text"
+                android:inputType="text"
+                android:text=""/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layout_channel_id2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/text_channel_id2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Channel Id:"
+                android:textColor="#FF000000"/>
+
+            <EditText
+                android:id="@+id/channel_id2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ems="10"
+                android:gravity="center"
+                android:hint="number"
+                android:inputType="number"
+                android:text=""/>
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/local_play_start2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="local play start"/>
+
+        <Button
+            android:id="@+id/local_play_stop2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="local play stop"
+            android:visibility="gone"/>
+
         <TextView
             android:id="@+id/status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:gravity="center"
-            android:text="status"/>
+            android:text="Status"
+            android:textColor="#FF000000"/>
 
     </LinearLayout>
 

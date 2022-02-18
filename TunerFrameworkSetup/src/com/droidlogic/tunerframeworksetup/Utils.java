@@ -226,4 +226,66 @@ public class Utils {
     public static String getPrivateDir(Context context) {
         return "/data/data/" + context.getPackageName() + "/";
     }
+
+    public static String setPropString(String prop) {
+        String propValue = null;
+        String propString = null;
+        try {
+            Process mProcess = Runtime.getRuntime().exec(prop);
+            InputStreamReader mISR = new InputStreamReader(mProcess.getInputStream());
+            BufferedReader mBR = new BufferedReader(mISR);
+            Log.d(TAG, prop);
+            while ((propValue = mBR.readLine()) != null) {
+                propString = propValue;
+            }
+            if (mBR != null) {
+                mBR.close();
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Can not read value from prop " + prop);
+            //e.printStackTrace();
+            Log.e(TAG, "IOException message: " + e);
+        } catch (Exception e) {
+            Log.e(TAG, "Can not read value from prop " + prop);
+            Log.e(TAG, "Exception message: " + e);
+        }
+        if (propString != null && propString.length() > 0) {
+            Log.d(TAG, prop + " is " + propString);
+            return propString;
+        } else {
+            Log.d(TAG, prop + " is empty");
+            return null;
+        }
+    }
+
+    public static String getPropString(String prop) {
+        String propValue = null;
+        String propString = null;
+        try {
+            Process mProcess = Runtime.getRuntime().exec(prop);
+            InputStreamReader mISR = new InputStreamReader(mProcess.getInputStream());
+            BufferedReader mBR = new BufferedReader(mISR);
+            Log.d(TAG, prop);
+            while ((propValue = mBR.readLine()) != null) {
+                propString = propValue;
+            }
+            if (mBR != null) {
+                mBR.close();
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Can not read value from prop " + prop);
+            //e.printStackTrace();
+            Log.e(TAG, "IOException message: " + e);
+        } catch (Exception e) {
+            Log.e(TAG, "Can not read value from prop " + prop);
+            Log.e(TAG, "Exception message: " + e);
+        }
+        if (propString != null && propString.length() > 0) {
+            Log.d(TAG, prop + " is " + propString);
+            return propString;
+        } else {
+            Log.d(TAG, prop + " is empty");
+            return null;
+        }
+    }
 }
