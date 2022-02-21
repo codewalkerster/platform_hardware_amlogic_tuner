@@ -23,6 +23,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 
+import com.droidlogic.app.SystemControlManager;
 import com.droidlogic.tunerframeworksetup.SetupInstance.TaskMsg;
 import com.droidlogic.tunerframeworksetup.SetupInstance.DBGProp;
 import java.lang.System;
@@ -71,6 +72,16 @@ public class SetupActivity extends Activity {
     private String mStreamMode = null;
     private String mScanMode = "Dvbt";
 
+    private static final String TF_DSCTYPE_PROP = "vendor.media.tunerhal.dsc_type";
+    private static final String TSN_SOURCE_NODE = "/sys/class/stb/tsn_source";
+    private static final String TSN_SOURCE_LOCAL = "local";
+    private static final String TSN_SOURCE_DEMOD = "demod";
+    private static final int CA_DSC_COMMON_TYPE = 0;
+    private static final int CA_DSC_TSD_TYPE = 1;
+
+    private SystemControlManager mSystemControlManager = null;
+    private String mTsnSource = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -78,6 +89,8 @@ public class SetupActivity extends Activity {
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setContentView(R.layout.activity_main);
+        mSystemControlManager = SystemControlManager.getInstance();
+        mTsnSource = getTsnSource();
         initView();
         initListener();
         initHandler();
@@ -90,6 +103,7 @@ public class SetupActivity extends Activity {
     @Override
     protected void onResume() {
         Log.d(TAG, "onResume");
+        setDscMode(CA_DSC_COMMON_TYPE);
         super.onResume();
     }
 
@@ -102,7 +116,14 @@ public class SetupActivity extends Activity {
                 mInstances[instanceId].pause();
             }
         }
+        setDscMode(CA_DSC_TSD_TYPE);
         Log.d(TAG, "onPause end");
+    }
+
+    @Override
+    protected void onStop() {
+        Log.d(TAG, "onStop");
+        super.onStop();
     }
 
     @Override
@@ -121,6 +142,7 @@ public class SetupActivity extends Activity {
             }
         }
         releaseHandler();
+        setTsnSource(mTsnSource);
         super.onDestroy();
         Log.d(TAG, "onDestroy end");
     }
@@ -241,6 +263,63 @@ public class SetupActivity extends Activity {
         Log.d(TAG, "mEnableExtendEcmTid: " + SetupInstance.mEnableExtendEcmTid);
     }
 
+    //Use for SC2 support TSD
+    public void setDscMode(int dscMode) {
+        if (mSystemControlManager == null)
+            mSystemControlManager = SystemControlManager.getInstance();
+        if (mSystemControlManager != null) {
+            mSystemControlManager.setProperty(TF_DSCTYPE_PROP, Integer.toString(dscMode));
+        } else {
+            Log.e(TAG, "Can not get mSystemControlManager!");
+            return;
+        }
+    }
+
+    public int getDscMode() {
+        int dscMode = -1;
+        if (mSystemControlManager == null)
+            mSystemControlManager = SystemControlManager.getInstance();
+        if (mSystemControlManager != null) {
+            dscMode = mSystemControlManager.getPropertyInt(TF_DSCTYPE_PROP, 0);
+            Log.d(TAG, "Get dscMode is " + dscMode);
+        } else {
+            Log.e(TAG, "Can not get mSystemControlManager!");
+            return -1;
+        }
+        return dscMode;
+    }
+
+    public void setTsnSource(String requireTsnSource) {
+        String tsnSource = null;
+        if (mSystemControlManager == null)
+            mSystemControlManager = SystemControlManager.getInstance();
+        if (mSystemControlManager != null) {
+            tsnSource = mSystemControlManager.readSysFs(TSN_SOURCE_NODE);
+            Log.d(TAG, "Current tsnSource is " + tsnSource);
+        } else {
+            Log.e(TAG, "Can not get mSystemControlManager!");
+            return;
+        }
+        if (!requireTsnSource.equals(tsnSource)) {
+            Log.d(TAG, "Set tsnSource to " + requireTsnSource);
+            mSystemControlManager.writeSysFs(TSN_SOURCE_NODE, requireTsnSource);
+        }
+    }
+
+    public String getTsnSource() {
+        String tsnSource = null;
+        if (mSystemControlManager == null)
+            mSystemControlManager = SystemControlManager.getInstance();
+        if (mSystemControlManager != null) {
+            tsnSource = mSystemControlManager.readSysFs(TSN_SOURCE_NODE);
+            Log.d(TAG, "Get tsnSource is " + tsnSource);
+        } else {
+            Log.e(TAG, "Can not get mSystemControlManager!");
+            return null;
+        }
+        return tsnSource;
+    }
+
     public Handler getUiHandler() {
         return mUiHandler;
     }
@@ -353,6 +432,8 @@ public class SetupActivity extends Activity {
             mStreamMode = "tuner";
             mEnableLocalPlay = false;
         }
+        String requireTsnSource = mStreamMode.equals("local") ? TSN_SOURCE_LOCAL : TSN_SOURCE_DEMOD;
+        setTsnSource(requireTsnSource);
     }
 
     private class SingleClickListener extends MultiClickListener {
@@ -373,7 +454,8 @@ public class SetupActivity extends Activity {
             boolean needUpdate = true;
             switch (view.getId()) {
                 case R.id.search_start:
-                    Log.d(TAG, "Click search start");
+                    Log.d(TAG, "Click search start " + mInstance);
+                    mPlayerViews[mInstance].setVisibility(View.VISIBLE);
                     mUiHandler.sendMessage(mUiHandler.obtainMessage(UI_MSG_STATUS, "search_start"));
                     mInstances[mInstance].setFrequency(Integer.parseInt(mFrequency.getText().toString()));
                     if ("Dvbc".equals(mScanMode) || "Dvbs".equals(mScanMode))
@@ -397,6 +479,7 @@ public class SetupActivity extends Activity {
                     break;
                 case R.id.play_stop:
                     Log.d(TAG, "Click play stop");
+                    mPlayerViews[mInstance].setVisibility(View.GONE);
                     mUiHandler.sendMessage(mUiHandler.obtainMessage(UI_MSG_STATUS, "play_stop"));
                     mInstances[mInstance].getTaskHandler().sendEmptyMessage(TaskMsg.TASK_MSG_STOP_PLAY);
                     break;

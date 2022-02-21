@@ -107,7 +107,7 @@ public class SetupInstance implements OnTuneEventListener,
     public static final int DEFAULT_DVR_READ_TS_PKT_NUM = 100;
     public static final int DEFAULT_DVR_READ_DURATION_MS = 2;
     public static final int MAX_DVR_READ_DURATION_MS = 4096;
-    public static final int MIN_DECODER_BUFFER_FREE_THRESHOLD = 40;
+    public static final int MIN_DECODER_BUFFER_FREE_THRESHOLD = 60;
     public static final int MAX_DECODER_BUFFER_FREE_THRESHOLD = 80;
 
     private int mInstance = -1;
@@ -165,13 +165,7 @@ public class SetupInstance implements OnTuneEventListener,
     public static final int CAS_PLUGIN_STATUS_SESSION_NUMBER_CHANGED = 1;
 
     private static final byte[] EMPTY_PSSH = new byte[0];
-    private static final byte[] GOOGLE_TEST_PSSH = {
-        (byte) 0x1a, (byte) 0x0d, (byte) 0x77, (byte) 0x69, (byte) 0x64, (byte) 0x65,
-        (byte) 0x76, (byte) 0x69, (byte) 0x6e, (byte) 0x65, (byte) 0x5f, (byte) 0x74,
-        (byte) 0x65, (byte) 0x73, (byte) 0x74, (byte) 0x22, (byte) 0x09, (byte) 0x43,
-        (byte) 0x61, (byte) 0x73, (byte) 0x54, (byte) 0x73, (byte) 0x46, (byte) 0x61,
-        (byte) 0x6b, (byte) 0x65, (byte) 0x58, (byte) 0x02
-    };
+    //private static final byte[] GOOGLE_TEST_PSSH = new byte[0];//Use for test streams no private data
 
     private static final String CERT_URL = "https://www.googleapis.com/certificateprovisioning/v1/devicecertificates/create?key=AIzaSyB-5OLKTx2iU5mko18DfdwK5611JIjbUhE";
     private static final String UAT_PROXY_URL = "https://proxy.uat.widevine.com/proxy?provider=widevine_test";
@@ -247,7 +241,7 @@ public class SetupInstance implements OnTuneEventListener,
 
     public static boolean mEnableLocalPlay = false;
     public static boolean mPassthroughMode = true;
-    public static boolean mEnableFlowCtl = true;
+    public static boolean mEnableFlowCtl = false;
     public static boolean mDumpVideoEs = false;
     public static int mDvrMQSize_MB = DEFAULT_DVR_MQ_SIZE_MB;
     public static long mDvrLowThreshold = DEFAULT_DVR_MQ_SIZE_MB * 1024 * 1024 * 2 / 10;
@@ -345,7 +339,7 @@ public class SetupInstance implements OnTuneEventListener,
                     playStart(true);
                     break;
                 case TaskMsg.TASK_MSG_STOP_PLAY:
-                    playStop();
+                    stopDvrPlayback();
                     break;
                 case TaskMsg.TASK_MSG_PULL_SECTION:
                     startSectionFilter(message.arg1, message.arg2);
@@ -683,8 +677,8 @@ public class SetupInstance implements OnTuneEventListener,
                         Log.d(TAG, "MediaCas provision with empty pssh");
                         mMediaCas.provision((new String(EMPTY_PSSH, "UTF-8")));
                     } else {
-                        Log.d(TAG, "MediaCas provision with google pssh");
-                        mMediaCas.provision((new String(GOOGLE_TEST_PSSH, "UTF-8")));
+                        Log.w(TAG, "Widevine cas stream no private data!");
+                        //mMediaCas.provision((new String(GOOGLE_TEST_PSSH, "UTF-8")));
                     }
                 } catch (MediaCasException e) {
                     Log.e(TAG, "startMediaCas MediaCasException: " + e.getMessage());
@@ -1039,7 +1033,7 @@ public class SetupInstance implements OnTuneEventListener,
         mMediaCodecPlayer.startPlayer();
         CreateAudioTrack();
 
-        if (!mEnableLocalPlay)
+        if (bTuner)
             startTuner();
         mPlayerStart.compareAndSet(false, true);
     }
@@ -1067,10 +1061,7 @@ public class SetupInstance implements OnTuneEventListener,
         if (mAudioFilter != null) {
             mAudioFilter.stop();
         }
-        if (mTuneStart.get()) {
-            mTuner.cancelTuning();
-            mTuneStart.set(false);
-        }
+        stopTuner();
     }
 
     private FilterCallback mfilterCallback = new FilterCallback() {
@@ -2248,7 +2239,7 @@ public class SetupInstance implements OnTuneEventListener,
             stopEcmSectionFilter(VIDEO_CHANNEL_INDEX, -1);
             stopEcmSectionFilter(AUDIO_CHANNEL_INDEX, -1);
         }
-        if (mDvrFilter != null) {
+        if (mDvrFilter != null && mDvrRecorder != null) {
             mDvrRecorder.detachFilter(mDvrFilter);
         }
         if (mVideoFilter != null)
@@ -2869,7 +2860,7 @@ public class SetupInstance implements OnTuneEventListener,
                     }
                 }
                 if (mPrePercentage < mPercentage  &&
-                    mPercentage >= MIN_DECODER_BUFFER_FREE_THRESHOLD &&
+                    mPercentage >= MAX_DECODER_BUFFER_FREE_THRESHOLD / 2 &&
                     mPercentage < MAX_DECODER_BUFFER_FREE_THRESHOLD &&
                     (mDuration >= 2 * DEFAULT_DVR_READ_DURATION_MS)) {
                     //Log.d(TAG, "mPercentage:" + mPercentage + " mPrePercentage:" + mPercentage);
@@ -2880,6 +2871,10 @@ public class SetupInstance implements OnTuneEventListener,
                     mDuration = DEFAULT_DVR_READ_DURATION_MS;
                     Log.d(TAG, "Reset duration to " + DEFAULT_DVR_READ_DURATION_MS + " with mPercentage:" + mPercentage);
                 }
+                if (mStatus == DVRMQ_SPACE_ALMOST_FULL)
+                    mDuration = MAX_DVR_READ_DURATION_MS / 2;
+                else if (mStatus == DVRMQ_SPACE_FULL)
+                    mDuration = MAX_DVR_READ_DURATION_MS;
                 if (mPreDuration != mDuration) {
                     mPreDuration = mDuration;
                     Log.d(TAG, "mDuration:" + mDuration + "ms");
@@ -2890,7 +2885,7 @@ public class SetupInstance implements OnTuneEventListener,
                 switch (mStatus) {
                     case DVRMQ_SPACE_EMPTY:
                     case DVRMQ_SPACE_ALMOST_EMPTY:
-                        setDuration(MAX_DVR_READ_DURATION_MS);
+                        setDuration(DEFAULT_DVR_READ_DURATION_MS);
                         break;
                     case DVRMQ_SPACE_ALMOST_FULL:
                         setDuration(MAX_DVR_READ_DURATION_MS / 2);
