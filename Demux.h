@@ -122,6 +122,8 @@ class Demux : public IDemux {
     uint32_t findFilterIdByfakeFilterId(uint32_t fakefilterId);
     void eraseFakeFilterId(uint32_t fakefilterId);
     void destroyMediaSync();
+    bool isRawData(uint32_t filterId);
+    void getPesRawData(uint32_t filterId);
 
   private:
     // Tuner service

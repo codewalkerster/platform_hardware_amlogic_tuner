@@ -294,6 +294,8 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                 }
                 case DemuxTsFilterType::PES: {
                     ALOGD("%s subType:PES", __FUNCTION__);
+                    bIsRaw = settings.ts().filterSettings.pesData().isRaw;
+                    ALOGD("%s bIsRaw:%d", __FUNCTION__, bIsRaw);
                     struct dmx_pes_filter_params pesp;
                     memset(&pesp, 0, sizeof(pesp));
                     pesp.pid = mTpid;
@@ -1057,6 +1059,10 @@ void Filter::releaseIonBuffer(uint8_t* avBuf, int size) {
 
 DemuxFilterType Filter::getFilterType() {
     return mType;
+}
+
+bool Filter::isRawData() {
+    return bIsRaw;
 }
 
 }  // namespace implementation

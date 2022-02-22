@@ -95,6 +95,7 @@ class Filter : public IFilter {
     void fillDataToDecoder();
     DemuxFilterType getFilterType();
     int updatePCRFilterId(int avSyncId);
+    bool isRawData();
 
   private:
     // Tuner service
@@ -207,6 +208,7 @@ class Filter : public IFilter {
     uint64_t mLastUsedDataId = 1;
     int mAvBufferCopyCount = 0;
     int mIonFd;
+    bool bIsRaw;
 };
 
 }  // namespace implementation

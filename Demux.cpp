@@ -38,6 +38,9 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 
 #define WAIT_TIMEOUT 3000000000
 #define PSI_MAX_SIZE 4096
+#define PES_RAW_DATA_SIZE 64 * 1024
+#define PRIVATE_STREAM_1   0x1bd
+#define PRIVATE_STREAM_2   0x1bf
 
 #ifdef TUNERHAL_DBG
 #define TF_DEBUG_DROP_TS_NUM "vendor.tf.drop.tsnum"
@@ -114,12 +117,14 @@ void Demux::combinePesData(uint32_t filterId) {
     int result = -1;
     int packetLen = 0;
     int64_t packetHeader = 0;
+    int stream_id = 0;
     vector<uint8_t> pesData;
     int size = 1;
     while (AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf, &size) == 0) {
         packetHeader = ((packetHeader<<8) & 0x000000ffffffff00) | tmpbuf[0];
         //ALOGD("[Demux] packetHeader = %llx", packetHeader);
-        if ((packetHeader & 0xffffffff) == 0x000001bd) {
+        stream_id = packetHeader & 0xffffffff;
+        if (stream_id == PRIVATE_STREAM_1 || stream_id == PRIVATE_STREAM_2) {
             ALOGD("## [Demux] combinePesData %x,%llx,-----------\n", tmpbuf[0], packetHeader & 0xffffffffff);
             size = 2;
             result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf1, &size);
@@ -129,7 +134,7 @@ void Demux::combinePesData(uint32_t filterId) {
             pesData[0] = 0x0;
             pesData[1] = 0x0;
             pesData[2] = 0x01;
-            pesData[3] = 0xbd;
+            pesData[3] = tmpbuf[0];
             pesData[4] = tmpbuf1[0];
             pesData[5] = tmpbuf1[1];
             int readLen = 0;
@@ -191,6 +196,22 @@ void Demux::getSectionData(uint32_t filterId) {
         startFilterHandler(filterId);
     }
 
+}
+
+void Demux::getPesRawData(uint32_t filterId) {
+    vector<uint8_t> pesRawData;
+    int pesRawDataSize = PES_RAW_DATA_SIZE;
+    pesRawData.resize(pesRawDataSize);
+    int readRet = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesRawData.data(), &pesRawDataSize);
+    if (readRet != 0) {
+        ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
+        return;
+    } else {
+        ALOGD("fid =%d pes raw data size:%d", filterId, pesRawDataSize);
+        pesRawData.resize(pesRawDataSize);
+        updateFilterOutput(filterId, pesRawData);
+        startFilterHandler(filterId);
+    }
 }
 
 void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
@@ -291,8 +312,12 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     } else {
         bool isPesFilterId = dmxDev->checkPesFilterId(fid);
         if (isPesFilterId) {
-            ALOGD("start pes data combine fid = %d", fid);
-            dmxDev->combinePesData(fid);
+            if (dmxDev->isRawData(fid)) {
+                dmxDev->getPesRawData(fid);
+            } else {
+                ALOGD("start pes data combine fid = %d", fid);
+                dmxDev->combinePesData(fid);
+            }
         } else {
             dmxDev->getSectionData(fid);
         }
@@ -632,6 +657,7 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
         if (pid == mFilters[*it]->getTpid()) {
             if (1) {
                 if (isValidTsPacket(data)) {
+                    //ALOGD("[Demux] size = %d data[0] = 0x%x", data.size(), data[0]);
                     while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
                         ALOGD("[Demux] wait for 100ms to write dvr device");
                         usleep(100 * 1000);
@@ -902,6 +928,10 @@ void Demux::destroyMediaSync() {
         mMediaSync = nullptr;
         mAvSyncHwId = -1;
     }
+}
+
+bool Demux::isRawData(uint32_t filterId) {
+    return mFilters[filterId]->isRawData();
 }
 }  // namespace implementation
 }  // namespace V1_0
