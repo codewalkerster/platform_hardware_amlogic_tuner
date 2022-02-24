@@ -19,6 +19,7 @@
 #include "Tuner.h"
 #include <android/hardware/tv/tuner/1.0/IFrontendCallback.h>
 #include <utils/Log.h>
+#include <sys/stat.h>
 #include "Demux.h"
 #include "Descrambler.h"
 #include "Frontend.h"
@@ -34,182 +35,200 @@ namespace V1_0 {
 namespace implementation {
 
 #define TUNER_CONFIG_FILE "/vendor/etc/tuner_hal/frontendinfos.json"
+#define FRONTEND_DEVICE "/dev/dvb0.frontend0"
 using ::android::hardware::tv::tuner::V1_0::DemuxId;
 
+//check deivce exist or not
+static bool isDeviceExist(const char *file_name)
+{
+    struct stat tmp_st;
+    return stat(file_name, &tmp_st) == 0;
+}
+
 Tuner::Tuner() {
-    const char* tuner_config_file = TUNER_CONFIG_FILE;
-    FILE* fp = fopen(tuner_config_file, "r");
-    if (fp != NULL) {
-        fseek(fp, 0L, SEEK_END);
-        const auto len = ftell(fp);
-        char* data = (char*)malloc(len + 1);
-
-        rewind(fp);
-        fread(data, sizeof(char), len, fp);
-        data[len] = '\0';
-
-        Json::Value root;
-        Json::Reader reader;
-
-        if (reader.parse(data, root)) {
-            auto& arrayHwFes = root["hwfe"];
-            auto& arrayFronts = root["frontends"];
-            auto& dmxSetting = root["dmxsetting"];
-            for (int i = 0; i < arrayHwFes.size(); i ++) {
-                if (!arrayHwFes[i]["id"].isNull()) {
-                    int hwId = arrayHwFes[i]["id"].asInt();
-                    sp<HwFeState> hwFeState = new HwFeState(hwId);
-                    mHwFes.push_back(hwFeState);
-                }
-            }
-            for (int i = 0; i < arrayFronts.size(); i ++) {
-                if (!arrayFronts[i]["type"].isNull()) {
-                    int frontType = arrayFronts[i]["type"].asInt();
-                    int id = i;
-                    int hwId = arrayFronts[i]["hwid"].asInt();
-                    HwFeCaps_t hwCaps;
-                    hwCaps.id = hwId;
-                    if (hwId >= 0 && hwId < arrayHwFes.size()) {
-                        hwCaps.minFreq = arrayHwFes[hwId]["minFreq"].asUInt();
-                        hwCaps.maxFreq = arrayHwFes[hwId]["maxFreq"].asUInt();
-                        hwCaps.minSymbol = arrayHwFes[hwId]["minSymbol"].asUInt();
-                        hwCaps.maxSymbol = arrayHwFes[hwId]["maxSymbol"].asUInt();
-                        hwCaps.acquireRange = arrayHwFes[hwId]["acquireRange"].asUInt();
-                        hwCaps.statusCap = arrayHwFes[hwId]["statusCap"].asUInt();
-                    }
-                    vector<FrontendStatusType> statusCaps;
-                    for (int s = 0; s < static_cast<int>(FrontendStatusType::ATSC3_PLP_INFO); s ++) {
-                        if ((hwCaps.statusCap & (1 << s)) == (1 << s)) {
-                            statusCaps.push_back(static_cast<FrontendStatusType>(s));
-                        }
-                    }
-                    FrontendInfo info;
-                    FrontendInfo::FrontendCapabilities caps = FrontendInfo::FrontendCapabilities();
-                    switch (frontType)
-                    {
-                        case static_cast<int>(FrontendType::ANALOG):{
-                            FrontendAnalogCapabilities analogCaps{
-                                .typeCap = arrayFronts[i]["analogTypeCap"].asUInt(),
-                                .sifStandardCap = arrayFronts[i]["sifCap"].asUInt(),
-                            };
-                            caps.analogCaps(analogCaps);
-                        }
-                        break;
-                        case static_cast<int>(FrontendType::ATSC): {
-                            FrontendAtscCapabilities atscCaps{
-                                .modulationCap = arrayFronts[i]["modulationCap"].asUInt(),
-                            };
-                            caps.atscCaps(atscCaps);
-                        }
-                        break;
-                        case static_cast<int>(FrontendType::DVBC): {
-                            FrontendDvbcCapabilities dvbcCaps{
-                                .modulationCap = arrayFronts[i]["modulationCap"].asUInt(),
-                                .fecCap = arrayFronts[i]["fecCap"].asUInt64(),
-                                .annexCap = (uint8_t)(arrayFronts[i]["annexCap"].asUInt()),
-                            };
-                            caps.dvbcCaps(dvbcCaps);
-                        }
-                        break;
-                        case static_cast<int>(FrontendType::DVBS): {
-                            FrontendDvbsCapabilities dvbsCaps{
-                                .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
-                                .innerfecCap = arrayFronts[i]["fecCap"].asUInt(),
-                                .standard = (uint8_t)(arrayFronts[i]["stdCap"].asUInt()),
-                            };
-                            caps.dvbsCaps(dvbsCaps);
-                        }
-                        break;
-                        case static_cast<int>(FrontendType::DVBT): {
-                            FrontendDvbtCapabilities dvbtCaps{
-                                .transmissionModeCap = arrayFronts[i]["transmissionCap"].asUInt(),
-                                .bandwidthCap = arrayFronts[i]["bandwidthCap"].asUInt(),
-                                .constellationCap = arrayFronts[i]["constellationCap"].asUInt(),
-                                .coderateCap = arrayFronts[i]["coderateCap"].asUInt(),
-                                .hierarchyCap = arrayFronts[i]["hierarchyCap"].asUInt(),
-                                .guardIntervalCap = arrayFronts[i]["guardIntervalCap"].asUInt(),
-                                .isT2Supported = arrayFronts[i]["supportT2"].asBool(),
-                                .isMisoSupported = arrayFronts[i]["constellationCap"].asBool(),
-                            };
-                            caps.dvbtCaps(dvbtCaps);
-                        }
-                        break;
-                        case static_cast<int>(FrontendType::ISDBT): {
-                            FrontendIsdbtCapabilities isdbtCaps{
-                                .modeCap = arrayFronts[i]["modeCap"].asUInt(),
-                                .bandwidthCap = arrayFronts[i]["bandwidthCap"].asUInt(),
-                                .modulationCap = arrayFronts[i]["modulationCap"].asUInt(),
-                                .coderateCap = arrayFronts[i]["coderateCap"].asUInt(),
-                                .guardIntervalCap = arrayFronts[i]["guardIntervalCap"].asUInt(),
-                            };
-                            caps.isdbtCaps(isdbtCaps);
-                        }
-                        break;
-                        default:
-                            break;
-                    }
-                    uint32_t minFreq, maxFreq, minSymbol, maxSymbol, exclusiveId;
-                    if (!arrayFronts[i]["minFreq"].isNull()) {
-                        minFreq = arrayFronts[i]["minFreq"].asUInt();
-                    } else {
-                        minFreq = hwCaps.minFreq;
-                    }
-                    if (!arrayFronts[i]["maxFreq"].isNull()) {
-                        maxFreq = arrayFronts[i]["maxFreq"].asUInt();
-                    } else {
-                        maxFreq = hwCaps.maxFreq;
-                    }
-                    if (!arrayFronts[i]["minSymbol"].isNull()) {
-                        minSymbol = arrayFronts[i]["minSymbol"].asUInt();
-                    } else {
-                        minSymbol = hwCaps.minSymbol;
-                    }
-                    if (!arrayFronts[i]["maxSymbol"].isNull()) {
-                        maxSymbol = arrayFronts[i]["maxSymbol"].asUInt();
-                    } else {
-                        maxSymbol = hwCaps.maxSymbol;
-                    }
-                    if (!arrayFronts[i]["exclusiveGroupId"].isNull()) {
-                        exclusiveId = arrayFronts[i]["exclusiveId"].asUInt();
-                    } else {
-                        exclusiveId = (uint32_t)(hwCaps.id);
-                    }
-                    info = {
-                        .type = static_cast<FrontendType>(frontType),
-                        .minFrequency = minFreq,
-                        .maxFrequency = maxFreq,
-                        .minSymbolRate = minSymbol,
-                        .maxSymbolRate = maxSymbol,
-                        .acquireRange = hwCaps.acquireRange,
-                        .exclusiveGroupId = exclusiveId,
-                        .statusCaps = statusCaps,
-                        .frontendCaps = caps,
-                    };
-                    ALOGD("Add frontend type(%d), id(%d), hwId(%d),exclusiveGroupId(%u)",
-                        frontType, id, hwCaps.id, info.exclusiveGroupId);
-                    FrontendInfos_t fes = {id, hwCaps.id, nullptr, info};
-                    mFrontendInfos.push_back(fes);
-                    mFrontendSize ++;
-                }
-            }
-
-            if (!dmxSetting["ts_input"].isNull()) {
-                mTsInput = dmxSetting["ts_input"].asInt();
-                ALOGD("ts_input = %d", mTsInput);
-            }
-        }
-        root.clear();
-        if (data)
-            free(data);
-        fclose(fp);
-    }
-
-    mLnbs.resize(1);
-    if (mHwFes.size() > 0) {
-        mLnbs[0] = new Lnb(0, mHwFes[0], "hardware_lnb");
+    if (!isDeviceExist(FRONTEND_DEVICE)) {
+        mFrontendSize = 0;
+        ALOGD("frontend device is not exist");
     } else {
-        mLnbs[0] = new Lnb(0, nullptr, "virtual_lnb");
+        ALOGD("frontend device is exist");
+        const char* tuner_config_file = TUNER_CONFIG_FILE;
+        FILE* fp = fopen(tuner_config_file, "r");
+        if (fp != NULL) {
+            fseek(fp, 0L, SEEK_END);
+            const auto len = ftell(fp);
+            char* data = (char*)malloc(len + 1);
+
+            rewind(fp);
+            fread(data, sizeof(char), len, fp);
+            data[len] = '\0';
+
+            Json::Value root;
+            Json::Reader reader;
+
+            if (reader.parse(data, root)) {
+                auto& arrayHwFes = root["hwfe"];
+                auto& arrayFronts = root["frontends"];
+                auto& dmxSetting = root["dmxsetting"];
+                for (int i = 0; i < arrayHwFes.size(); i ++) {
+                    if (!arrayHwFes[i]["id"].isNull()) {
+                        int hwId = arrayHwFes[i]["id"].asInt();
+                        sp<HwFeState> hwFeState = new HwFeState(hwId);
+                        mHwFes.push_back(hwFeState);
+                    }
+                }
+                for (int i = 0; i < arrayFronts.size(); i ++) {
+                    if (!arrayFronts[i]["type"].isNull()) {
+                        int frontType = arrayFronts[i]["type"].asInt();
+                        int id = i;
+                        int hwId = arrayFronts[i]["hwid"].asInt();
+                        HwFeCaps_t hwCaps;
+                        hwCaps.id = hwId;
+                        if (hwId >= 0 && hwId < arrayHwFes.size()) {
+                            hwCaps.minFreq = arrayHwFes[hwId]["minFreq"].asUInt();
+                            hwCaps.maxFreq = arrayHwFes[hwId]["maxFreq"].asUInt();
+                            hwCaps.minSymbol = arrayHwFes[hwId]["minSymbol"].asUInt();
+                            hwCaps.maxSymbol = arrayHwFes[hwId]["maxSymbol"].asUInt();
+                            hwCaps.acquireRange = arrayHwFes[hwId]["acquireRange"].asUInt();
+                            hwCaps.statusCap = arrayHwFes[hwId]["statusCap"].asUInt();
+                        }
+                        vector<FrontendStatusType> statusCaps;
+                        for (int s = 0; s < static_cast<int>(FrontendStatusType::ATSC3_PLP_INFO); s ++) {
+                            if ((hwCaps.statusCap & (1 << s)) == (1 << s)) {
+                                statusCaps.push_back(static_cast<FrontendStatusType>(s));
+                            }
+                        }
+                        FrontendInfo info;
+                        FrontendInfo::FrontendCapabilities caps = FrontendInfo::FrontendCapabilities();
+                        switch (frontType)
+                        {
+                            case static_cast<int>(FrontendType::ANALOG):{
+                                FrontendAnalogCapabilities analogCaps{
+                                    .typeCap = arrayFronts[i]["analogTypeCap"].asUInt(),
+                                    .sifStandardCap = arrayFronts[i]["sifCap"].asUInt(),
+                                };
+                                caps.analogCaps(analogCaps);
+                            }
+                            break;
+                            case static_cast<int>(FrontendType::ATSC): {
+                                FrontendAtscCapabilities atscCaps{
+                                    .modulationCap = arrayFronts[i]["modulationCap"].asUInt(),
+                                };
+                                caps.atscCaps(atscCaps);
+                            }
+                            break;
+                            case static_cast<int>(FrontendType::DVBC): {
+                                FrontendDvbcCapabilities dvbcCaps{
+                                    .modulationCap = arrayFronts[i]["modulationCap"].asUInt(),
+                                    .fecCap = arrayFronts[i]["fecCap"].asUInt64(),
+                                    .annexCap = (uint8_t)(arrayFronts[i]["annexCap"].asUInt()),
+                                };
+                                caps.dvbcCaps(dvbcCaps);
+                            }
+                            break;
+                            case static_cast<int>(FrontendType::DVBS): {
+                                FrontendDvbsCapabilities dvbsCaps{
+                                    .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
+                                    .innerfecCap = arrayFronts[i]["fecCap"].asUInt(),
+                                    .standard = (uint8_t)(arrayFronts[i]["stdCap"].asUInt()),
+                                };
+                                caps.dvbsCaps(dvbsCaps);
+                            }
+                            break;
+                            case static_cast<int>(FrontendType::DVBT): {
+                                FrontendDvbtCapabilities dvbtCaps{
+                                    .transmissionModeCap = arrayFronts[i]["transmissionCap"].asUInt(),
+                                    .bandwidthCap = arrayFronts[i]["bandwidthCap"].asUInt(),
+                                    .constellationCap = arrayFronts[i]["constellationCap"].asUInt(),
+                                    .coderateCap = arrayFronts[i]["coderateCap"].asUInt(),
+                                    .hierarchyCap = arrayFronts[i]["hierarchyCap"].asUInt(),
+                                    .guardIntervalCap = arrayFronts[i]["guardIntervalCap"].asUInt(),
+                                    .isT2Supported = arrayFronts[i]["supportT2"].asBool(),
+                                    .isMisoSupported = arrayFronts[i]["constellationCap"].asBool(),
+                                };
+                                caps.dvbtCaps(dvbtCaps);
+                            }
+                            break;
+                            case static_cast<int>(FrontendType::ISDBT): {
+                                FrontendIsdbtCapabilities isdbtCaps{
+                                    .modeCap = arrayFronts[i]["modeCap"].asUInt(),
+                                    .bandwidthCap = arrayFronts[i]["bandwidthCap"].asUInt(),
+                                    .modulationCap = arrayFronts[i]["modulationCap"].asUInt(),
+                                    .coderateCap = arrayFronts[i]["coderateCap"].asUInt(),
+                                    .guardIntervalCap = arrayFronts[i]["guardIntervalCap"].asUInt(),
+                                };
+                                caps.isdbtCaps(isdbtCaps);
+                            }
+                            break;
+                            default:
+                                break;
+                        }
+                        uint32_t minFreq, maxFreq, minSymbol, maxSymbol, exclusiveId;
+                        if (!arrayFronts[i]["minFreq"].isNull()) {
+                            minFreq = arrayFronts[i]["minFreq"].asUInt();
+                        } else {
+                            minFreq = hwCaps.minFreq;
+                        }
+                        if (!arrayFronts[i]["maxFreq"].isNull()) {
+                            maxFreq = arrayFronts[i]["maxFreq"].asUInt();
+                        } else {
+                            maxFreq = hwCaps.maxFreq;
+                        }
+                        if (!arrayFronts[i]["minSymbol"].isNull()) {
+                            minSymbol = arrayFronts[i]["minSymbol"].asUInt();
+                        } else {
+                            minSymbol = hwCaps.minSymbol;
+                        }
+                        if (!arrayFronts[i]["maxSymbol"].isNull()) {
+                            maxSymbol = arrayFronts[i]["maxSymbol"].asUInt();
+                        } else {
+                            maxSymbol = hwCaps.maxSymbol;
+                        }
+                        if (!arrayFronts[i]["exclusiveGroupId"].isNull()) {
+                            exclusiveId = arrayFronts[i]["exclusiveId"].asUInt();
+                        } else {
+                            exclusiveId = (uint32_t)(hwCaps.id);
+                        }
+                        info = {
+                            .type = static_cast<FrontendType>(frontType),
+                            .minFrequency = minFreq,
+                            .maxFrequency = maxFreq,
+                            .minSymbolRate = minSymbol,
+                            .maxSymbolRate = maxSymbol,
+                            .acquireRange = hwCaps.acquireRange,
+                            .exclusiveGroupId = exclusiveId,
+                            .statusCaps = statusCaps,
+                            .frontendCaps = caps,
+                        };
+                        ALOGD("Add frontend type(%d), id(%d), hwId(%d),exclusiveGroupId(%u)",
+                            frontType, id, hwCaps.id, info.exclusiveGroupId);
+                        FrontendInfos_t fes = {id, hwCaps.id, nullptr, info};
+                        mFrontendInfos.push_back(fes);
+                        mFrontendSize ++;
+                    }
+                }
+
+                if (!dmxSetting["ts_input"].isNull()) {
+                    mTsInput = dmxSetting["ts_input"].asInt();
+                    ALOGD("ts_input = %d", mTsInput);
+                }
+            }
+            mLnbs.resize(1);
+            if (mHwFes.size() > 0) {
+                mLnbs[0] = new Lnb(0, mHwFes[0], "hardware_lnb");
+            } else {
+                mLnbs[0] = new Lnb(0, nullptr, "virtual_lnb");
+            }
+
+            root.clear();
+            if (data)
+                free(data);
+            fclose(fp);
+            fp = NULL;
+        } else {
+            mFrontendSize = 0;
+        }
     }
+
     setTsnSource();
 }
 
@@ -219,11 +238,12 @@ Return<void> Tuner::getFrontendIds(getFrontendIds_cb _hidl_cb) {
     ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
     vector<FrontendId> frontendIds;
-    frontendIds.resize(mFrontendSize);
-    for (int i = 0; i < mFrontendSize; i++) {
-        frontendIds[i] = mFrontendInfos[i].id;
+    if (mFrontendSize > 0) {
+        frontendIds.resize(mFrontendSize);
+        for (int i = 0; i < mFrontendSize; i++) {
+            frontendIds[i] = mFrontendInfos[i].id;
+        }
     }
-
     _hidl_cb(Result::SUCCESS, frontendIds);
     return Void();
 }
