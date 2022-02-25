@@ -123,6 +123,7 @@ public class SetupActivity extends Activity {
     @Override
     protected void onStop() {
         Log.d(TAG, "onStop");
+        setTsnSource(mTsnSource);
         super.onStop();
     }
 
@@ -142,7 +143,6 @@ public class SetupActivity extends Activity {
             }
         }
         releaseHandler();
-        setTsnSource(mTsnSource);
         super.onDestroy();
         Log.d(TAG, "onDestroy end");
     }
@@ -300,7 +300,7 @@ public class SetupActivity extends Activity {
             Log.e(TAG, "Can not get mSystemControlManager!");
             return;
         }
-        if (!requireTsnSource.equals(tsnSource)) {
+        if (!tsnSource.contains(requireTsnSource)) {
             Log.d(TAG, "Set tsnSource to " + requireTsnSource);
             mSystemControlManager.writeSysFs(TSN_SOURCE_NODE, requireTsnSource);
         }
@@ -316,6 +316,11 @@ public class SetupActivity extends Activity {
         } else {
             Log.e(TAG, "Can not get mSystemControlManager!");
             return null;
+        }
+        if (tsnSource.contains(TSN_SOURCE_LOCAL)) {
+            tsnSource = TSN_SOURCE_LOCAL;
+        } else if (tsnSource.contains(TSN_SOURCE_DEMOD)) {
+            tsnSource = TSN_SOURCE_DEMOD;
         }
         return tsnSource;
     }

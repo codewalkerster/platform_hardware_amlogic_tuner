@@ -482,14 +482,15 @@ void Tuner::setTsnSource() {
         ALOGI("tsn_source is %s", tsn_source);
     } else {
         ALOGW("can't read tsn_source! %s", strerror(errno));
+        return;
     }
-    if (mDscMode == CA_DSC_COMMON_TYPE) {
-        if (strncmp(tsn_source, TSN_LOCAL, 5) != 0) {
+    if (!strncmp(dmx_ver, "sc2-d", 5)) {
+        if (!strstr(tsn_source, TSN_LOCAL)) {
             ALOGD("set tsn_source to local");
             FileSystem_writeFile(TSN_SOURCE, TSN_LOCAL);
         }
-    } else if (mDscMode == CA_DSC_TSD_TYPE) {
-        if (strncmp(tsn_source, TSN_DEMOD, 5) != 0) {
+    } else {
+        if (!strstr(tsn_source, TSN_DEMOD)) {
             ALOGD("set tsn_source to demod");
             FileSystem_writeFile(TSN_SOURCE, TSN_DEMOD);
         }

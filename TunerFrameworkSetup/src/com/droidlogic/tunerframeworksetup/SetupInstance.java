@@ -76,6 +76,7 @@ import android.os.ParcelFileDescriptor;
 
 import android.media.MediaCas;
 import android.media.MediaCasException;
+import android.media.MediaCasStateException;
 import android.media.tv.tuner.Descrambler;
 import android.util.Base64;
 import android.system.OsConstants;
@@ -643,7 +644,9 @@ public class SetupInstance implements OnTuneEventListener,
                             }
                             break;
                         } catch (MediaCasException e) {
-                                Log.e(TAG, "mHandler:exception:" + Log.getStackTraceString(e));
+                                Log.e(TAG, "MediaCasException:" + Log.getStackTraceString(e));
+                        } catch (MediaCasStateException e) {
+                                Log.e(TAG, "MediaCasStateException:" + Log.getStackTraceString(e));
                         }
                     case LICENSED_REV_MSG:
                         if (mLicenseLister != null) {
