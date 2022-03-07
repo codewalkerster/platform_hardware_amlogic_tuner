@@ -96,10 +96,15 @@ int ca_alloc_chan(int devno, unsigned int pid, int algo, int dsc_type)
     desc.params.alloc_params.ca_index = -1;
     desc.params.alloc_params.loop = 0;
 
-    if (devno >= MAX_DSC_DEV || !dvb_dsc_dev[devno].used) {
-        ALOGE("ca_alloc_chan failed! devno:%d used:%d\n", devno, dvb_dsc_dev[devno].used);
+    if (devno >= MAX_DSC_DEV) {
+        ALOGE("ca_alloc_chan failed! devno:%d\n", devno);
         goto ERROR_EXIT;
     }
+    if (!dvb_dsc_dev[devno].used) {
+        ALOGW("ca_alloc_chan failed! devno:%d isn't used!\n", devno);
+        goto ERROR_EXIT;
+    }
+
     fd = dvb_dsc_dev[devno].fd;
     ret = ioctl(fd, CA_SC2_SET_DESCR_EX, &desc);
     if (ret != 0) {
@@ -127,10 +132,15 @@ int ca_free_chan(int devno, int index)
     desc.cmd = CA_FREE;
     desc.params.free_params.ca_index = index;
 
-    if (devno >= MAX_DSC_DEV || !dvb_dsc_dev[devno].used) {
-        ALOGE("ca_free_chan failed! devno:%d used:%d\n", devno, dvb_dsc_dev[devno].used);
+    if (devno >= MAX_DSC_DEV) {
+        ALOGE("ca_free_chan failed! devno:%d\n", devno);
         goto ERROR_EXIT;
     }
+    if (!dvb_dsc_dev[devno].used) {
+        ALOGW("ca_free_chan failed! devno:%d isn't used!\n", devno);
+        goto ERROR_EXIT;
+    }
+
     fd = dvb_dsc_dev[devno].fd;
     ret = ioctl(fd, CA_SC2_SET_DESCR_EX, &desc);
     if (ret != 0) {
@@ -162,10 +172,15 @@ int ca_set_key(int devno, int index, int parity, uint32_t key_index)
     desc.params.key_params.parity = parity;
     desc.params.key_params.key_index = key_index;
 
-    if (devno >= MAX_DSC_DEV || !dvb_dsc_dev[devno].used) {
-        ALOGE("ca_set_key failed! devno:%d used:%d\n", devno, dvb_dsc_dev[devno].used);
+    if (devno >= MAX_DSC_DEV) {
+        ALOGE("ca_set_key failed! devno:%d\n", devno);
         goto ERROR_EXIT;
     }
+    if (!dvb_dsc_dev[devno].used) {
+        ALOGW("ca_set_key failed! devno:%d isn't used!\n", devno);
+        goto ERROR_EXIT;
+    }
+
     fd = dvb_dsc_dev[devno].fd;
     ret = ioctl(fd, CA_SC2_SET_DESCR_EX, &desc);
     if (ret != 0) {
@@ -189,8 +204,12 @@ int ca_close(int devno)
     pthread_mutex_lock(&lock);
 
     ALOGI("ca_close dev:%d\n", devno);
-    if (devno >= MAX_DSC_DEV || !dvb_dsc_dev[devno].used) {
-        ALOGE("ca_close failed! devno:%d used:%d\n", devno, dvb_dsc_dev[devno].used);
+    if (devno >= MAX_DSC_DEV) {
+        ALOGE("ca_close failed! devno:%d\n", devno);
+        goto ERROR_EXIT;
+    }
+    if (!dvb_dsc_dev[devno].used) {
+        ALOGW("ca_close failed! devno:%d isn't used!\n", devno);
         goto ERROR_EXIT;
     }
     fd = dvb_dsc_dev[devno].fd;

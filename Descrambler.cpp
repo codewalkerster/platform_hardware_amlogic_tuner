@@ -32,6 +32,8 @@ Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
   mTunerService = tuner;
   mEnableLocalMode = false;
   mDscType = mTunerService->getDscMode();
+  mSourceDemuxId = 0;
+  mCasSessionToken = 0;
   FileSystem_create();
   getTsnSourceStatus(&mEnableLocalMode);
 
@@ -41,22 +43,26 @@ Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
     TUNER_DSC_DBG(mDescramblerId, "getProperty mDscType:%d", mDscType);
   }
 #endif
-  TUNER_DSC_INFO(descramblerId, "mEnableLocalMode:%d mDscType:%d", mEnableLocalMode, mDscType);
 
 #ifdef SUPPORT_DSM
+  TUNER_DSC_INFO(descramblerId, "mEnableLocalMode:%d mDscType:%d", mEnableLocalMode, mDscType);
+  memset(&mKeyslotList, 0, sizeof(dsm_keyslot_list));
   if (ca_open(descramblerId) != CA_DSC_OK)
-    TUNER_DSC_ERR(descramblerId, "ca_open failed! %s", strerror(errno));
-
+    TUNER_DSC_ERR(descramblerId, "ca_open ca%d failed!", descramblerId);
+  else
+    TUNER_DSC_DBG(descramblerId, "ca_open ca%d ok", descramblerId);
   mDsmFd = DSM_OpenSession(0);
-  if (mDsmFd <= 0) {
+  if (mDsmFd < 0) {
     TUNER_DSC_ERR(descramblerId, "dsm_open failed! %s", strerror(errno));
+  } else {
+    TUNER_DSC_DBG(descramblerId, "dsm_open mDsmFd:%d", mDsmFd);
   }
 #endif
 }
 
 Descrambler::~Descrambler() {
 #ifdef SUPPORT_DSM
-  if (mDsmFd > 0) {
+  if (mDsmFd >= 0) {
     DSM_CloseSession(mDsmFd);
     ca_close(mDescramblerId);
   }
@@ -186,7 +192,7 @@ Return<Result> Descrambler::close() {
   clearDscChannels();
 
 #ifdef SUPPORT_DSM
-  if (mDsmFd > 0) {
+  if (mDsmFd >= 0) {
     DSM_CloseSession(mDsmFd);
     ca_close(mDescramblerId);
     mDsmFd = -1;
@@ -219,10 +225,7 @@ bool Descrambler::bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_han
     else
       return false;
     kt_id = mKeyslotList.keyslots[i].id;
-    if (kt_type < 0 || kt_id < 0) {
-      TUNER_DSC_ERR(mDescramblerId, "Invalid paras(%d %d)!", kt_type, kt_id);
-      return false;
-    }
+
     if (ca_set_key(dsc_dev_id, dsc_handle, kt_type, kt_id)) {
       TUNER_DSC_ERR(mDescramblerId, "ca_set_key(%d %d %d) failed!", dsc_handle, kt_type, kt_id);
       return false;
@@ -308,15 +311,15 @@ bool Descrambler::isDescramblerReady() {
       return mIsReady;
     uint32_t dsm_dsc_type = DSM_PROP_SC2_DSC_TYPE_TSN;
     if (DSM_GetProperty(mDsmFd, DSM_PROP_SC2_DSC_TYPE, &dsm_dsc_type))
-      TUNER_DSC_ERR(mDescramblerId, "Get dsm dsc type failed! %s", strerror(errno));
+      TUNER_DSC_WRAN(mDescramblerId, "Get dsm_dsc_type failed! %s", strerror(errno));
+    else
+      TUNER_DSC_DBG(mDescramblerId, "Get dsm_dsc_type:%d from cas", dsm_dsc_type);
     if (dsm_dsc_type == DSM_PROP_SC2_DSC_TYPE_TSN)
       mDscType = CA_DSC_COMMON_TYPE;
     else if (dsm_dsc_type == DSM_PROP_SC2_DSC_TYPE_TSD)
       mDscType = CA_DSC_TSD_TYPE;
     else if (dsm_dsc_type == DSM_PROP_SC2_DSC_TYPE_TSE)
       mDscType = CA_DSC_TSE_TYPE;
-    else
-      TUNER_DSC_ERR(mDescramblerId, "invalid dsm dsc type! %d", dsm_dsc_type);
 #endif
     if (!allocDscChannels()) {
       clearDscChannels();
