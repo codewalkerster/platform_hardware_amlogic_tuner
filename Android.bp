@@ -33,7 +33,7 @@ cc_defaults {
         "frontenddevices/FrontendDvbsDevice.cpp",
         "frontenddevices/FrontendIsdbtDevice.cpp",
         "frontenddevices/HwFeState.cpp",
-        "utils/TSPMessage.cpp",
+        //"utils/TSPMessage.cpp",
         "utils/TSPLooper.cpp",
         "utils/TSPLooperRoster.cpp",
         "utils/String8.cpp",
