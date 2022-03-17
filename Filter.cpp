@@ -132,11 +132,12 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     }
                     memset(&param, 0, sizeof(param));
                     param.pid = mTpid;
+                    /* match with CBS, don't set repeat flag, CBS will filter the same section data.
                     bool isRepeat = settings.ts().filterSettings.section().isRepeat;
                     ALOGD("%s isRepeat:%d", __FUNCTION__, isRepeat);
                     if (!isRepeat) {
                         param.flags |= DMX_ONESHOT;
-                    }
+                    }*/
                     bool isCheckCrc = settings.ts().filterSettings.section().isCheckCrc;
                     ALOGD("%s isCheckCrc:%d", __FUNCTION__, isCheckCrc);
                     if (isCheckCrc) {
@@ -348,7 +349,6 @@ Return<Result> Filter::stop() {
     if (mFilterId > DMX_FILTER_COUNT) {
         mFilterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
     }
-    mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
     mDemux->getAmDmxDevice()->AM_DMX_StopFilter(mFilterId);
     mFilterThreadRunning = false;
 
@@ -385,6 +385,7 @@ Return<Result> Filter::close() {
         mFilterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
         mDemux->eraseFakeFilterId(tmpFilterId);
     }
+    mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
     mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
     if (mFilterMQ.get() != NULL)
         mFilterMQ.reset();
