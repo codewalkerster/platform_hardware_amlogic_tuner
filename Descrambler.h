@@ -21,12 +21,11 @@
 #include <android/hardware/tv/tuner/1.0/ITuner.h>
 #include <inttypes.h>
 #include "Tuner.h"
-#ifdef SUPPORT_DSM
 extern "C" {
 #include "libdsm.h"
 #include "dsc_dev.h"
 }
-#endif
+
 using namespace std;
 
 namespace android {
@@ -80,13 +79,11 @@ class Descrambler : public IDescrambler {
 
   bool clearDscChannels();
 
-#ifdef SUPPORT_DSM
   bool bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle);
-#endif
+
   bool getTsnSourceStatus(bool *enableLocalMode);
 
  private:
-  //const bool DEBUG_DESCRAMBLER = false;
   virtual ~Descrambler();
 
   uint32_t mDescramblerId;
@@ -100,13 +97,12 @@ class Descrambler : public IDescrambler {
   uint32_t mCasSessionToken;
   bool mEnableLocalMode;
 
-#ifdef SUPPORT_DSM
   int mDsmFd = -1;
   uint32_t mDscType = -1;
   uint32_t mDscAlgo = CA_ALGO_UNKNOWN;
+  bool mIsEnc = false;
   struct dsm_keyslot_list mKeyslotList;
   std::map<uint16_t, uint32_t> es_pid_to_dsc_channel;
-#endif
 };
 
 }  // namespace implementation

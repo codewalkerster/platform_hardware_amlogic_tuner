@@ -31,7 +31,8 @@ Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
   mDescramblerId = descramblerId;
   mTunerService = tuner;
   mEnableLocalMode = false;
-  mDscType = mTunerService->getDscMode();
+  if (mTunerService != nullptr)
+    mDscType = mTunerService->getDscMode();
   mSourceDemuxId = 0;
   mCasSessionToken = 0;
   FileSystem_create();
@@ -44,7 +45,6 @@ Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
   }
 #endif
 
-#ifdef SUPPORT_DSM
   TUNER_DSC_INFO(descramblerId, "mEnableLocalMode:%d mDscType:%d", mEnableLocalMode, mDscType);
   memset(&mKeyslotList, 0, sizeof(dsm_keyslot_list));
   if (ca_open(descramblerId) != CA_DSC_OK)
@@ -52,27 +52,19 @@ Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
   else
     TUNER_DSC_DBG(descramblerId, "ca_open ca%d ok", descramblerId);
   mDsmFd = DSM_OpenSession(0);
-  if (mDsmFd < 0) {
-    TUNER_DSC_ERR(descramblerId, "dsm_open failed! %s", strerror(errno));
-  } else {
-    TUNER_DSC_DBG(descramblerId, "dsm_open mDsmFd:%d", mDsmFd);
-  }
-#endif
+  TUNER_DSC_DBG(descramblerId, "DSM_OpenSession mDsmFd:%d", mDsmFd);
 }
 
 Descrambler::~Descrambler() {
-#ifdef SUPPORT_DSM
   if (mDsmFd >= 0) {
     DSM_CloseSession(mDsmFd);
     ca_close(mDescramblerId);
   }
-#endif
   TUNER_DSC_TRACE(mDescramblerId);
 }
 
 Return<Result> Descrambler::setDemuxSource(uint32_t demuxId) {
   std::lock_guard<std::mutex> lock(mDescrambleLock);
-
   TUNER_DSC_TRACE(mDescramblerId);
 
   if (mDemuxSet) {
@@ -95,7 +87,6 @@ Return<Result> Descrambler::setDemuxSource(uint32_t demuxId) {
 
 Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
   std::lock_guard<std::mutex> lock(mDescrambleLock);
-
   TUNER_DSC_TRACE(mDescramblerId);
 
   uint32_t token_size = keyToken.size();
@@ -109,7 +100,6 @@ Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
   }
   TUNER_DSC_DBG(mDescramblerId, "keyToken:0x%x", mCasSessionToken);
 
-#ifdef SUPPORT_DSM
   int ret = DSM_BindToken(mDsmFd, mCasSessionToken);
   if (ret)
     TUNER_DSC_WRAN(mDescramblerId, "DSM_BindToken exception! %s", strerror(errno));
@@ -128,7 +118,6 @@ Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
     return Result::INVALID_STATE;
   }
 #endif
-#endif
 
   return Result::SUCCESS;
 }
@@ -142,7 +131,7 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid, const sp<IFilter>& filte
   TUNER_DSC_INFO(mDescramblerId, "mPid:0x%x", mPid);
   // Assume transport stream pid only.
   added_pid.insert(mPid);
-#ifdef SUPPORT_DSM
+
   if (es_pid_to_dsc_channel.find(mPid) == es_pid_to_dsc_channel.end()
     && mIsReady) {
     int handle = ca_alloc_chan(mDescramblerId, mPid, mDscAlgo, mDscType);
@@ -158,7 +147,7 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid, const sp<IFilter>& filte
     }
     TUNER_DSC_DBG(mDescramblerId, "ca_alloc_chan(0x%x 0x%x) ok.", mPid, es_pid_to_dsc_channel[mPid]);
   }
-#endif
+
   return Result::SUCCESS;
 }
 
@@ -169,13 +158,10 @@ Return<Result> Descrambler::removePid(const DemuxPid& pid, const sp<IFilter>& fi
 
   uint16_t mPid = pid.tPid();
   TUNER_DSC_INFO(mDescramblerId, "mPid:0x%x", mPid);
-
-#ifdef SUPPORT_DSM
   if (es_pid_to_dsc_channel.find(mPid) != es_pid_to_dsc_channel.end()) {
     ca_free_chan(mDescramblerId, es_pid_to_dsc_channel[mPid]);
     es_pid_to_dsc_channel.erase(mPid);
   }
-#endif
 
   added_pid.erase(mPid);
 
@@ -183,21 +169,21 @@ Return<Result> Descrambler::removePid(const DemuxPid& pid, const sp<IFilter>& fi
 }
 
 Return<Result> Descrambler::close() {
-  std::lock_guard<std::mutex> lock(mDescrambleLock);
-
   TUNER_DSC_TRACE(mDescramblerId);
 
-  mDemuxSet = false;
-  mTunerService->detachDescramblerFromDemux(mDescramblerId, mSourceDemuxId);
-  clearDscChannels();
+  if (mTunerService != nullptr)
+    mTunerService->detachDescramblerFromDemux(mDescramblerId, mSourceDemuxId);
 
-#ifdef SUPPORT_DSM
-  if (mDsmFd >= 0) {
-    DSM_CloseSession(mDsmFd);
-    ca_close(mDescramblerId);
-    mDsmFd = -1;
+  {
+    std::lock_guard<std::mutex> lock(mDescrambleLock);
+    mDemuxSet = false;
+    clearDscChannels();
+    if (mDsmFd >= 0) {
+      DSM_CloseSession(mDsmFd);
+      ca_close(mDescramblerId);
+      mDsmFd = -1;
+    }
   }
-#endif
 
   return Result::SUCCESS;
 }
@@ -210,7 +196,6 @@ bool Descrambler::isPidSupported(uint16_t pid) {
   return added_pid.find(pid) != added_pid.end();
 }
 
-#ifdef SUPPORT_DSM
 bool Descrambler::bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle) {
   for (int i = 0; i < mKeyslotList.count; i++) {
     uint32_t kt_parity = mKeyslotList.keyslots[i].parity;
@@ -234,7 +219,6 @@ bool Descrambler::bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_han
 
   return true;
 }
-#endif
 
 bool Descrambler::clearDscChannels() {
   TUNER_DSC_TRACE(mDescramblerId);
@@ -242,17 +226,15 @@ bool Descrambler::clearDscChannels() {
   set<uint16_t>::iterator it;
   for (it = added_pid.begin(); it != added_pid.end(); it++) {
     uint16_t mPid = *it;
-#ifdef SUPPORT_DSM
-  uint32_t dsc_chan;
-  if (es_pid_to_dsc_channel.find(mPid) != es_pid_to_dsc_channel.end()) {
-    dsc_chan = es_pid_to_dsc_channel[mPid];
-    ca_free_chan(mDescramblerId, dsc_chan);
-    es_pid_to_dsc_channel.erase(mPid);
-  } else {
-    continue;
-  }
-  TUNER_DSC_DBG(mDescramblerId, "ca_free_chan(0x%x 0x%x) ok.", mPid, dsc_chan);
-#endif
+    uint32_t dsc_chan;
+    if (es_pid_to_dsc_channel.find(mPid) != es_pid_to_dsc_channel.end()) {
+      dsc_chan = es_pid_to_dsc_channel[mPid];
+      ca_free_chan(mDescramblerId, dsc_chan);
+      es_pid_to_dsc_channel.erase(mPid);
+    } else {
+      continue;
+    }
+    TUNER_DSC_DBG(mDescramblerId, "ca_free_chan(0x%x 0x%x) ok.", mPid, dsc_chan);
   }
 
   return true;
@@ -264,7 +246,6 @@ bool Descrambler::allocDscChannels() {
   set<uint16_t>::iterator it;
   for (it = added_pid.begin(); it != added_pid.end(); it++) {
     uint16_t mPid = *it;
-#ifdef SUPPORT_DSM
     int handle = ca_alloc_chan(mDescramblerId, mPid, mDscAlgo, mDscType);
     if (handle < 0) {
       TUNER_DSC_ERR(mDescramblerId, "ca_alloc_chan failed!");
@@ -277,7 +258,6 @@ bool Descrambler::allocDscChannels() {
       }
     }
     TUNER_DSC_DBG(mDescramblerId, "ca_alloc_chan(0x%x 0x%x) ok.", mPid, es_pid_to_dsc_channel[mPid]);
-#endif
   }
 
   return true;
@@ -286,23 +266,30 @@ bool Descrambler::allocDscChannels() {
 bool Descrambler::isDescramblerReady() {
   std::lock_guard<std::mutex> lock(mDescrambleLock);
 
-  if (!mIsReady && mDsmFd > 0) {
-#ifdef SUPPORT_DSM
+  if (!mIsReady && mDsmFd >= 0) {
+    int dsmRet = -1;
     uint32_t mIsKtReady = DSM_PROP_SLOT_NOT_READY;
-    if (DSM_GetProperty(mDsmFd, DSM_PROP_DEC_SLOT_READY, &mIsKtReady)) {
-      TUNER_DSC_DBG(mDescramblerId, "key slots are not ready");
-      return mIsReady;
+    dsmRet = DSM_GetProperty(mDsmFd, DSM_PROP_DEC_SLOT_READY, &mIsKtReady);
+    if (dsmRet != 0 || mIsKtReady != DSM_PROP_SLOT_IS_READY) {
+      dsmRet = DSM_GetProperty(mDsmFd, DSM_PROP_ENC_SLOT_READY, &mIsKtReady);
+      if (dsmRet != 0 || mIsKtReady != DSM_PROP_SLOT_IS_READY)
+        return mIsReady;
+      else
+        mIsEnc = true;
+    } else {
+      mIsEnc = false;
     }
-    if (mIsKtReady != DSM_PROP_SLOT_IS_READY)
-      return mIsReady;
 
     if (DSM_GetKeySlots(mDsmFd, &mKeyslotList)) {
       TUNER_DSC_ERR(mDescramblerId, "DSM_GetKeySlots failed! %s", strerror(errno));
       return mIsReady;
     }
-    TUNER_DSC_DBG(mDescramblerId, "mKeyslotList count:%d", mKeyslotList.count);
+    TUNER_DSC_DBG(mDescramblerId, "mKeyslotList count:%d mIsEnc:%d", mKeyslotList.count, mIsEnc);
     for (int i = 0; i < mKeyslotList.count; i++) {
-      if (mKeyslotList.keyslots[i].is_enc == 0) {
+      if (!mIsEnc && mKeyslotList.keyslots[i].is_enc == 0) {
+        mDscAlgo = mKeyslotList.keyslots[i].algo;
+        break;
+      } else if (mIsEnc && mKeyslotList.keyslots[i].is_enc != 0) {
         mDscAlgo = mKeyslotList.keyslots[i].algo;
         break;
       }
@@ -320,7 +307,6 @@ bool Descrambler::isDescramblerReady() {
       mDscType = CA_DSC_TSD_TYPE;
     else if (dsm_dsc_type == DSM_PROP_SC2_DSC_TYPE_TSE)
       mDscType = CA_DSC_TSE_TYPE;
-#endif
     if (!allocDscChannels()) {
       clearDscChannels();
       return mIsReady;

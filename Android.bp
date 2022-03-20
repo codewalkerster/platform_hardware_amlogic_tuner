@@ -104,7 +104,6 @@ cc_defaults {
 
     cppflags: [
        //"-DTUNERHAL_DBG",
-       "-DSUPPORT_DSM",
     ],
     include_dirs: [
        "hardware/amlogic/tuner/frontenddevices",
