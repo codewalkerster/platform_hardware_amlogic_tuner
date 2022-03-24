@@ -113,10 +113,10 @@ class Tuner : public ITuner {
     std::map<uint32_t, sp<Demux>> mDemuxes;
     std::map<uint32_t, sp<Descrambler>> mDescramblers;
     // To maintain how many Frontends we have
-    int mFrontendSize;
+    int mFrontendSize = 0;
     // The last used demux id. Initial value is -1.
     // First used id will be 0.
-    uint32_t mLastUsedId = -1;
+    int mLastUsedId = -1;
     vector<sp<Lnb>> mLnbs;
     vector<sp<HwFeState>> mHwFes;
     uint32_t mTsInput = -1;

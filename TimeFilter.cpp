@@ -30,6 +30,7 @@ TimeFilter::TimeFilter() {}
 
 TimeFilter::TimeFilter(sp<Demux> demux) {
     mDemux = demux;
+    mBeginTime = 0;
 }
 
 TimeFilter::~TimeFilter() {}

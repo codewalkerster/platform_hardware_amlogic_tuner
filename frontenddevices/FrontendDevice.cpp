@@ -49,6 +49,8 @@ FrontendDevice::FrontendDevice(uint32_t thId, FrontendType type, const sp<Fronte
     mDev.blindFreq = 0;
     mDev.tuneFreq = 0;
     mDev.islocked = false;
+    mRequestTunningStop = false;
+    mThreadState = STATE_INITIAL_IDLE;
     if (type == FrontendType::ATSC3
         || type == FrontendType::ISDBS
         || type == FrontendType::ISDBS3) {

@@ -28,8 +28,19 @@ AM_DMX_Device::AM_DMX_Device(int demuxId) {
     drv = new AmLinuxDvb();
     dev_no = demuxId;
     open_count = 0;
+    drv_data = NULL;
+    mDemuxWrapper = NULL;
+    thread = 0;
+    flags = 0;
+    enable_thread = false;
     for (int fid = 0; fid < DMX_FILTER_COUNT; fid++) {
         filters[fid].used = false;
+        filters[fid].drv_data = NULL;
+        filters[fid].enable = false;
+        filters[fid].id = 0;
+        filters[fid].cb = NULL;
+        filters[fid].flags = 0;
+        filters[fid].user_data = NULL;
     }
 }
 
@@ -104,7 +115,10 @@ pthread_mutex_unlock(&dev->lock);
             } else {
                 //ALOGE("TEST: try to read head size:%d, got data len:%u", headersize, ((dmx_non_sec_es_header*)sec_buf)->len);
             }
-            esHeader = (dmx_non_sec_es_header*)sec_buf;
+            //esHeader = (dmx_non_sec_es_header*)sec_buf;
+            if (sizeof(sec_buf) < sizeof(dmx_non_sec_es_header)) {
+                esHeader = (dmx_non_sec_es_header*)sec_buf;
+            }
             uint32_t reaminSize = esHeader->len;
             int buffSize = 10*1024*1024;
             int readsize = (reaminSize > buffSize) ? buffSize : reaminSize;
@@ -311,7 +325,8 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Open(void) {
         enable_thread = true;
         flags = 0;
 
-        if (pthread_create(&thread, NULL, this->dmx_data_thread, this)) {
+        //if (pthread_create(&thread, NULL, this->dmx_data_thread, this)) {
+        if (pthread_create(&thread, NULL, dmx_data_thread, this)) {
             pthread_mutex_destroy(&lock);
             pthread_cond_destroy(&cond);
             ret = AM_DMX_ERR_CANNOT_CREATE_THREAD;

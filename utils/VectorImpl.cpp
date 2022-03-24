@@ -420,12 +420,18 @@ void* VectorImpl::_grow(size_t where, size_t amount)
             if (sb) {
                 void* array = sb->data();
                 if (where != 0) {
-                    _do_copy(array, mStorage, where);
+                    //_do_copy(array, mStorage, where);
+                    if (mStorage != NULL) {
+                        _do_copy(array, mStorage, where);
+                    }
                 }
                 if (where != mCount) {
                     const void* from = reinterpret_cast<const uint8_t *>(mStorage) + where*mItemSize;
                     void* dest = reinterpret_cast<uint8_t *>(array) + (where+amount)*mItemSize;
-                    _do_copy(dest, from, mCount-where);
+                    //_do_copy(dest, from, mCount-where);
+                    if (from != NULL) {
+                        _do_copy(dest, from, mCount-where);
+                    }
                 }
                 release_storage();
                 mStorage = const_cast<void*>(array);

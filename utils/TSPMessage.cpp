@@ -462,7 +462,10 @@ sp<TSPMessage> TSPMessage::dup() const {
             case kTypeString:
             {
                 to->u.stringValue = (char *)malloc(strlen(from->u.stringValue));
-	            strncpy(to->u.stringValue, from->u.stringValue, strlen(from->u.stringValue));
+                //strncpy(to->u.stringValue, from->u.stringValue, strlen(from->u.stringValue));
+                int nLen = strlen(from->u.stringValue) < (sizeof(to->u.stringValue)-1) ? strlen(from->u.stringValue) : (sizeof(to->u.stringValue)-1);
+                strncpy(to->u.stringValue, from->u.stringValue, nLen);
+                to->u.stringValue[nLen] = '\0';
                 break;
             }
 
@@ -691,7 +694,10 @@ dp_state TSPMessage::setEntryAt(size_t index, const ItemData &item) {
         dst->mType = kTypeRect;
     } else if (item.find(&stringValue)) {
         dst->u.stringValue = (char*) malloc(strlen(stringValue));
-		strncpy(dst->u.stringValue, stringValue, strlen(stringValue));
+        //strncpy(dst->u.stringValue, stringValue, strlen(stringValue));
+        int nLen1 = strlen(stringValue) < (sizeof(dst->u.stringValue)-1) ? strlen(stringValue) : (sizeof(dst->u.stringValue)-1);
+        strncpy(dst->u.stringValue, stringValue, nLen1);
+        dst->u.stringValue[nLen1] = '\0';
         dst->mType = kTypeString;
     } else if (item.find(&refValue)) {
         if (refValue != NULL) { refValue->incStrong(this); }

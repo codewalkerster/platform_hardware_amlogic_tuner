@@ -63,6 +63,8 @@ Thread::Thread()
         mStatus(NO_ERROR),
         mExitPending(false), mRunning(false)
 {
+        mThreadName = NULL;
+
 }
 
 Thread::~Thread()

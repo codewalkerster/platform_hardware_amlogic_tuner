@@ -61,7 +61,8 @@ class TimeFilter : public ITimeFilter {
   private:
     sp<Demux> mDemux;
     uint64_t mTimeStamp = INVALID_TIME_STAMP;
-    time_t mBeginTime;
+    //time_t mBeginTime;
+    time_t mBeginTime = time(NULL);
 };
 
 }  // namespace implementation

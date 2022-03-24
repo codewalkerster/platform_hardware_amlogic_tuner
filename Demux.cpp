@@ -55,6 +55,10 @@ static int mDumpEsData = 0;
 Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     mDemuxId = demuxId;
     mTunerService = tuner;
+    mCiCamId = 0;
+    mFrontendInputThreadRunning = false;
+    mKeepFetchingDataFromFrontend = false;
+    mFrontendInputThread = 0;
 #ifdef TUNERHAL_DBG
     mDropLen = 0;
     mFilterOutputTotalLen = 0;
@@ -128,7 +132,10 @@ void Demux::combinePesData(uint32_t filterId) {
             ALOGD("## [Demux] combinePesData %x,%llx,-----------\n", tmpbuf[0], packetHeader & 0xffffffffff);
             size = 2;
             result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf1, &size);
-            packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
+            //packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
+            if (sizeof(tmpbuf1) < sizeof(int)) {
+                packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
+            }
             ALOGD("[Demux] packetLen = %d", packetLen);
             pesData.resize(packetLen + 6);
             pesData[0] = 0x0;
@@ -346,7 +353,8 @@ Return<Result> Demux::setFrontendDataSource(uint32_t frontendId) {
 Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
                                const sp<IFilterCallback>& cb, openFilter_cb _hidl_cb) {
     int dmxFilterIdx;
-    DemuxTsFilterType tsFilterType;
+    //DemuxTsFilterType tsFilterType;
+    DemuxTsFilterType tsFilterType = DemuxTsFilterType::UNDEFINED;
     bool hasTsFilterType = (DemuxFilterType::DemuxFilterSubType::hidl_discriminator::tsFilterType
                             == type.subType.getDiscriminator());
 
@@ -387,11 +395,13 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
             || tsFilterType == DemuxTsFilterType::VIDEO
             || tsFilterType == DemuxTsFilterType::AUDIO
             || tsFilterType == DemuxTsFilterType::PES) {
-            AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, this->postData, this);
+            //AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, this->postData, this);
+            AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, postData, this);
         } else if (tsFilterType == DemuxTsFilterType::PCR) {
             AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
         } else if (tsFilterType == DemuxTsFilterType::RECORD) {
-            mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
+            //mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
+            mAmDvrDevice->AM_DVR_SetCallback(postDvrData, this);
         }
     }
 

@@ -187,7 +187,18 @@ GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_pa
     return Result::SUCCESS;
 }
 
-Filter::Filter() {}
+Filter::Filter() {
+    mFilterId = 0;
+    mBufferSize = 0;
+    mTpid = 0;
+    mFilterEventFlag = NULL;
+    mFilterThread = 0;
+    mFilterStatus = DemuxFilterStatus(1);
+    mFilterThreadRunning = false;
+    mKeepFetchingDataFromFrontend = false;
+    mIonFd = 0;
+    bIsRaw = false;
+}
 
 Filter::Filter(DemuxFilterType type, uint32_t filterId, uint32_t bufferSize,
                const sp<IFilterCallback>& cb, sp<Demux> demux) {
@@ -196,6 +207,14 @@ Filter::Filter(DemuxFilterType type, uint32_t filterId, uint32_t bufferSize,
     mBufferSize = bufferSize;
     mCallback = cb;
     mDemux = demux;
+    mTpid = 0;
+    mFilterThreadRunning = false;
+    mKeepFetchingDataFromFrontend = false;
+    mIonFd = 0;
+    bIsRaw = false;
+    mFilterEventFlag = NULL;
+    mFilterThread = 0;
+    mFilterStatus = DemuxFilterStatus(1);
 #ifdef TUNERHAL_DBG
     mFilterEventSize = property_get_int32(TF_FILTER_PROP_EVENTSIZE, 10);
     mFilterEventSize *= 1024 * 1024;

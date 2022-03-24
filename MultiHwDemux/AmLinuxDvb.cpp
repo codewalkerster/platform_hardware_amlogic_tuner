@@ -43,6 +43,7 @@ AmLinuxDvb::AmLinuxDvb() {
     mDvrFd = -1;
     pollFailCount = 0;
     mFilterMemInfoFd = -1;
+    mDmxFd = 0;
 }
 
 AmLinuxDvb::~AmLinuxDvb() {
@@ -159,7 +160,12 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_pes_filter(AM_DMX_Device *dev, AM_DMX_Filter 
     UNUSED(dev);
     int fd = (long)filter->drv_data;
     int ret;
-    fcntl(fd,F_SETFL,O_NONBLOCK);
+    //fcntl(fd,F_SETFL,O_NONBLOCK);
+    int ret_0 = fcntl(fd,F_SETFL,O_NONBLOCK);
+    if (ret_0 == -1) {
+        ALOGE("set nonblock failed (%s)", strerror(errno));
+        return AM_DMX_ERR_SYS;
+    }
 
     ret = ioctl(fd, DMX_SET_PES_FILTER, params);
     if (ret == -1) {

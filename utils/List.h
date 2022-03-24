@@ -60,9 +60,10 @@ protected:
         friend class List;
         friend class _ListIterator;
         T           mVal;
-        _Node*      mpPrev;
-        _Node*      mpNext;
+        _Node*      mpPrev = NULL;
+        _Node*      mpNext = NULL;
     };
+    //initialize  class member
 
     /*
      * Iterator for walking through the list.

@@ -38,7 +38,13 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
         ALOGD("cannot open \"%s\" (%s)", dev_name, strerror(errno));
         return AM_DVR_ERR_CANNOT_OPEN_DEV;
     }
-    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
+    //fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
+    int ret_0 = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
+    if (ret_0<0) {
+        ALOGE("fcntl failed %s\n", strerror(errno));
+        close(fd);
+        return -1;
+    }
 
     dev->drv_data = (void*)(long)fd;
     return AM_SUCCESS;
@@ -167,6 +173,8 @@ AmDvr::AmDvr(uint32_t demuxId) {
     mData->cb = NULL;
     mData->user_data = NULL;
     opencnt = 0;
+    enable_thread = false;
+    thread = 0;
 }
 
 AmDvr::~AmDvr() {

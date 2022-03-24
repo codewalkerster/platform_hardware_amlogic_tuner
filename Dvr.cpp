@@ -29,13 +29,26 @@ namespace implementation {
 
 #define WAIT_TIMEOUT 3000000000
 
-Dvr::Dvr() {}
+Dvr::Dvr() {
+    mType = DvrType(0);
+    mBufferSize = 0;
+    mDvrEventFlag = NULL;
+    mDvrThread = 0;
+    mPlaybackStatus = PlaybackStatus(1u);
+    mRecordStatus = DemuxFilterStatus(0);
+    mKeepFetchingDataFromFrontend = false;
+}
 
 Dvr::Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux> demux) {
     mType = type;
     mBufferSize = bufferSize;
     mCallback = cb;
     mDemux = demux;
+    mKeepFetchingDataFromFrontend = false;
+    mDvrEventFlag = NULL;
+    mDvrThread = 0;
+    mPlaybackStatus = PlaybackStatus(1u);
+    mRecordStatus = DemuxFilterStatus(0);
     ALOGD("%s/%d type:%d bufsize:%d MB", __FUNCTION__, __LINE__, (int)type, bufferSize/1024/1024);
      //dump ts file
     //mFd = ::open("/data/local/tmp/media_dvr.ts",  O_WRONLY|O_CREAT, 0666);

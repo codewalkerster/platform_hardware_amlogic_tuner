@@ -59,7 +59,11 @@ Tuner::Tuner() {
             char* data = (char*)malloc(len + 1);
 
             rewind(fp);
-            fread(data, sizeof(char), len, fp);
+            //fread(data, sizeof(char), len, fp);
+            int rc = fread(data, sizeof(char), len, fp);
+            if (rc == 0) {
+                ALOGD("fread fd failed!");
+            }
             data[len] = '\0';
 
             Json::Value root;
@@ -82,6 +86,7 @@ Tuner::Tuner() {
                         int id = i;
                         int hwId = arrayFronts[i]["hwid"].asInt();
                         HwFeCaps_t hwCaps;
+                        hwCaps.statusCap = 0;
                         hwCaps.id = hwId;
                         if (hwId >= 0 && hwId < arrayHwFes.size()) {
                             hwCaps.minFreq = arrayHwFes[hwId]["minFreq"].asUInt();
@@ -251,7 +256,7 @@ Return<void> Tuner::getFrontendIds(getFrontendIds_cb _hidl_cb) {
 Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _hidl_cb) {
     ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
-    if (frontendId >= mFrontendSize || frontendId < 0) {
+    if (frontendId >= mFrontendSize || (int)frontendId < 0) {
         ALOGW("[   WARN   ] Frontend with id %d isn't available", frontendId);
         _hidl_cb(Result::UNAVAILABLE, nullptr);
         return Void();
