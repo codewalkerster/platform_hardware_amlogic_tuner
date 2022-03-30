@@ -636,39 +636,41 @@ Result Demux::removeFilter(uint32_t filterId) {
 }
 
 void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
-    std::lock_guard<std::mutex> lock(mFilterLock);
 
     uint16_t pid = ((data[1] & 0x1f) << 8) | ((data[2] & 0xff));
+    bool needWriteData = false;
     if (DEBUG_DEMUX)
         ALOGD("%s/%d write to dvr %d size:%d pid:0x%x", __FUNCTION__, __LINE__, mDemuxId, data.size(), pid);
 
-    for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
-        if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
-            if (DEBUG_DEMUX)
-                ALOGD("[Demux] found descrambler for pid: 0x%x", pid);
-            if (!descramblerIt->second->isDescramblerReady())
-                ALOGV("[Demux] dsc isn't ready for pid: %d", pid);
-            continue;
-        }
-    }
-
-    set<uint32_t>::iterator it;
-    for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
-        if (pid == mFilters[*it]->getTpid()) {
-            if (1) {
-                if (isValidTsPacket(data)) {
-                    //ALOGD("[Demux] size = %d data[0] = 0x%x", data.size(), data[0]);
-                    while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
-                        ALOGD("[Demux] wait for 100ms to write dvr device");
-                        usleep(100 * 1000);
-                    }
-                } else {
-                    ALOGD("[Demux] data[0] = 0x%x", data[0]);
-                }
-            } else {
-                mFilters[*it]->updateFilterOutput(data);
+    {
+        std::lock_guard<std::mutex> lock(mFilterLock);
+        for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
+            if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
+                if (DEBUG_DEMUX)
+                    ALOGD("[Demux] found descrambler for pid: 0x%x", pid);
+                if (!descramblerIt->second->isDescramblerReady())
+                    ALOGV("[Demux] dsc isn't ready for pid: %d", pid);
+                continue;
             }
-            break;
+        }
+
+        set<uint32_t>::iterator it;
+        for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
+            if (pid == mFilters[*it]->getTpid()) {
+                needWriteData = true;
+                break;
+            }
+        }
+   }
+
+    if (needWriteData) {
+        if (isValidTsPacket(data)) {
+            while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
+                ALOGD("[Demux] wait for 100ms to write dvr device");
+                usleep(100 * 1000);
+            }
+        } else {
+            ALOGD("[Demux] data[0] = 0x%x", data[0]);
         }
     }
 }
