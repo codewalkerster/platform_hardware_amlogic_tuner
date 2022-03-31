@@ -518,15 +518,15 @@ Return<Result> Filter::releaseAvHandle(const hidl_handle& /*avMemory*/, uint64_t
 
 Return<Result> Filter::close() {
     ALOGD("%s/%d mFilterId = %d", __FUNCTION__, __LINE__, mFilterId);
-    if (mFilterId > DMX_FILTER_COUNT) {
-        uint32_t tmpFilterId = mFilterId;
-        mFilterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
-        mDemux->eraseFakeFilterId(tmpFilterId);
-    }
     mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
     mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
     if (mFilterMQ.get() != NULL)
         mFilterMQ.reset();
+
+    if (mFilterEventFlag != NULL) {
+        EventFlag::deleteEventFlag(&mFilterEventFlag);
+        mFilterEventFlag = NULL;
+    }
     return mDemux->removeFilter(mFilterId);
 }
 

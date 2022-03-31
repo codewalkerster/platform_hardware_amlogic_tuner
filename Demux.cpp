@@ -945,6 +945,11 @@ void Demux::destroyMediaSync() {
 bool Demux::isRawData(uint32_t filterId) {
     return mFilters[filterId]->isRawData();
 }
+
+uint32_t Demux::getDemuxId() {
+    return mDemuxId;
+}
+
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner
