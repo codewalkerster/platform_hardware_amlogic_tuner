@@ -80,6 +80,8 @@ class Descrambler : public IDescrambler {
   bool clearDscChannels();
 
   bool bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle);
+  bool allocNskDscChannels();
+  bool clearNskDscChannels();
 
   bool getTsnSourceStatus(bool *enableLocalMode);
 
@@ -103,6 +105,7 @@ class Descrambler : public IDescrambler {
   bool mIsEnc = false;
   struct dsm_keyslot_list mKeyslotList;
   std::map<uint16_t, uint32_t> es_pid_to_dsc_channel;
+  uint32_t mIsNskDsc = 0;
 };
 
 }  // namespace implementation
