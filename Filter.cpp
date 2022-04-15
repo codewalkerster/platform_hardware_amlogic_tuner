@@ -796,10 +796,10 @@ bool Filter::postFilteredEmmSection(vector<uint8_t> data)
                     break;
                 }
 
-                // for (i = 0; i < 8; i++) {     //from NSK2 Harmonizer, it will look
-                // for the same lable first.
-                // For a new android DemuxfilterSetting with special Magic value, it is
-                // assumed to use fixed label in order.
+                // for (i = 0; i < 8; i++) {     //from NSK2 Harmonizer, it will
+                // look for the same label first. For a new android
+                // DemuxfilterSetting with special Magic value, it is assumed to
+                // use fixed label in order.
                 idx_filter_def = label_type - 1;
                 {
                     ALOGD("filter def [%d]", idx_filter_def + 1);
