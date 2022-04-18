@@ -153,18 +153,17 @@ Return<Result> Lnb::setSatellitePosition(LnbPosition position) {
 Return<Result> Lnb::sendDiseqcMessage(const hidl_vec<uint8_t>& diseqcMessage) {
     struct dvb_diseqc_master_cmd cmd;
     memset(&cmd, 0, sizeof(struct dvb_diseqc_master_cmd));
-
     if (diseqcMessage.size() == 0) {
         return Result::INVALID_ARGUMENT;
     }
-
-    for (int i = 0; i < diseqcMessage.size(); i++)
+    int size = (sizeof(cmd.msg) >= diseqcMessage.size()) ? diseqcMessage.size() : sizeof(cmd.msg);
+    for (int i = 0; i < size; i++)
     {
         cmd.msg[i] = diseqcMessage[i];
         ALOGD("%s cmd[%d]:0x%02x", __FUNCTION__, i, diseqcMessage[i]);
     }
 
-    if (cmd.msg[0] == 0x70 && diseqcMessage.size() > 4) {
+    if (cmd.msg[0] == 0x70 && size > 4) {
         //en50607- ODU_CHANNEL_CHANGE : 70 d1 d2 d3
         cmd.msg_len = 4;
     } else if (cmd.msg[0] == 0x7A || cmd.msg[0] == 0x7B || cmd.msg[0] == 0x7C) {
@@ -173,12 +172,12 @@ Return<Result> Lnb::sendDiseqcMessage(const hidl_vec<uint8_t>& diseqcMessage) {
         //ODU_UB_PIN : 0x7B
         //ODU_UB_inuse : 0x7C
         cmd.msg_len = 1;
-    } else if ((cmd.msg[0] == 0x7D || cmd.msg[0] == 0x7E) && diseqcMessage.size() > 2) {
+    } else if ((cmd.msg[0] == 0x7D || cmd.msg[0] == 0x7E) && size > 2) {
         //en50607- ODU_UB_freq : 0x7d d1
         //en50607- ODU_UB_switches : 0x7e d1
         cmd.msg_len = 2;
     } else {
-        cmd.msg_len = diseqcMessage.size();
+        cmd.msg_len = size;
     }
 
     int devFd = acquireLnbDevice();

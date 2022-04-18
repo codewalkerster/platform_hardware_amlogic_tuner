@@ -72,9 +72,7 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d", mDemuxId, bSupportSoftDemuxForSubtitle);
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
     mAmDvrDevice[mDemuxId] = new AmDvr(mDemuxId);
-    if (mDemuxId == 0) {
-        mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput(), true);
-    }
+    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput(), true);
      //dump ts file
     //mfd = ::open("/data/local/tmp/media_demux.ts",  O_WRONLY|O_CREAT, 0666);
     //ALOGD("need dump ts file: ts file fd =%d %d", mfd, errno);
@@ -448,11 +446,12 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         tsFilterType = type.subType.tsFilterType();
     }
 
+    /* for vts
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::UNDEFINED) {
         ALOGE("[Demux] Invalid filter type!");
          _hidl_cb(Result::INVALID_ARGUMENT, nullptr);
          return Void();
-     }
+     }*/
 
     std::lock_guard<std::mutex> lock(mFilterLock);
     AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&dmxFilterIdx);
@@ -483,11 +482,13 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
             || tsFilterType == DemuxTsFilterType::AUDIO
             || tsFilterType == DemuxTsFilterType::PES) {
             //AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, this->postData, this);
+            bCheckVts = true;
             AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, postData, this);
         } else if (tsFilterType == DemuxTsFilterType::PCR) {
             AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
         } else if (tsFilterType == DemuxTsFilterType::RECORD) {
             //mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
+            bCheckVts = false;
             mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
         }
     }
@@ -668,8 +669,10 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
         case DvrType::PLAYBACK:
             ALOGD("DvrType::PLAYBACK");
             mDvrPlayback = new Dvr(type, bufferSize, cb, this);
-            ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL");
-            AmDmxDevice[mDemuxId]->dmx_dvr_open(INPUT_LOCAL);
+            if (bCheckVts) {
+                ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL");
+                AmDmxDevice[mDemuxId]->dmx_dvr_open(INPUT_LOCAL);
+            }
             if (!mDvrPlayback->createDvrMQ()) {
                 _hidl_cb(Result::UNKNOWN_ERROR, mDvrPlayback);
                 return Void();

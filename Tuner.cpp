@@ -311,6 +311,7 @@ Return<void> Tuner::getDemuxCaps(getDemuxCaps_cb _hidl_cb) {
     caps.numBytesInSectionFilter = NUMBYTESINSECTIONFILTER;
     // ts filter can be an ts filter's data source.
     caps.linkCaps = {0x02, 0x00, 0x00, 0x00, 0x00};
+    caps.bTimeFilter             = true;
     _hidl_cb(Result::SUCCESS, caps);
     return Void();
 }

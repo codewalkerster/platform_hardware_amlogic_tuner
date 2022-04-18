@@ -30,19 +30,6 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
-static uint32_t adjustFrequencyOffSet(uint32_t fre) {
-    //this handle frequency, only for android vts. so ugly.
-    uint32_t frequency = fre;
-    if (frequency%1000000 == 0) {
-        return frequency;
-    } else {
-        double f = (double)frequency/1000000;
-        frequency = ceil(f) * 1000000;
-        ALOGD("adjust frequency = %d", frequency);
-    }
-    return frequency;
-}
-
 FrontendDvbsDevice::FrontendDvbsDevice(uint32_t hwId, FrontendType type, const sp<Frontend>& context)
     : FrontendDevice(hwId, type, context) {
 }
@@ -63,7 +50,7 @@ int FrontendDvbsDevice::getFrontendSettings(FrontendSettings *settings, void * f
         return -1;
     }
 
-    p_fe_params->frequency = adjustFrequencyOffSet(settings->dvbs().frequency) / 1000;
+    p_fe_params->frequency = (settings->dvbs().frequency) / 1000;
     p_fe_params->u.qpsk.symbol_rate = settings->dvbs().symbolRate;
     if (settings->dvbs().modulation == FrontendDvbsModulation::UNDEFINED) {
         settings->dvbs().modulation = FrontendDvbsModulation::MOD_QPSK;

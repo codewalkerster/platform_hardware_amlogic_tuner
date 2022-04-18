@@ -39,6 +39,19 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
+static uint32_t adjustFrequencyOffSet(uint32_t fre) {
+    //this handle frequency, only for android vts. so ugly.
+    uint32_t frequency = fre;
+    if (frequency%1000000 == 0) {
+        return frequency;
+    } else {
+        double f = (double)frequency/1000000;
+        frequency = ceil(f) * 1000000;
+        ALOGD("adjust frequency = %d", frequency);
+    }
+    return frequency;
+}
+
 FrontendDevice::FrontendDevice(uint32_t thId, FrontendType type, const sp<Frontend>& context) {
     mContext = context;
     mDev.id  = thId;
@@ -206,7 +219,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    mDev.tuneFreq = fe_params.frequency;
+    mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);
