@@ -520,6 +520,11 @@ Return<Result> Filter::close() {
     ALOGD("%s/%d mFilterId = %d", __FUNCTION__, __LINE__, mFilterId);
     mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
     mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
+    return mDemux->removeFilter(mFilterId);
+}
+
+
+void Filter::clear() {
     if (mFilterMQ.get() != NULL)
         mFilterMQ.reset();
 
@@ -527,7 +532,8 @@ Return<Result> Filter::close() {
         EventFlag::deleteEventFlag(&mFilterEventFlag);
         mFilterEventFlag = NULL;
     }
-    return mDemux->removeFilter(mFilterId);
+
+    mCallback = nullptr;
 }
 
 int Filter::updatePCRFilterId(int avSyncId) {
@@ -687,7 +693,7 @@ void Filter::maySendFilterStatusCallback() {
 
     DemuxFilterStatus newStatus = checkFilterStatusChange(
             availableToWrite, availableToRead, ceil(fmqSize * 0.75), ceil(fmqSize * 0.25));
-    if (mFilterStatus != newStatus) {
+    if (mFilterStatus != newStatus && mCallback !=  nullptr) {
         ALOGD("%s/%d mFilterId:%d aw:%d ar:%d fmqSize:%d", __FUNCTION__, __LINE__,
         mFilterId, availableToWrite, availableToRead, fmqSize);
         mCallback->onFilterStatus(newStatus);

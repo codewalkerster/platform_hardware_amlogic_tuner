@@ -629,6 +629,9 @@ Return<Result> Demux::disconnectCiCam() {
 Result Demux::removeFilter(uint32_t filterId) {
     ALOGD("%s/%d filterId = %d", __FUNCTION__, __LINE__, filterId);
     std::lock_guard<std::mutex> lock(mFilterLock);
+    if (mFilters[filterId] != nullptr) {
+        mFilters[filterId]->clear();
+    }
     mFilters.erase(filterId);
     mPlaybackFilterIds.erase(filterId);
     mRecordFilterIds.erase(filterId);

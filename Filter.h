@@ -84,6 +84,7 @@ class Filter : public IFilter {
     uint16_t getTpid();
     void updateFilterOutput(vector<uint8_t> data);
     void updateRecordOutput(vector<uint8_t> data);
+    void clear();
     Result startFilterHandler();
     Result startRecordFilterHandler();
     void attachFilterToRecord(const sp<Dvr> dvr);
