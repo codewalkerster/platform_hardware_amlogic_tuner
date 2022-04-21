@@ -48,6 +48,7 @@ public:
     AM_ErrorCode_t dvr_open(AM_DMX_Device *dev,dmx_input_source_t inputSource);
     int dvr_data_write(uint8_t *buf, int size,uint64_t timeout);
     AM_ErrorCode_t dvr_close(void);
+    AM_ErrorCode_t dvb_set_decode_info(AM_DMX_Filter * filter, int rp);
 private:
     int getDmaByDemuxId(int demuxId);
     int mDvrFd;

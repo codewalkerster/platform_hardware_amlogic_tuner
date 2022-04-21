@@ -186,6 +186,11 @@ struct dmx_filter_mem_info {
 	__u32 filter_num;
 	struct filter_mem_info info[40];
 };
+
+struct decoder_mem_info {
+	__u32 rp_phy;
+};
+
 #endif
 
 struct dmx_pes_filter_params {
@@ -274,5 +279,6 @@ struct dmx_stc {
 #define DMX_SET_HW_SOURCE       _IO('o', 82)
 #endif
 #define DMX_GET_FILTER_MEM_INFO _IOR('o', 84, struct dmx_filter_mem_info)
+#define DMX_SET_DECODE_INFO     _IOW('o', 88, struct decoder_mem_info)
 
 #endif /* _UAPI_DVBDMX_H_ */

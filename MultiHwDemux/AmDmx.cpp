@@ -678,6 +678,21 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_WriteTs(uint8_t* data,int32_t size,uint64_t
     return AM_SUCCESS;
 }
 
+AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetDecodeInfo(int fhandle, int rp) {
+    AM_DMX_Filter *filter;
+    AM_ErrorCode_t ret = AM_SUCCESS;
+
+    pthread_mutex_lock(&lock);
+
+    ret = dmx_get_used_filter(fhandle, &filter);
+
+    if (ret == AM_SUCCESS) {
+        ret = drv->dvb_set_decode_info(filter, rp);
+    }
+    pthread_mutex_unlock(&lock);
+    return ret;
+}
+
  #if 0
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSource(AM_DMX_Source_t src)
 {

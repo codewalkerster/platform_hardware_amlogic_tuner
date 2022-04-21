@@ -476,3 +476,18 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, AM_DMX_Source_t sr
     return AM_FileEcho(buf, cmd);
 }
 #endif
+
+AM_ErrorCode_t AmLinuxDvb::dvb_set_decode_info(AM_DMX_Filter * filter, int rp) {
+    int fd = (long)filter->drv_data;
+    int ret;
+    ALOGV("%s/%d", __FUNCTION__, __LINE__);
+    decoder_mem_info info;
+    info.rp_phy = rp;
+    ret = ioctl(fd, DMX_SET_DECODE_INFO, (unsigned long)&info);
+    if (ret == -1) {
+        ALOGE("set decoder info failed (%s)", strerror(errno));
+        return AM_DMX_ERR_SYS;
+    }
+
+    return AM_SUCCESS;
+}

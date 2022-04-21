@@ -122,6 +122,7 @@ public:
     //AM_ErrorCode_t AM_DMX_GetScrambleStatus(AM_Bool_t dev_status[2]);
 
     AM_ErrorCode_t AM_DMX_WriteTs(uint8_t* data,int32_t size,uint64_t timeout);
+    AM_ErrorCode_t AM_DMX_SetDecodeInfo(int fhandle, int rp);
     int dev_no;
     sp<AmLinuxDvb> drv;
     void *drv_data;
