@@ -132,11 +132,12 @@ void Demux::combinePesData(uint32_t filterId) {
             ALOGD("## [Demux] combinePesData %x,%llx,-----------\n", tmpbuf[0], packetHeader & 0xffffffffff);
             size = 2;
             result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf1, &size);
-            //packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
-            if (sizeof(tmpbuf1) < sizeof(int)) {
-                packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
-            }
+            packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
             ALOGD("[Demux] packetLen = %d", packetLen);
+            if (packetLen == 0) {
+                ALOGD("[Demux] read pes data header error");
+                return;
+            }
             pesData.resize(packetLen + 6);
             pesData[0] = 0x0;
             pesData[1] = 0x0;
@@ -150,13 +151,21 @@ void Demux::combinePesData(uint32_t filterId) {
                 dataLen = packetLen - readLen;
                 result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + readLen, &dataLen);
                 //ALOGD("[Demux] result = 0x%x", result);
-                if (result == 0) {
+                if (result == AM_SUCCESS) {
                     readLen += dataLen;
-                } else if (result == -1){
-                    //ALOGD("[Demux] filter has not allocated");
+                } else if (result == AM_FAILURE) {
+                    ALOGD("[Demux] pes data read fail");
+                    return;
+                } else if (result == AM_DMX_ERR_TIMEOUT) {
+                    ALOGD("[Demux] pes data read timeout");
                     return;
                 }
-            } while(readLen < packetLen);
+            } while(!bRemovePesFid && (readLen < packetLen));
+
+            if (packetLen != (pesData.size() - 6)) {
+                ALOGD("[Demux] incomplete packet, abandon it");
+                return;
+            }
 
             updateFilterOutput(filterId, pesData);
             startFilterHandler(filterId);
@@ -191,12 +200,12 @@ void Demux::getSectionData(uint32_t filterId) {
     } else {
         ALOGV("fid =%d section data size:%d", filterId, sectionSize);
         /* for debug
-        uint16_t tableId = tmpSectionData[0];
+        uint16_t tableId = sectionData[0];
         if (tableId == 0x0) {
-            ALOGD("received PAT table tableId = %d, fid = %d", tableId, fid);
+            ALOGD("received PAT table tableId = %d, fid = %d", tableId, filterId);
         }
         if (tableId == 0x2) {
-            ALOGD("received PMT table tableId = %d, fid = %d", tableId, fid);
+            ALOGD("received PMT table tableId = %d, fid = %d", tableId, filterId);
         }*/
         sectionData.resize(sectionSize);
         updateFilterOutput(filterId, sectionData);
@@ -407,6 +416,7 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
 
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PES) {
         mPesFilterIds.insert(dmxFilterIdx);
+        bRemovePesFid = false;
         ALOGD("Insert PES filter");
     }
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PCR) {
@@ -635,7 +645,10 @@ Result Demux::removeFilter(uint32_t filterId) {
     mFilters.erase(filterId);
     mPlaybackFilterIds.erase(filterId);
     mRecordFilterIds.erase(filterId);
-    mPesFilterIds.erase(filterId);
+    if (checkPesFilterId(filterId)) {
+        bRemovePesFid = true;
+        mPesFilterIds.erase(filterId);
+    }
 
     if (mDvrPlayback != nullptr) {
         mDvrPlayback->removePlaybackFilter(filterId);
@@ -871,8 +884,9 @@ sp<AmDvr> Demux::getAmDvrDevice() {
 bool Demux::checkPesFilterId(uint32_t filterId) {
     set<uint32_t>::iterator it;
     for (it = mPesFilterIds.begin(); it != mPesFilterIds.end(); it++) {
-        if (*it == filterId)
+        if (*it == filterId) {
             return true;
+         }
     }
     return false;
 }

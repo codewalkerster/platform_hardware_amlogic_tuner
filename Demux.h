@@ -230,6 +230,7 @@ class Demux : public IDemux {
     sp<AmDvr> mAmDvrDevice = NULL;
     int mAvSyncHwId = -1;
     std::map<uint32_t, uint32_t> mMapFilter;
+    bool bRemovePesFid = false;
     //int mfd;
 };
 
