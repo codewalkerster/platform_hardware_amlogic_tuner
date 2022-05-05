@@ -93,6 +93,7 @@ class Filter : public IFilter {
     bool isMediaFilter() { return mIsMediaFilter; };
     bool isPcrFilter() { return mIsPcrFilter; };
     bool isRecordFilter() { return mIsRecordFilter; };
+    bool isPesFilter() { return mIsPesFilter; }
     void fillDataToDecoder();
     DemuxFilterType getFilterType();
     int updatePCRFilterId(int avSyncId);
@@ -213,6 +214,7 @@ class Filter : public IFilter {
     int mAvBufferCopyCount = 0;
     int mIonFd;
     bool bIsRaw;
+    bool mIsPesFilter = false;
 };
 
 }  // namespace implementation

@@ -237,6 +237,10 @@ Filter::Filter(DemuxFilterType type, uint32_t filterId, uint32_t bufferSize,
             if (mType.subType.tsFilterType() == DemuxTsFilterType::RECORD) {
                 mIsRecordFilter = true;
             }
+            if (mType.subType.tsFilterType() == DemuxTsFilterType::PES) {
+                ALOGD("%s tsFilter subType is PES", __FUNCTION__);
+                mIsPesFilter = true;
+            }
             break;
         case DemuxFilterMainType::MMTP:
             ALOGD("%s DemuxFilterMainType::MMTP:", __FUNCTION__);

@@ -41,6 +41,7 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define PES_RAW_DATA_SIZE 64 * 1024
 #define PRIVATE_STREAM_1   0x1bd
 #define PRIVATE_STREAM_2   0x1bf
+#define READ_DEMUX_TIME_OUT 2000
 
 #ifdef TUNERHAL_DBG
 #define TF_DEBUG_DROP_TS_NUM "vendor.tf.drop.tsnum"
@@ -118,12 +119,17 @@ void Demux::combinePesData(uint32_t filterId) {
     ALOGV("%s/%d", __FUNCTION__, __LINE__);
     uint8_t tmpbuf[8] = {0};
     uint8_t tmpbuf1[8] = {0};
+    int64_t pts = 0, dts = 0;
+    int64_t tempPts = 0, tempDts = 0;
     int result = -1;
-    int packetLen = 0;
+    int packetLen = 0, pesHeaderLen = 0;
+    unsigned int elapsed_ms = 0;
+    bool needSkipData = false;
     int64_t packetHeader = 0;
     int stream_id = 0;
     vector<uint8_t> pesData;
     int size = 1;
+    struct timeval read_start, read_end, read_elapsed;
     while (AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf, &size) == 0) {
         packetHeader = ((packetHeader<<8) & 0x000000ffffffff00) | tmpbuf[0];
         //ALOGD("[Demux] packetHeader = %llx", packetHeader);
@@ -134,39 +140,90 @@ void Demux::combinePesData(uint32_t filterId) {
             result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf1, &size);
             packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
             ALOGD("[Demux] packetLen = %d", packetLen);
-            if (packetLen == 0) {
-                ALOGD("[Demux] read pes data header error");
-                return;
-            }
-            pesData.resize(packetLen + 6);
-            pesData[0] = 0x0;
-            pesData[1] = 0x0;
-            pesData[2] = 0x01;
-            pesData[3] = tmpbuf[0];
-            pesData[4] = tmpbuf1[0];
-            pesData[5] = tmpbuf1[1];
-            int readLen = 0;
-            int dataLen = 0;
-            do {
-                dataLen = packetLen - readLen;
-                result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + readLen, &dataLen);
-                //ALOGD("[Demux] result = 0x%x", result);
-                if (result == AM_SUCCESS) {
-                    readLen += dataLen;
-                } else if (result == AM_FAILURE) {
-                    ALOGD("[Demux] pes data read fail");
-                    return;
-                } else if (result == AM_DMX_ERR_TIMEOUT) {
-                    ALOGD("[Demux] pes data read timeout");
-                    return;
+            if (packetLen >= 3) {
+                pesData.resize(packetLen + 6);
+                pesData[0] = 0x0;
+                pesData[1] = 0x0;
+                pesData[2] = 0x01;
+                pesData[3] = tmpbuf[0];
+                pesData[4] = tmpbuf1[0];
+                pesData[5] = tmpbuf1[1];
+                size = 3;
+                result =  AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6, &size);
+                packetLen -= 3;
+                pesHeaderLen = pesData[8];
+                ALOGD("[Demux] pesHeaderLen = %d", pesHeaderLen);
+                if (packetLen >= pesHeaderLen) {
+                    if ((pesData[7] & 0xc0) == 0x80) {
+                        result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + 3, &pesHeaderLen);
+                        if (result == 0) {
+                            tempPts = (int64_t)(pesData[9] & 0xe) << 29;
+                            tempPts = tempPts | ((pesData[10] & 0xff) << 22);
+                            tempPts = tempPts | ((pesData[11] & 0xfe) << 14);
+                            tempPts = tempPts | ((pesData[12] & 0xff) << 7);
+                            tempPts = tempPts | ((pesData[13] & 0xfe) >> 1);
+                            pts = tempPts;
+                            packetLen -= pesHeaderLen;
+                        }
+                    } else if ((pesData[7] & 0xc0) == 0xc0) {
+                        result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + 3, &pesHeaderLen);
+                        if (result == 0) {
+                            tempPts = (int64_t)(pesData[9] & 0xe) << 29;
+                            tempPts = tempPts | ((pesData[10] & 0xff) << 22);
+                            tempPts = tempPts | ((pesData[11] & 0xfe) << 14);
+                            tempPts = tempPts | ((pesData[12] & 0xff) << 7);
+                            tempPts = tempPts | ((pesData[13] & 0xfe) >> 1);
+                            pts = tempPts; // - pts_aligned;
+                            tempDts = (int64_t)(pesData[14] & 0xe) << 29;
+                            tempDts = tempDts | ((pesData[15] & 0xff) << 22);
+                            tempDts = tempDts | ((pesData[16] & 0xfe) << 14);
+                            tempDts = tempDts | ((pesData[17] & 0xff) << 7);
+                            tempDts = tempDts | ((pesData[18] & 0xfe) >> 1);
+                            dts = tempDts; // - pts_aligned;
+                            packetLen -= pesHeaderLen;
+                        }
+                    } else {
+                        needSkipData = true;
+                    }
+                } else {
+                    needSkipData = true;
                 }
-            } while(!bRemovePesFid && (readLen < packetLen));
-
-            if (packetLen != (pesData.size() - 6)) {
-                ALOGD("[Demux] incomplete packet, abandon it");
-                return;
+            } else {
+                needSkipData = true;
             }
 
+            if (needSkipData) {
+                ALOGD("[Demux] need to skip pes data");
+                return;
+            } else if ((pts) && (packetLen > 0)) {
+                int readLen = 0;
+                int dataLen = 0;
+                memset(&read_start, 0, sizeof(read_start));
+                memset(&read_end, 0, sizeof(read_end));
+                memset(&read_elapsed, 0, sizeof(read_elapsed));
+                gettimeofday(&read_start, NULL);
+                do {
+                    dataLen = packetLen - readLen;
+                    result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + 3 + pesHeaderLen + readLen, &dataLen);
+                    //ALOGD("[Demux] result = 0x%x", result);
+                    if (result == AM_SUCCESS) {
+                        readLen += dataLen;
+                    } else if (result == AM_FAILURE) {
+                        ALOGD("[Demux] pes data read fail");
+                        return;
+                    }
+                    //ALOGD("[Demux] bRemovePesFid = %d", bRemovePesFid);
+                } while(!bRemovePesFid && (readLen < packetLen));
+            }
+
+            gettimeofday(&read_end, NULL);
+            timersub(&read_end, &read_start, &read_elapsed);
+            elapsed_ms = read_elapsed.tv_sec * 1000 + read_elapsed.tv_usec / 1000;
+            //it is a workaround to check wrong pes data.
+            if (elapsed_ms > READ_DEMUX_TIME_OUT) {
+                ALOGD("[Demux] read pes data from demux takes %d ms, wrong pes data is abandoned", elapsed_ms);
+                return;
+            }
             updateFilterOutput(filterId, pesData);
             startFilterHandler(filterId);
             return;
@@ -885,13 +942,11 @@ sp<AmDvr> Demux::getAmDvrDevice() {
 }
 
 bool Demux::checkPesFilterId(uint32_t filterId) {
-    set<uint32_t>::iterator it;
-    for (it = mPesFilterIds.begin(); it != mPesFilterIds.end(); it++) {
-        if (*it == filterId) {
-            return true;
-         }
+    bool isPesFilter = false;
+    if (mFilters[filterId] != nullptr) {
+        isPesFilter = mFilters[filterId]->isPesFilter();
     }
-    return false;
+    return isPesFilter;
 }
 
 void Demux::mapPassthroughMediaFilter(uint32_t fakefilterId, uint32_t filterId) {
