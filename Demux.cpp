@@ -385,6 +385,7 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
     sp<Filter> filter = new Filter(type, dmxFilterIdx, bufferSize, cb, this);
 
     if (tsFilterType == DemuxTsFilterType::PCR) {
+        ALOGD("DemuxTsFilterType::PCR");
         if (mMediaSync == nullptr) {
             mMediaSync = new MediaSyncWrap();
         }
@@ -486,6 +487,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
         DemuxFilterType type = mFilters[fid]->getFilterType();
         if (mMediaSync != nullptr) {
+            std::lock_guard<std::mutex> lock(mFilterLock);
             if (mAvSyncHwId == -1) {
                 mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
                 mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
@@ -499,6 +501,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
         // Return the lowest pcr filter id in the default implementation as the av sync id
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
         if (mMediaSync != nullptr) {
+            std::lock_guard<std::mutex> lock(mFilterLock);
             if (mAvSyncHwId == -1) {
                 mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
                 mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
