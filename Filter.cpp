@@ -316,6 +316,8 @@ Return<Result> Filter::configure(const DemuxFilterSettings &settings)
                     return result;
                 }
 
+                mTpid = param.pid;
+
                 mIsNSKEmmFilter = true;
             } else {
                 param.pid = mTpid;
