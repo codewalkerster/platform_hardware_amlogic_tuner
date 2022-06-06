@@ -130,12 +130,11 @@ GetNskEmmFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_par
 static Return<Result>
 GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_params &param)
 {
-    /* match with CBS, don't set repeat flag, CBS will filter the same section data.
-                    bool isRepeat = settings.ts().filterSettings.section().isRepeat;
-                    ALOGD("%s isRepeat:%d", __FUNCTION__, isRepeat);
-                    if (!isRepeat) {
-                        param.flags |= DMX_ONESHOT;
-                    }*/
+    bool isRepeat = settings.ts().filterSettings.section().isRepeat;
+    ALOGD("%s isRepeat:%d", __FUNCTION__, isRepeat);
+    if (!isRepeat) {
+        param.flags |= DMX_ONESHOT;
+    }
     bool isCheckCrc = settings.ts().filterSettings.section().isCheckCrc;
     ALOGD("%s isCheckCrc:%d", __FUNCTION__, isCheckCrc);
     if (isCheckCrc) {
