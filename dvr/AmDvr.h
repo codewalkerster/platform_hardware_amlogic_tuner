@@ -86,7 +86,7 @@ public:
     AmDvr(uint32_t demuxId);
     ~AmDvr();
 
-    AM_ErrorCode_t AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_input);
+    AM_ErrorCode_t AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_input, bool bsetInput);
     AM_ErrorCode_t AM_DVR_Close();
     AM_ErrorCode_t AM_DVR_Read(uint8_t *buf, int *size);
     AM_ErrorCode_t AM_DVR_SetCallback(AM_DVR_DataCb cb, void* data);

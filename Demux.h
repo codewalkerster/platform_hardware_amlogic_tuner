@@ -31,6 +31,7 @@
 #include "AmDmx.h"
 #include "MediaSyncWrap.h"
 #include "AmDvr.h"
+#include "AmPesFilter.h"
 
 using namespace std;
 
@@ -87,7 +88,7 @@ class Demux : public IDemux {
     virtual Return<Result> disconnectCiCam() override;
     static void postData(void* demux, int fid, bool esOutput, bool passthrough);
     static void postDvrData(void* demux);
-
+    static void pesDataCallback(void* demux, int fid, uint8_t *pes, int len);
     // Functions interacts with Tuner Service
     void stopFrontendInput();
     Result removeFilter(uint32_t filterId);
@@ -125,6 +126,10 @@ class Demux : public IDemux {
     bool isRawData(uint32_t filterId);
     void getPesRawData(uint32_t filterId);
     uint32_t getDemuxId();
+    sp<AmPesFilter> getAmPesFilter();
+    int getPesFid();
+    int recordTsPacketForPesData(int filterId);
+    void closePesRecordFilter();
 
   private:
     // Tuner service
@@ -227,10 +232,13 @@ class Demux : public IDemux {
     sp<AM_DMX_Device> AmDmxDevice[DMX_COUNT] = { NULL };
     const bool DEBUG_DEMUX = false;
     sp<MediaSyncWrap> mMediaSync = nullptr;
-    sp<AmDvr> mAmDvrDevice = NULL;
+    sp<AmDvr> mAmDvrDevice[DMX_COUNT] = { NULL };
+    sp<AmPesFilter> mAmPesFilter = NULL;
     int mAvSyncHwId = -1;
     std::map<uint32_t, uint32_t> mMapFilter;
     bool bRemovePesFid = true;
+    int mPesFid = -1;
+    int mPesRecordFid = -1;
     //int mfd;
 };
 

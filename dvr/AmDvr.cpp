@@ -69,6 +69,12 @@ static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source_t inpu
         ALOGI("DMX_SET_INPUT ret:%d\n", ret);
         ret = ioctl(fd, DMX_SET_HW_SOURCE, ts_input);
         ALOGI("DMX_SET_HW_SOURCE ret:%d\n", ret);
+    } else if (inputSource == INPUT_LOCAL) {
+        ALOGI("set ---> INPUT_LOCAL \n" );
+        ret = ioctl(fd, DMX_SET_INPUT, INPUT_LOCAL);
+        ALOGI("DMX_SET_INPUT ret:%d\n", ret);
+        ret = ioctl(fd, DMX_SET_HW_SOURCE, ts_input);
+        ALOGI("DMX_SET_HW_SOURCE ret:%d\n", ret);
     }
     if (ret < 0) {
         ALOGE("dvr_open ioctl failed %s\n", strerror(errno));
@@ -82,8 +88,6 @@ static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source_t inpu
 
 static AM_ErrorCode_t dvr_close(AM_DVR_Device_t *dev)
 {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
-
     int fd = (long)dev->drv_data;
     if (fd > 0) {
         close(fd);
@@ -169,6 +173,7 @@ AmDvr::AmDvr(uint32_t demuxId) {
     mDvrDevice = new AM_DVR_Device_t;
     mDvrDevice->dev_no = demuxId;
     mDvrDevice->dmx_no = demuxId;
+    mDvrDevice->dmx_fd = -1;
     mData = new AM_DVR_Data();
     mData->cb = NULL;
     mData->user_data = NULL;
@@ -179,28 +184,21 @@ AmDvr::AmDvr(uint32_t demuxId) {
 
 AmDvr::~AmDvr() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
-
-    if (mDvrDevice != NULL) {
-        delete mDvrDevice;
-        mDvrDevice = NULL;
-    }
-    if (mData != NULL) {
-        delete mData;
-        mData = NULL;
-    }
 }
 
-AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_input)
+AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_input, bool bsetInput)
 {
     ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, mDvrDevice->dev_no);
     if (opencnt > 0) {
         ALOGI("dvr device %d has already been openned", mDvrDevice->dev_no);
-        opencnt++;
+        //opencnt++;
         return AM_SUCCESS;
     }
 
     AM_ErrorCode_t ret = dvr_open(mDvrDevice, inputSource);
-    ret = setDvbSource(mDvrDevice, inputSource, getTsInputById(ts_input));
+    if (bsetInput) {
+        ret = setDvbSource(mDvrDevice, inputSource, getTsInputById(ts_input));
+    }
     if (ret == AM_SUCCESS) {
         pthread_mutex_init(&lock, NULL);
         pthread_cond_init(&cond, NULL);
@@ -213,7 +211,7 @@ AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_in
     }
 
     if (ret == AM_SUCCESS) {
-        opencnt = 1;
+        opencnt ++;
     }
 
     return ret;
@@ -222,13 +220,22 @@ AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_in
 AM_ErrorCode_t AmDvr::AM_DVR_Close()
 {
     AM_ErrorCode_t ret = AM_SUCCESS;
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    ALOGD("%s/%d opencnt = %d", __FUNCTION__, __LINE__, opencnt);
 
-    if (opencnt == 1) {
+    if (opencnt > 0) {
         enable_thread = false;
         pthread_join(thread, NULL);
         if (mDvrDevice != NULL) {
             ret = dvr_close(mDvrDevice);
+        }
+
+        if (mDvrDevice != NULL) {
+            delete mDvrDevice;
+            mDvrDevice = NULL;
+        }
+        if (mData != NULL) {
+            delete mData;
+            mData = NULL;
         }
         pthread_mutex_destroy(&lock);
         pthread_cond_destroy(&cond);
@@ -257,10 +264,10 @@ void* AmDvr::dvr_data_thread(void *arg) {
     //uint8_t buf[256*1024];
     prctl(PR_SET_NAME, "dvr_data_thread");
 
-    while (dev->enable_thread) {
+    while (dev != NULL && dev->mDvrDevice != NULL && dev->enable_thread) {
         ret = dvr_poll(dev->mDvrDevice, 1000);
         if (ret == AM_SUCCESS ) {
-            if (dev->mData->cb != NULL) {
+            if (dev->mData != NULL && dev->mData->cb != NULL) {
                 dev->mData->cb(dev->mData->user_data);
             }
         /*

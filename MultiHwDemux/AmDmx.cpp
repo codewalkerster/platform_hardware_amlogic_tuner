@@ -586,7 +586,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetBufferSize(int fhandle, int size) {
     }
     pthread_mutex_unlock(&lock);
 
-return ret;
+    return ret;
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetCallback(int fhandle, AM_DMX_DataCb *cb, void **data) {
