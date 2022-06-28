@@ -41,8 +41,7 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define PES_RAW_DATA_SIZE 64 * 1024
 #define PRIVATE_STREAM_1   0x1bd
 #define PRIVATE_STREAM_2   0x1bf
-#define READ_DEMUX_TIME_OUT 2000
-
+#define SUPPORT_SOFTWARE_DEMUX_SUBTITLE "vendor.tunerhal.softwaredemux.subtitle"
 #ifdef TUNERHAL_DBG
 #define TF_DEBUG_DROP_TS_NUM "vendor.tf.drop.tsnum"
 #define TF_DEBUG_DUMP_ES_DATA "vendor.tf.dump.es"
@@ -68,8 +67,9 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     ALOGD("mDropLen:%d mFilterOutputTotalLen:%d mDropTsPktNum:%d mDumpEsData:%d",
         mDropLen, mFilterOutputTotalLen, mDropTsPktNum, mDumpEsData);
 #endif
+    bSupportSoftDemuxForSubtitle =  property_get_bool(SUPPORT_SOFTWARE_DEMUX_SUBTITLE, true);
     AmDmxDevice[mDemuxId] = new AM_DMX_Device(mDemuxId);
-    ALOGD("mDemuxId:%d", mDemuxId);
+    ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d", mDemuxId, bSupportSoftDemuxForSubtitle);
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
     mAmDvrDevice[mDemuxId] = new AmDvr(mDemuxId);
     if (mDemuxId == 0) {
@@ -137,7 +137,7 @@ void Demux::postDvrData(void* demux) {
         ALOGD("%s/%d pesFid = %d", __FUNCTION__, __LINE__, pesFid);
         int pid = dmxDev->getFilterTpid(pesFid);
         ALOGD("%s/%d pid = %d", __FUNCTION__, __LINE__, pid);
-        if (pid != -1) {
+        if (pid != -1 && dmxDev->getAmPesFilter() != NULL) {
             dmxDev->getAmPesFilter()->extractPesDataFromTsPacket(pid, dvrData.data(), cnt);
         }
     } else {
@@ -154,13 +154,11 @@ void Demux::combinePesData(uint32_t filterId) {
     int64_t tempPts = 0, tempDts = 0;
     int result = -1;
     int packetLen = 0, pesHeaderLen = 0;
-    unsigned int elapsed_ms = 0;
     bool needSkipData = false;
     int64_t packetHeader = 0;
     int stream_id = 0;
     vector<uint8_t> pesData;
     int size = 1;
-    struct timeval read_start, read_end, read_elapsed;
     while (AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf, &size) == 0) {
         packetHeader = ((packetHeader<<8) & 0x000000ffffffff00) | tmpbuf[0];
         //ALOGD("[Demux] packetHeader = %llx", packetHeader);
@@ -229,10 +227,6 @@ void Demux::combinePesData(uint32_t filterId) {
             } else if ((pts) && (packetLen > 0)) {
                 int readLen = 0;
                 int dataLen = 0;
-                memset(&read_start, 0, sizeof(read_start));
-                memset(&read_end, 0, sizeof(read_end));
-                memset(&read_elapsed, 0, sizeof(read_elapsed));
-                gettimeofday(&read_start, NULL);
                 do {
                     dataLen = packetLen - readLen;
                     result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + 3 + pesHeaderLen + readLen, &dataLen);
@@ -243,18 +237,9 @@ void Demux::combinePesData(uint32_t filterId) {
                         ALOGD("[Demux] pes data read fail");
                         return;
                     }
-                    //ALOGD("[Demux] bRemovePesFid = %d", bRemovePesFid);
-                } while(!bRemovePesFid && (readLen < packetLen));
+                } while(readLen < packetLen);
             }
 
-            gettimeofday(&read_end, NULL);
-            timersub(&read_end, &read_start, &read_elapsed);
-            elapsed_ms = read_elapsed.tv_sec * 1000 + read_elapsed.tv_usec / 1000;
-            //it is a workaround to check wrong pes data.
-            if (elapsed_ms > READ_DEMUX_TIME_OUT) {
-                ALOGD("[Demux] read pes data from demux takes %d ms, wrong pes data is abandoned", elapsed_ms);
-                return;
-            }
             updateFilterOutput(filterId, pesData);
             startFilterHandler(filterId);
             return;
@@ -419,7 +404,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             if (dmxDev->isRawData(fid)) {
                 dmxDev->getPesRawData(fid);
             } else {
-                if (0) {
+                if (!dmxDev->checkSoftDemuxForSubtitle()) {
                     ALOGD("start pes data combine fid = %d", fid);
                     dmxDev->combinePesData(fid);
                 } else {
@@ -509,13 +494,8 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
     }
 
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PES) {
-        mAmPesFilter = new AmPesFilter(dmxFilterIdx, pesDataCallback, this);
-        mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
-        mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTunerService->getTsInput(), false);
         mPesFilterIds.insert(dmxFilterIdx);
-        mPesFid = dmxFilterIdx;
-        bRemovePesFid = false;
-        ALOGD("Insert PES filter mPesFid = %d", mPesFid);
+        ALOGD("Insert PES filter mPesFid = %d", dmxFilterIdx);
     }
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PCR) {
         mPcrFilterIds.insert(dmxFilterIdx);
@@ -746,11 +726,11 @@ Result Demux::removeFilter(uint32_t filterId) {
     mPlaybackFilterIds.erase(filterId);
     mRecordFilterIds.erase(filterId);
     if (checkPesFilterId(filterId)) {
+        if (bSupportSoftDemuxForSubtitle) {
+            closePesRecordFilter();
+        }
         ALOGD("remove PES filter mPesFid = %d", filterId);
-        closePesRecordFilter();
-        bRemovePesFid = true;
         mPesFilterIds.erase(filterId);
-        mPesFid = -1;
     }
 
     if (mDvrPlayback != nullptr) {
@@ -1084,6 +1064,11 @@ int Demux::getPesFid() {
 
 int Demux::recordTsPacketForPesData(int filterId) {
     mFilters[filterId]->stop();
+    mPesFid = filterId;
+
+    mAmPesFilter = new AmPesFilter(filterId, pesDataCallback, this);
+    mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
+    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTunerService->getTsInput(), false);
 
     int pid = getFilterTpid(filterId);
     ALOGD("%s/%d pid = %d", __FUNCTION__, __LINE__, pid);
@@ -1120,8 +1105,12 @@ void Demux::closePesRecordFilter() {
     //mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(NULL, this);
     mAmPesFilter->release();
     mAmPesFilter = NULL;
+    mPesFid = -1;
 }
 
+bool Demux::checkSoftDemuxForSubtitle() {
+    return bSupportSoftDemuxForSubtitle;
+}
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner

@@ -130,6 +130,7 @@ class Demux : public IDemux {
     int getPesFid();
     int recordTsPacketForPesData(int filterId);
     void closePesRecordFilter();
+    bool checkSoftDemuxForSubtitle();
 
   private:
     // Tuner service
@@ -236,9 +237,9 @@ class Demux : public IDemux {
     sp<AmPesFilter> mAmPesFilter = NULL;
     int mAvSyncHwId = -1;
     std::map<uint32_t, uint32_t> mMapFilter;
-    bool bRemovePesFid = true;
     int mPesFid = -1;
     int mPesRecordFid = -1;
+    bool bSupportSoftDemuxForSubtitle = false;
     //int mfd;
 };
 
