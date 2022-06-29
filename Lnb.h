@@ -60,7 +60,10 @@ class Lnb : public ILnb {
     sp<HwFeState> mHw;
     const char* name;
     virtual ~Lnb();
-    int acquireLnbDevice();
+    int acquireLnbDevice(void);
+
+    bool prepareFeSystem(int fd);
+
 };
 
 }  // namespace implementation

@@ -42,6 +42,28 @@ int Lnb::acquireLnbDevice() {
     return mHw->acquireForLnb();
 }
 
+bool Lnb::prepareFeSystem(int fd) {
+    struct dvb_frontend_info feInfo;
+
+    if (fd != -1) {
+        if (ioctl(fd, FE_GET_INFO, &feInfo) != -1) {
+            if (feInfo.type == FE_QPSK)
+                return true;
+            else {
+                struct dtv_property p =
+                    {.cmd = DTV_DELIVERY_SYSTEM,
+                     .u.data = SYS_DVBS
+                    };
+                struct dtv_properties props = {.num = 1, .props = &p};
+                if (ioctl(fd, FE_SET_PROPERTY, &props) != -1) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 Return<Result> Lnb::setCallback(const sp<ILnbCallback>& callback) {
     ALOGV("%s", __FUNCTION__);
     //hardware diseqc version < 2.0, not support diseqc event
@@ -126,15 +148,36 @@ Return<Result> Lnb::sendDiseqcMessage(const hidl_vec<uint8_t>& diseqcMessage) {
     struct dvb_diseqc_master_cmd cmd;
     memset(&cmd, 0, sizeof(struct dvb_diseqc_master_cmd));
 
+    if (diseqcMessage.size() == 0) {
+        return Result::INVALID_ARGUMENT;
+    }
+
     for (int i = 0; i < diseqcMessage.size(); i++)
     {
         cmd.msg[i] = diseqcMessage[i];
-        ALOGD("%s cmd[%d]:%u", __FUNCTION__, i, diseqcMessage[i]);
+        ALOGD("%s cmd[%d]:0x%02x", __FUNCTION__, i, diseqcMessage[i]);
     }
 
-    cmd.msg_len = diseqcMessage.size();
+    if (cmd.msg[0] == 0x70 && diseqcMessage.size() > 4) {
+        //en50607- ODU_CHANNEL_CHANGE : 70 d1 d2 d3
+        cmd.msg_len = 4;
+    } else if (cmd.msg[0] == 0x7A || cmd.msg[0] == 0x7B || cmd.msg[0] == 0x7C) {
+        //en50607-
+        //ODU_UB_avail : 0x7A
+        //ODU_UB_PIN : 0x7B
+        //ODU_UB_inuse : 0x7C
+        cmd.msg_len = 1;
+    } else if ((cmd.msg[0] == 0x7D || cmd.msg[0] == 0x7E) && diseqcMessage.size() > 2) {
+        //en50607- ODU_UB_freq : 0x7d d1
+        //en50607- ODU_UB_switches : 0x7e d1
+        cmd.msg_len = 2;
+    } else {
+        cmd.msg_len = diseqcMessage.size();
+    }
 
     int devFd = acquireLnbDevice();
+    if (devFd == -1 || !prepareFeSystem(devFd)) return Result::UNAVAILABLE;
+
     if (ioctl(devFd, FE_DISEQC_SEND_MASTER_CMD, &cmd) == -1)
     {
         ALOGE("%s failed.", __FUNCTION__);
