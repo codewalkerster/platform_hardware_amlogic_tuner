@@ -347,18 +347,18 @@ uint32_t FrontendDevice::getFeBer() {
     return ber;
 }
 
-uint16_t FrontendDevice::getSingnalStrenth() {
-    uint16_t strenth = 0;;
+uint16_t FrontendDevice::getSignalStrength() {
+    uint16_t strength = 0;;
 
     if (!checkOpen(true)) {
-        return strenth;
+        return strength;
     }
 
-    if (ioctl(mDev.devFd, FE_READ_SIGNAL_STRENGTH, &strenth) < 0) {
+    if (ioctl(mDev.devFd, FE_READ_SIGNAL_STRENGTH, &strength) < 0) {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
-    return strenth;
+    return strength;
 }
 
 int FrontendDevice::setFeSystem() {
@@ -482,7 +482,7 @@ bool FrontendDevice::threadLoop() {
                 }
             } else {
                 if (state == FrontendDevice::STATE_TUNE_IDLE) {
-                    //scan and tune need check sevaral seconds for signal
+                    //scan and tune need check several seconds for signal
                     //will not stable. and in ilde state, we just poll once
                     stop = true;
                 }

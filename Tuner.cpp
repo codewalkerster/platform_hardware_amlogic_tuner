@@ -38,7 +38,7 @@ namespace implementation {
 #define FRONTEND_DEVICE "/dev/dvb0.frontend0"
 using ::android::hardware::tv::tuner::V1_0::DemuxId;
 
-//check deivce exist or not
+//check device exist or not
 static bool isDeviceExist(const char *file_name)
 {
     struct stat tmp_st;

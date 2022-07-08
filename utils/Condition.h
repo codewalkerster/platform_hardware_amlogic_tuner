@@ -114,4 +114,4 @@ inline void TSPCondition::broadcast() {
     pthread_cond_broadcast(&mCond);
 }
 
-#endif // _LIBS_UTILS_CONDITON_H
+#endif // _LIBS_UTILS_CONDITION_H

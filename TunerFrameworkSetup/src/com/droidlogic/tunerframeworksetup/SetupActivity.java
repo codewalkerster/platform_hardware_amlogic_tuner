@@ -363,16 +363,16 @@ public class SetupActivity extends Activity {
                 boolean localMode = (i == 0);
                 Log.d(TAG, "onItemSelected localMode:" + localMode);
                 enableLocalMode(localMode);
-                int tunerVisble = View.GONE;
+                int tunerVisible = View.GONE;
                 int localVisible = View.VISIBLE;
                 if (!localMode) {
-                    tunerVisble = View.VISIBLE;
+                    tunerVisible = View.VISIBLE;
                     localVisible = View.GONE;
                 }
-                mLayoutFrequency.setVisibility(tunerVisble);
-                mLayoutScanmode.setVisibility(tunerVisble);
-                mSearchStart.setVisibility(tunerVisble);
-                mPlayStop.setVisibility(tunerVisble);
+                mLayoutFrequency.setVisibility(tunerVisible);
+                mLayoutScanmode.setVisibility(tunerVisible);
+                mSearchStart.setVisibility(tunerVisible);
+                mPlayStop.setVisibility(tunerVisible);
                 mLayoutChannelIds[0].setVisibility(View.VISIBLE);
 
                 mLayoutSymbol.setVisibility(View.GONE);
@@ -385,7 +385,7 @@ public class SetupActivity extends Activity {
                         mSymbol.setHint(27500);
                     }
                 }
-                mStatus.setVisibility(tunerVisble);
+                mStatus.setVisibility(tunerVisible);
                 for (int instanceId = 0; instanceId < MAX_INSTANCES; instanceId ++) {
                     mLayoutLocalFiles[instanceId].setVisibility(localVisible);
                     mLocalPlayStarts[instanceId].setVisibility(localVisible);

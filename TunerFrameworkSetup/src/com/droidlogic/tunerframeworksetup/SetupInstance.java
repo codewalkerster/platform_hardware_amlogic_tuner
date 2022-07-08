@@ -438,7 +438,7 @@ public class SetupInstance implements OnTuneEventListener,
     private byte[] sendLicenseRequest(byte[] data) throws Exception {
         Exception ex = null;
         Post.Response response = null;
-        mCasLicenseServer = Utils.getPropString("getprop " + DBGProp.WVCAS_PROP_LICSERVER);
+        mCasLicenseServer = Utils.getPropString("getprop " + DBGProp.WVCAS_PROP_LICENSE_SERVER);
         mCustomerData = Utils.getPropString("getprop " + DBGProp.WVCAS_PROP_CUSTOMER_DATA);
         mContentType = Utils.getPropString("getprop " + DBGProp.WVCAS_PROP_CONTENT_TYPE);
         if (mCasLicenseServer == null)
@@ -657,7 +657,7 @@ public class SetupInstance implements OnTuneEventListener,
                         Log.e(TAG, "mHandler:Get license timeout!");
                         break;
                     default:
-                        Log.e(TAG, "mHandler:Unkonwn msg!");
+                        Log.e(TAG, "mHandler:Unknown msg!");
                         break;
                 }
             }
@@ -1818,7 +1818,7 @@ public class SetupInstance implements OnTuneEventListener,
             Log.d(TAG, "Find programs down. mIsCasPlayback:" + mIsCasPlayback);
 
             mPcrFilter = openPcrFilter(mPmtInfo.mPcrPid);
-            //Prepare av mediaformats for passthrough
+            //Prepare av media formats for passthrough
             mVideoMediaFormat = MediaFormat.createVideoFormat(mVideoMimeType, 1280, 720);
             mAudioMediaFormat = MediaFormat.createAudioFormat(mAudioMimeType, MediaCodecPlayer.AUDIO_SAMPLE_RATE, MediaCodecPlayer.AUDIO_CHANNEL_COUNT);
 
@@ -2723,7 +2723,7 @@ public class SetupInstance implements OnTuneEventListener,
         public static final String DVR_PROP_READ_DATA_DURATION = "vendor.tf.dvr.read.duration";
         public static final String DVR_PROP_LOW_THRESHOLD = "vendor.tf.dvr.low_threshold";
         public static final String DVR_PROP_HIGH_THRESHOLD = "vendor.tf.dvr.high_threshold";
-        public static final String WVCAS_PROP_LICSERVER = "vendor.media.wvcas.licserver";
+        public static final String WVCAS_PROP_LICENSE_SERVER = "vendor.media.wvcas.licserver";
         public static final String WVCAS_PROP_PROXY_VENDOR = "vendor.wvcas.proxy.vendor";
         public static final String WVCAS_PROP_CONTENT_TYPE = "vendor.wvcas.content.type";
         public static final String WVCAS_PROP_CUSTOMER_DATA = "vendor.wvcas.customer.data";

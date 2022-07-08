@@ -165,7 +165,7 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::SIGNAL_STRENGTH: {
-                status.signalStrength(mFeDev->getSingnalStrenth());
+                status.signalStrength(mFeDev->getSignalStrength());
                 break;
             }
             case FrontendStatusType::SYMBOL_RATE: {

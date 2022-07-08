@@ -49,7 +49,7 @@ public:
     virtual int  scan(const FrontendSettings& settings, FrontendScanType type);
     uint16_t getFeSnr();
     uint32_t getFeBer();
-    uint16_t getSingnalStrenth();
+    uint16_t getSignalStrength();
     virtual FrontendModulationStatus getFeModulationStatus();
     virtual int  stopTune();
     virtual int  stopScan();

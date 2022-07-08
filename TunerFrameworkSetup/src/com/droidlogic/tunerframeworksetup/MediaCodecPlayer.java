@@ -105,8 +105,8 @@ public class MediaCodecPlayer {
         mInputSlotListener = inputSlotListener;
     }
 
-    public void setExtractorOutputSlotListener(OutputSlotListener ouputSlotListener) {
-        mOutputSlotListener = ouputSlotListener;
+    public void setExtractorOutputSlotListener(OutputSlotListener outputSlotListener) {
+        mOutputSlotListener = outputSlotListener;
     }
 
     public void setVideoMediaFormat(MediaFormat mediaFormat) {
@@ -764,7 +764,7 @@ public class MediaCodecPlayer {
             Log.d(TAG, "LocalMediaCodecRunnable startRun");
             while (mRunning) {
                 if (!WriteInputData(mLinearInputBlock.block, 0, 0, 0)) {
-                    Log.d(TAG, "WriteInputData... ... interupt");
+                    Log.d(TAG, "WriteInputData... ... interrupt");
                     break;
                 }
             }
