@@ -134,9 +134,8 @@ void Demux::postDvrData(void* demux) {
     dvrData.resize(cnt);
     int pesFid = dmxDev->getPesFid();
     if (pesFid != -1) {
-        ALOGD("%s/%d pesFid = %d", __FUNCTION__, __LINE__, pesFid);
         int pid = dmxDev->getFilterTpid(pesFid);
-        ALOGD("%s/%d pid = %d", __FUNCTION__, __LINE__, pid);
+        ALOGD("%s/%d pid = %d, pesFid = %d", __FUNCTION__, __LINE__, pid, pesFid);
         if (pid != -1 && dmxDev->getAmPesFilter() != NULL) {
             dmxDev->getAmPesFilter()->extractPesDataFromTsPacket(pid, dvrData.data(), cnt);
         }
@@ -494,6 +493,7 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
     }
 
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PES) {
+        mAmPesFilter = new AmPesFilter(dmxFilterIdx, pesDataCallback, this);
         mPesFilterIds.insert(dmxFilterIdx);
         ALOGD("Insert PES filter mPesFid = %d", dmxFilterIdx);
     }
@@ -1066,7 +1066,6 @@ int Demux::recordTsPacketForPesData(int filterId) {
     mFilters[filterId]->stop();
     mPesFid = filterId;
 
-    mAmPesFilter = new AmPesFilter(filterId, pesDataCallback, this);
     mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
     mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTunerService->getTsInput(), false);
 
@@ -1100,12 +1099,17 @@ int Demux::recordTsPacketForPesData(int filterId) {
 
 void Demux::closePesRecordFilter() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
-    AmDmxDevice[mDemuxId]->AM_DMX_StopFilter(mPesRecordFid);
-    AmDmxDevice[mDemuxId]->AM_DMX_FreeFilter(mPesRecordFid);
+    if (AmDmxDevice[mDemuxId] != NULL) {
+        AmDmxDevice[mDemuxId]->AM_DMX_StopFilter(mPesRecordFid);
+        AmDmxDevice[mDemuxId]->AM_DMX_FreeFilter(mPesRecordFid);
+    }
     //mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(NULL, this);
-    mAmPesFilter->release();
-    mAmPesFilter = NULL;
+    if (mAmPesFilter != NULL) {
+        mAmPesFilter->release();
+        mAmPesFilter = NULL;
+    }
     mPesFid = -1;
+    mPesRecordFid = -1;
 }
 
 bool Demux::checkSoftDemuxForSubtitle() {
