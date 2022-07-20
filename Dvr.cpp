@@ -287,7 +287,7 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
     vector<uint8_t> dataOutputBuffer;
     dataOutputBuffer.resize(playbackPacketSize);
     // Dispatch the packet to the PID matching filter output buffer
-    for (int i = 0; i < size / playbackPacketSize; i++) {
+    for (int i = 0; mDvrThreadRunning && i < size / playbackPacketSize; i++) {
         if (!mDvrMQ->read(dataOutputBuffer.data(), playbackPacketSize)) {
             ALOGE("%s read ts from mDvrMQ failed!", __FUNCTION__);
             return false;
