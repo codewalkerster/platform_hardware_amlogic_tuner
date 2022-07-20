@@ -18,8 +18,11 @@
 
 #include "Lnb.h"
 #include "FrontendDevice.h"
+#include <cutils/properties.h>
 #include <utils/Log.h>
 #include <sys/ioctl.h>
+#include <errno.h>
+
 
 namespace android {
 namespace hardware {
@@ -27,6 +30,8 @@ namespace tv {
 namespace tuner {
 namespace V1_0 {
 namespace implementation {
+
+#define PROPERTY_DELAY_OF_TONE "vendor.tunerhal.tone.delay"
 
 Lnb::Lnb(int id, const sp<HwFeState>& hwFe, const char* name) {
     mId = id;
@@ -43,22 +48,16 @@ int Lnb::acquireLnbDevice() {
 }
 
 bool Lnb::prepareFeSystem(int fd) {
-    struct dvb_frontend_info feInfo;
-
     if (fd != -1) {
-        if (ioctl(fd, FE_GET_INFO, &feInfo) != -1) {
-            if (feInfo.type == FE_QPSK)
-                return true;
-            else {
-                struct dtv_property p =
-                    {.cmd = DTV_DELIVERY_SYSTEM,
-                     .u.data = SYS_DVBS
-                    };
-                struct dtv_properties props = {.num = 1, .props = &p};
-                if (ioctl(fd, FE_SET_PROPERTY, &props) != -1) {
-                    return true;
-                }
-            }
+        struct dtv_property p =
+            {.cmd = DTV_DELIVERY_SYSTEM,
+             .u.data = SYS_DVBS
+            };
+        struct dtv_properties props = {.num = 1, .props = &p};
+        if (ioctl(fd, FE_SET_PROPERTY, &props) != -1) {
+            return true;
+        } else {
+            ALOGD("%s fe set dvbs failed for %s ", __FUNCTION__, strerror(errno));
         }
     }
     return false;
@@ -91,8 +90,8 @@ Return<Result> Lnb::setVoltage(LnbVoltage voltage) {
             break;
     }
 
-    ALOGD("%s: %d(0:13,1:18,2:off)", __FUNCTION__, devVoltage);
     int devFd = acquireLnbDevice();
+    ALOGD("%s: %d(0:13,1:18,2:off)", __FUNCTION__, devVoltage);
     if (devFd != -1) {
         if (ioctl(devFd, FE_SET_VOLTAGE, devVoltage) == -1)
         {
@@ -116,6 +115,13 @@ Return<Result> Lnb::setTone(LnbTone tone) {
             ALOGE("%s failed.", __FUNCTION__);
             return Result::UNAVAILABLE;
         }
+    }
+
+    //Add a delay for some multi-switch devices
+    //This delay can be customized by property: vendor.tunerhal.tone.delay
+    int32_t tone_delay_ms = property_get_int32(PROPERTY_DELAY_OF_TONE, 20);
+    if (tone_delay_ms && devTone == SEC_TONE_OFF) {
+        usleep(tone_delay_ms * 1000);
     }
 
     return Result::SUCCESS;
@@ -176,14 +182,22 @@ Return<Result> Lnb::sendDiseqcMessage(const hidl_vec<uint8_t>& diseqcMessage) {
     }
 
     int devFd = acquireLnbDevice();
-    if (devFd == -1 || !prepareFeSystem(devFd)) return Result::UNAVAILABLE;
-
-    if (ioctl(devFd, FE_DISEQC_SEND_MASTER_CMD, &cmd) == -1)
-    {
-        ALOGE("%s failed.", __FUNCTION__);
+    ALOGD("%s check delivery system.", __FUNCTION__);
+    if (devFd == -1 || !prepareFeSystem(devFd)) {
+        if (devFd == -1)
+            ALOGE("%s failed for no device.", __FUNCTION__);
+        else
+            ALOGE("%s failed for set dvbs failed.", __FUNCTION__);
         return Result::UNAVAILABLE;
     }
 
+    if (ioctl(devFd, FE_DISEQC_SEND_MASTER_CMD, &cmd) == -1)
+    {
+        ALOGE("%s failed(%s)", __FUNCTION__, strerror(errno));
+        return Result::UNAVAILABLE;
+    }
+
+    ALOGD("%s ok.", __FUNCTION__);
     return Result::SUCCESS;
 }
 
