@@ -255,10 +255,12 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
     return Void();
 }
 
-Return<Result> Frontend::setLna(bool /* bEnable */) {
-    ALOGV("%s", __FUNCTION__);
+Return<Result> Frontend::setLna(bool bEnable) {
+    ALOGV("%s : %d", __FUNCTION__, bEnable);
 
-    return Result::SUCCESS;
+    int ret = mFeDev->setLna(bEnable);
+
+    return Result(ret);
 }
 
 Return<Result> Frontend::setLnb(uint32_t /* lnb */) {

@@ -436,6 +436,40 @@ int FrontendDevice::stopScan() {
     return 0;
 }
 
+int FrontendDevice::setLna(bool bEnable) {
+    if (mDev.type != FrontendType::DVBT && mDev.type != FrontendType::ISDBT) {
+        return INVALID_STATE;
+    }
+
+    if (!checkOpen(true)) return UNAVAILABLE;
+
+    struct dtv_properties props;
+    struct dtv_property cmds[16];
+    struct dtv_property *cmd = cmds;
+    int ncmd = 0;
+
+    cmd->cmd = DTV_DELIVERY_SYSTEM;
+    cmd->u.data = getFeDeliverySystem(mDev.type);
+    cmd ++;
+    ncmd ++;
+
+    cmd->cmd = DTV_LNA;
+    cmd->u.data = int(bEnable);
+    cmd ++;
+    ncmd ++;
+
+    props.num = ncmd;
+    props.props = cmds;
+
+    if (ioctl(mDev.devFd, FE_SET_PROPERTY, &props) == -1) {
+         ALOGE("setLna failed, (%s)", strerror(errno));
+         return UNAVAILABLE;
+    }
+
+    return SUCCESS;
+
+}
+
 status_t FrontendDevice::readyToRun() {
     ALOGI("%s with frontendType(%d), id(%d)", __FUNCTION__, mDev.type, mDev.id);
     return NO_ERROR;
