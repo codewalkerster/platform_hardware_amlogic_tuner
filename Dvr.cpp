@@ -363,7 +363,7 @@ bool Dvr::writeRecordFMQ(const std::vector<uint8_t>& data) {
         ALOGD("[Dvr] stops writing and wait for the client side flushing.");
         return true;
     }
-    if (mDvrMQ->write(data.data(), data.size())) {
+    if (mDvrMQ.get() != NULL && mDvrMQ->write(data.data(), data.size())) {
         mDvrEventFlag->wake(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY));
         maySendRecordStatusCallback();
         /*

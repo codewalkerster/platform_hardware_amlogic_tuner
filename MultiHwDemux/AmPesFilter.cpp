@@ -44,7 +44,6 @@ void AmPesFilter::postPesData() {
             ALOGE("PES packet length error");
             return;
         }
-
         mPesFilter->cb(mPesFilter->user_data, mPesFilter->fid, mPesFilter->pes_data, mPesFilter->pes_len);
     }
 }
@@ -70,8 +69,11 @@ void AmPesFilter::ts_payload(int pusi, uint8_t * data, int len) {
 
             mPesFilter->pes_cap = cap;
         }
-        memcpy(mPesFilter->pes_data + mPesFilter->pes_len, data, len);
-        mPesFilter->pes_len += len;
+        //ALOGD("ts_payload  peslen = %d, len = %d, size = %d", mPesFilter->pes_len, len, size);
+        if (size >= mPesFilter->pes_len + len) {
+            memcpy(mPesFilter->pes_data + mPesFilter->pes_len, data, len);
+            mPesFilter->pes_len += len;
+        }
     }
     if (mPesFilter != NULL && mPesFilter->pes_len >= 6) {
         int      len;
