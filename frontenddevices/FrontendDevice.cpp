@@ -449,7 +449,7 @@ int FrontendDevice::stopScan() {
 
 int FrontendDevice::setLna(bool bEnable) {
     if (mDev.type != FrontendType::DVBT && mDev.type != FrontendType::ISDBT) {
-        return INVALID_STATE;
+        return SUCCESS;
     }
 
     if (!checkOpen(true)) return UNAVAILABLE;
