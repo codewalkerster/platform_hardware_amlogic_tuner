@@ -132,7 +132,7 @@ public class MediaCodecPlayer {
                 startTunerPlayer();
                 break;
             default:
-                Log.d(TAG, "startPlayer unkown " + mPlayerMode);
+                Log.d(TAG, "startPlayer unknown " + mPlayerMode);
                 break;
         }
     }
@@ -147,7 +147,7 @@ public class MediaCodecPlayer {
                 stopTunerPlayer();
                 break;
             default:
-                Log.d(TAG, "stopPlayer unkown " + mPlayerMode);
+                Log.d(TAG, "stopPlayer unknown " + mPlayerMode);
                 break;
         }
     }
