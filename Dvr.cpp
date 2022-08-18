@@ -27,7 +27,7 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
-#define WAIT_TIMEOUT 3000000000
+#define WAIT_TIMEOUT 3000000000  //3s
 
 Dvr::Dvr() {
     mType = DvrType(0);
@@ -238,7 +238,7 @@ void Dvr::playbackThreadLoop() {
             }
             maySendPlaybackStatusCallback();
         }
-        usleep(100* 1000);
+        usleep(10 * 1000);
     }
 
     mDvrThreadRunning = false;
