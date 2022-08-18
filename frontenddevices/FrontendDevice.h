@@ -53,7 +53,10 @@ public:
     virtual FrontendModulationStatus getFeModulationStatus();
     virtual int  stopTune();
     virtual int  stopScan();
-    virtual int  setLna(bool bEnable);
+    int  setLna(bool bEnable);
+    bool getLna();
+    uint32_t  getLnbVoltage();
+    uint32_t  getSymbolRate();
 
     virtual int getFrontendSettings(FrontendSettings *settings, void* fe_params) {return -1;};
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
@@ -111,6 +114,7 @@ private:
     int getThreadState(void);
     void updateThreadState(int state);
     void requestTuneStop(void);
+    int getFeProp(struct dtv_properties *prop);
 
     int setFeSystem();
     int internalTune(const FrontendSettings & settings);

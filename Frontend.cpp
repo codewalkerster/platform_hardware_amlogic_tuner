@@ -169,7 +169,7 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::SYMBOL_RATE: {
-                status.symbolRate(0);
+                status.symbolRate(mFeDev->getSymbolRate());
                 break;
             }
             case FrontendStatusType::FEC: {
@@ -187,7 +187,7 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::LNB_VOLTAGE: {
-                status.lnbVoltage(LnbVoltage::VOLTAGE_5V);
+                status.lnbVoltage(static_cast<LnbVoltage>(mFeDev->getLnbVoltage()));
                 break;
             }
             case FrontendStatusType::PLP_ID: {
@@ -203,7 +203,7 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::LNA: {
-                status.isLnaOn(false);
+                status.isLnaOn(mFeDev->getLna());
                 break;
             }
             case FrontendStatusType::LAYER_ERROR: {
@@ -228,6 +228,7 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::ATSC3_PLP_INFO: {
+                //hardware not support now
                 vector<FrontendStatusAtsc3PlpInfo> v;
                 FrontendStatusAtsc3PlpInfo info1{
                         .plpId = 3,

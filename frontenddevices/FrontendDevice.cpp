@@ -361,6 +361,17 @@ uint16_t FrontendDevice::getSignalStrength() {
     return strength;
 }
 
+int FrontendDevice::getFeProp(struct dtv_properties *prop) {
+    if (!checkOpen(true)) return UNAVAILABLE;
+
+    if (ioctl(mDev.devFd, FE_GET_PROPERTY, prop) == -1) {
+        ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
+        return UNAVAILABLE;
+    }
+
+    return SUCCESS;
+}
+
 int FrontendDevice::setFeSystem() {
     ALOGI("%s, id(%d)", __FUNCTION__, mDev.id);
     if (mDev.devFd != -1) {
@@ -468,6 +479,66 @@ int FrontendDevice::setLna(bool bEnable) {
 
     return SUCCESS;
 
+}
+
+bool FrontendDevice::getLna() {
+    struct dtv_property p = {.cmd = DTV_LNA, .u.data = 0};
+    struct dtv_properties props = {.num = 1, .props = &p};
+
+    if (getFeProp(&props) != SUCCESS) {
+        return false;
+    }
+
+    ALOGD("getLna: %d", p.u.data);//driver will return -1
+    return (p.u.data == 1);
+}
+
+uint32_t FrontendDevice::getLnbVoltage() {
+    uint32_t lnbVoltage;
+    fe_sec_voltage_t devVoltage;
+
+    struct dtv_property p = {.cmd = DTV_VOLTAGE, .u.data = 0};
+    struct dtv_properties props = {.num = 1, .props = &p};
+
+    if (mDev.type != FrontendType::DVBS) {
+        return static_cast<uint32_t>(LnbVoltage::NONE);
+    }
+
+    if (getFeProp(&props) != SUCCESS) {
+        return static_cast<uint32_t>(LnbVoltage::NONE);
+    }
+
+    devVoltage = (fe_sec_voltage_t)(p.u.data);
+    switch (devVoltage) {
+        case SEC_VOLTAGE_13:
+            lnbVoltage = static_cast<uint32_t>(LnbVoltage::VOLTAGE_13V);
+            break;
+        case SEC_VOLTAGE_18:
+            lnbVoltage = static_cast<uint32_t>(LnbVoltage::VOLTAGE_18V);
+            break;
+        case SEC_VOLTAGE_OFF:
+            lnbVoltage = static_cast<uint32_t>(LnbVoltage::NONE);
+            break;
+    }
+
+    ALOGD("getLnbVoltage: %u(0:13,1:18,2:off)", devVoltage);
+    return lnbVoltage;
+}
+
+uint32_t FrontendDevice::getSymbolRate() {
+    struct dtv_property p = {.cmd = DTV_SYMBOL_RATE, .u.data = 0};
+    struct dtv_properties props = {.num = 1, .props = &p};
+
+    if (mDev.type != FrontendType::DVBC && mDev.type != FrontendType::DVBS) {
+        return 0;
+    }
+
+    if (getFeProp(&props) != SUCCESS) {
+        return 0;
+    }
+
+    ALOGD("getSymbolRate: %u", p.u.data);
+    return (p.u.data);
 }
 
 status_t FrontendDevice::readyToRun() {
