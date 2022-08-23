@@ -679,11 +679,13 @@ Filter::~Filter() {
     ALOGV("%s", __FUNCTION__);
 
     // temp implementation to flush the FMQ
-    int size = mFilterMQ->availableToRead();
-    int8_t* buffer = new int8_t[size];
-    mFilterMQ->read(buffer, size);
-    delete[] buffer;
-    mFilterStatus = DemuxFilterStatus::DATA_READY;
+    if (mFilterMQ.get() != NULL) {
+        int size = mFilterMQ->availableToRead();
+        int8_t* buffer = new int8_t[size];
+        mFilterMQ->read(buffer, size);
+        delete[] buffer;
+        mFilterStatus = DemuxFilterStatus::DATA_READY;
+    }
 
     return ::ndk::ScopedAStatus::ok();
 }

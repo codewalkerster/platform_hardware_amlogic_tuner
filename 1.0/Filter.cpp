@@ -503,12 +503,13 @@ Return<Result> Filter::stop() {
 Return<Result> Filter::flush() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
     // temp implementation to flush the FMQ
-    int size = mFilterMQ->availableToRead();
-    char* buffer = new char[size];
-    mFilterMQ->read((unsigned char*)&buffer[0], size);
-    delete[] buffer;
-    mFilterStatus = DemuxFilterStatus::DATA_READY;
-
+    if (mFilterMQ.get() != NULL) {
+        int size = mFilterMQ->availableToRead();
+        char* buffer = new char[size];
+        mFilterMQ->read((unsigned char*)&buffer[0], size);
+        delete[] buffer;
+        mFilterStatus = DemuxFilterStatus::DATA_READY;
+    }
     return Result::SUCCESS;
 }
 
