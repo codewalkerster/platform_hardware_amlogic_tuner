@@ -255,7 +255,7 @@ Return<void> Tuner::getFrontendIds(getFrontendIds_cb _hidl_cb) {
 
 Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _hidl_cb) {
     ALOGV("%s/%d", __FUNCTION__, __LINE__);
-
+    std::lock_guard<std::mutex> lock(mLock);
     if (frontendId >= mFrontendSize || (int)frontendId < 0) {
         ALOGW("[   WARN   ] Frontend with id %d isn't available", frontendId);
         _hidl_cb(Result::UNAVAILABLE, nullptr);
@@ -275,7 +275,8 @@ Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _h
 }
 
 Return<void> Tuner::openDemux(openDemux_cb _hidl_cb) {
-    ALOGV("%s/%d mDemuxes size = %d", __FUNCTION__, __LINE__, mDemuxes.size());
+    ALOGD("%s/%d mDemuxes size = %d", __FUNCTION__, __LINE__, mDemuxes.size());
+    std::lock_guard<std::mutex> lock(mLock);
     mLastUsedId = 0;
     std::map<uint32_t, sp<Demux>>::iterator it = mDemuxes.find(mLastUsedId);
     while (it != mDemuxes.end()) {
@@ -452,6 +453,8 @@ void Tuner::detachDescramblerFromDemux(uint32_t descramblerId,
 }
 
 void Tuner::removeDemux(uint32_t demuxId) {
+   std::lock_guard<std::mutex> lock(mLock);
+   ALOGD("%s/%d", __FUNCTION__, __LINE__);
    map<uint32_t, uint32_t>::iterator it;
    for (it = mFrontendToDemux.begin(); it != mFrontendToDemux.end(); it++) {
        if (it->second == demuxId) {
@@ -463,6 +466,7 @@ void Tuner::removeDemux(uint32_t demuxId) {
 }
 
 void Tuner::removeFrontend(uint32_t frontendId) {
+   std::lock_guard<std::mutex> lock(mLock);
    mFrontendToDemux.erase(frontendId);
 }
 

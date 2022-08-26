@@ -121,6 +121,7 @@ class Tuner : public ITuner {
     vector<sp<HwFeState>> mHwFes;
     uint32_t mTsInput = -1;
     uint32_t mDscMode = -1;
+    std::mutex mLock;
 };
 
 }  // namespace implementation

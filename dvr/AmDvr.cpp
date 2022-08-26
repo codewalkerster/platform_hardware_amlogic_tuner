@@ -184,6 +184,14 @@ AmDvr::AmDvr(uint32_t demuxId) {
 
 AmDvr::~AmDvr() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    if (mDvrDevice != NULL) {
+        delete mDvrDevice;
+        mDvrDevice = NULL;
+    }
+    if (mData != NULL) {
+        delete mData;
+        mData = NULL;
+    }
 }
 
 AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_input, bool bsetInput)
@@ -228,18 +236,10 @@ AM_ErrorCode_t AmDvr::AM_DVR_Close()
         if (mDvrDevice != NULL) {
             ret = dvr_close(mDvrDevice);
         }
-
-        if (mDvrDevice != NULL) {
-            delete mDvrDevice;
-            mDvrDevice = NULL;
-        }
-        if (mData != NULL) {
-            delete mData;
-            mData = NULL;
-        }
         pthread_mutex_destroy(&lock);
         pthread_cond_destroy(&cond);
     }
+
     opencnt--;
     return ret;
 }

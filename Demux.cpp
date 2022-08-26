@@ -747,7 +747,6 @@ Result Demux::removeFilter(uint32_t filterId) {
         mDvrPlayback->removePlaybackFilter(filterId);
     }
 
-    ALOGD("%s/%d mFilters size = %d", __FUNCTION__, __LINE__, mFilters.size());
     if (mFilters.size() == 0) {
         destroyMediaSync();
     }
@@ -905,7 +904,7 @@ void Demux::frontendInputThreadLoop() {
         return;
     }
 
-    while (mFrontendInputThreadRunning) {
+    while (mFrontendInputThreadRunning && mDvrPlayback->getDvrEventFlag() != NULL) {
         uint32_t efState = 0;
         status_t status = mDvrPlayback->getDvrEventFlag()->wait(
                 static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY), &efState, WAIT_TIMEOUT,
