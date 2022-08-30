@@ -106,6 +106,10 @@ void Demux::pesDataCallback(void* demux, int fid, uint8_t *pes, int len) {
 
 void Demux::postDvrData(void* demux) {
     Demux *dmxDev = (Demux*)demux;
+    if (dmxDev == NULL) {
+        ALOGD("get demux device is NULL in dvr thread");
+        return;
+    }
     int ret = -1;
     int cnt = -1;
     int size = 10 * 188;
@@ -303,6 +307,10 @@ void Demux::getPesRawData(uint32_t filterId) {
 void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     vector<uint8_t> tmpData;
     Demux *dmxDev = (Demux*)demux;
+    if (dmxDev == NULL) {
+        ALOGD("get demux device is NULL in demux thread");
+        return;
+    }
     ALOGV("[Demux] postData fid =%d esOutput:%d dev_no:%d", fid, esOutput, dmxDev->getAmDmxDevice()->dev_no);
 
 #ifdef TUNERHAL_DBG
@@ -561,11 +569,11 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     }
 
     ALOGD("%s/%d fid = %d", __FUNCTION__, __LINE__, fid);
+    std::lock_guard<std::mutex> lock(mFilterLock);
     if (mFilters[fid] != nullptr && mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty()) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
         DemuxFilterType type = mFilters[fid]->getFilterType();
         if (mMediaSync != nullptr) {
-            std::lock_guard<std::mutex> lock(mFilterLock);
             if (mAvSyncHwId == -1) {
                 mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
                 mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
@@ -579,7 +587,6 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
         // Return the lowest pcr filter id in the default implementation as the av sync id
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
         if (mMediaSync != nullptr) {
-            std::lock_guard<std::mutex> lock(mFilterLock);
             if (mAvSyncHwId == -1) {
                 mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
                 mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
@@ -870,7 +877,6 @@ void Demux::updateFilterOutput(uint16_t filterId, vector<uint8_t> data) {
 }
 
 uint16_t Demux::getFilterTpid(uint32_t filterId) {
-    std::lock_guard<std::mutex> lock(mFilterLock);
     if ( mFilters[filterId] != nullptr) {
         return mFilters[filterId]->getTpid();
     } else {
