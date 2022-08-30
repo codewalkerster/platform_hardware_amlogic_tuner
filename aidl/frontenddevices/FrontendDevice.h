@@ -59,11 +59,15 @@ public:
     bool getLna();
     LnbVoltage  getLnbVoltage();
     uint32_t  getSymbolRate();
+    uint32_t  getActualTerrHierarchy();
+    vector<int32_t> getMPLPIDList();
+    int32_t getCurrentMPlpId();
 
     virtual int getFrontendSettings(FrontendSettings *settings, void* fe_params) {return -1;};
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
     void setHwFe(const sp<HwFeState>& hwFe);
     int getFrontendId();
+    FrontendSettings* getFeSetting();
 
     typedef struct {
         uint32_t                  id;
@@ -107,6 +111,7 @@ private:
     fe_dev_t         mDev;
     bool             unsupportSystem;
     bool             mRequestTunningStop;
+    int32_t          mPlpId;
 
     virtual bool     threadLoop(void);
     virtual status_t readyToRun(void);

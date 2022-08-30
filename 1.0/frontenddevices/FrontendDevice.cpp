@@ -31,6 +31,7 @@
 #define FE_POLL_TIMEOUT_MS 50
 #define FE_STATE_TIMEOUT_MS 3000
 #define FE_SIGNAL_CHECK_INTERVAL_MS 200
+#define MAX_PLP_NUMBER 256
 
 namespace android {
 namespace hardware {
@@ -294,11 +295,11 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         cmd ++;
         ncmd ++;
 
-        if ((settings.dvbt().standard == FrontendDvbtStandard::T2)
-                && (settings.dvbt().plpMode == FrontendDvbtPlpMode::MANUAL)) {
+        if ((settings.dvbt().standard == FrontendDvbtStandard::T2)) {
             cmd->cmd = DTV_DVBT2_PLP_ID_LEGACY;
             cmd->u.data = settings.dvbt().plpId;
-
+            ALOGD("DTV DVBT2 plpId = %d", settings.dvbt().plpId);
+            mPlpId = settings.dvbt().plpId;
             cmd ++;
             ncmd ++;
         }
@@ -554,6 +555,63 @@ uint32_t FrontendDevice::getSymbolRate() {
     return (p.u.data);
 }
 
+uint32_t FrontendDevice::getActualTerrHierarchy() {
+    uint32_t retval = 0;
+    struct dtv_property cmd;
+    struct dtv_properties props;
+    uint8_t plp_ids[MAX_PLP_NUMBER];
+    memset(&cmd, 0, sizeof(struct dtv_property));
+    cmd.cmd = DTV_DVBT2_PLP_ID_LEGACY;
+    cmd.u.buffer.reserved1[1] = (~0U);
+    cmd.u.buffer.reserved2 = plp_ids;
+
+    props.num = 1;
+    props.props = &cmd;
+    if (getFeProp(&props) != SUCCESS) {
+        return 0;
+    }
+    retval = cmd.u.buffer.reserved1[0];
+    if (retval != 0) {
+        /* Return the value of the max PLP id */
+        retval--;
+    }
+    ALOGD("getActualTerrHierarchy: %d", retval);
+    return retval;
+}
+
+vector<uint8_t> FrontendDevice::getMPLPIDList() {
+    int retval = 0;
+    struct dtv_property cmd;
+    struct dtv_properties props;
+    uint8_t plp_ids[MAX_PLP_NUMBER];
+    vector<uint8_t> plpIds;
+    memset(&cmd, 0, sizeof(struct dtv_property));
+    cmd.cmd = DTV_DVBT2_PLP_ID_LEGACY;
+    cmd.u.buffer.reserved1[1] = MAX_PLP_NUMBER;
+    cmd.u.buffer.reserved2 = plp_ids;
+
+    props.num = 1;
+    props.props = &cmd;
+    if (getFeProp(&props) != SUCCESS) {
+        return plpIds;
+    }
+    retval = cmd.u.buffer.reserved1[0];
+    if (retval != 0) {
+        ALOGD("getMPLPIDList plpId num = %d", retval);
+        plpIds.resize(retval);
+        memcpy(plpIds.data(), plp_ids, retval * sizeof(uint8_t));
+    }
+
+    for (int i = 0; i < retval; i++) {
+        ALOGD("getMPLPIDList pipid[%d] = %d", i, plpIds[i]);
+    }
+    return plpIds;
+}
+
+uint8_t FrontendDevice::getCurrentMPlpId() {
+    return mPlpId;
+}
+
 status_t FrontendDevice::readyToRun() {
     ALOGI("%s with frontendType(%d), id(%d)", __FUNCTION__, mDev.type, mDev.id);
     return NO_ERROR;
@@ -689,6 +747,10 @@ void FrontendDevice::requestTuneStop(void) {
         }
     }
     mRequestTunningStop = false;
+}
+
+FrontendSettings* FrontendDevice::getFeSetting() {
+    return mDev.feSettings;
 }
 
 }  // namespace implementation

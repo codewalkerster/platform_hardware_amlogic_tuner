@@ -191,7 +191,7 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::PLP_ID: {
-                status.plpId(101);  // type uint8_t
+                status.plpId(mFeDev->getFeSetting()->dvbt().plpId);  // type uint8_t
                 break;
             }
             case FrontendStatusType::EWBS: {
@@ -290,6 +290,7 @@ bool Frontend::isLocked() {
 }
 
 void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
+    ALOGD("%s", __FUNCTION__);
     mIsLocked = isLocked;
     FrontendScanMessage msg;
     msg.isLocked(isLocked);
@@ -298,14 +299,35 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
     mCallback->onScanMessage(FrontendScanMessageType::FREQUENCY, msg);
     msg.isEnd(isEnd);
     mCallback->onScanMessage(FrontendScanMessageType::END, msg);
+    msg.symbolRates(mFeDev->getSymbolRate());
+    mCallback->onScanMessage(FrontendScanMessageType::SYMBOL_RATE, msg);
+
+    FrontendSettings* feSettings = mFeDev->getFeSetting();
+    if (feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&
+        feSettings->dvbt().standard == FrontendDvbtStandard::T2 && mIsLocked) {
+        msg.hierarchy((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());
+        mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
+        msg.plpIds(mFeDev->getMPLPIDList());
+        mCallback->onScanMessage(FrontendScanMessageType::PLP_IDS, msg);
+    }
 }
 
 void Frontend::sendEventCallBack(FrontendEventType locked) {
+    ALOGD("%s", __FUNCTION__);
     mCallback->onEvent(locked);
     if (locked == FrontendEventType::LOCKED) {
       mIsLocked = true;
     } else {
       mIsLocked = false;
+    }
+    FrontendSettings* feSettings = mFeDev->getFeSetting();
+    if (feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&
+        feSettings->dvbt().standard == FrontendDvbtStandard::T2 && mIsLocked) {
+        FrontendScanMessage msg;
+        msg.hierarchy((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());
+        mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
+        msg.plpIds(mFeDev->getMPLPIDList());
+        mCallback->onScanMessage(FrontendScanMessageType::PLP_IDS, msg);
     }
 }
 
