@@ -101,6 +101,7 @@ cc_defaults {
         "Tuner.cpp",
         "Lnb.cpp",
         "service.cpp",
+        "stbtrace.cpp",
     ],
 
     compile_multilib: "first",

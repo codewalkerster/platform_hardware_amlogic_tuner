@@ -23,6 +23,7 @@
 #include "linux/dvb/frontend.h"
 #include <semaphore.h>
 #include <utils/Thread.h>
+#include "stbtrace.h"
 
 using namespace std;
 
@@ -64,6 +65,10 @@ public:
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
     void setHwFe(const sp<HwFeState>& hwFe);
     int getFrontendId();
+    stbtrace_info mStbTrace_info;
+    struct timeval tune_start_time;
+    struct timeval tune_end_time;
+    struct timeval tune_elapsed_time;
     FrontendSettings* getFeSetting();
 
     typedef struct {
@@ -123,6 +128,7 @@ private:
     int setFeSystem();
     int internalTune(const FrontendSettings & settings);
     int blindTune(const FrontendSettings& settings);
+    timeval tuneStartTime();
 };
 
 

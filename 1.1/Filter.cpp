@@ -326,7 +326,8 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                         return result;
                     }
                 }
-                ALOGD("mFilterId = %llu, tableId = %d, dmxId = %d", mFilterId, param.filter.filter[0], mDemux->getDemuxId());
+                //mTableId = param.filter.filter[0];
+                ALOGD("mFilterId = %llu, mTableId = %d, dmxId = %d", mFilterId, param.filter.filter[0], mDemux->getDemuxId());
 
                 if (mDemux->getAmDmxDevice()->AM_DMX_SetSecFilter(mFilterId, &param) != 0) {
                     ALOGE("Failed to set Section Filter");
@@ -500,6 +501,13 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
 
 Return<Result> Filter::start() {
     ALOGD("%s/%d mFilterId:%llu", __FUNCTION__, __LINE__, mFilterId);
+    gettimeofday(&mTable_start, NULL);
+    /*if (mTableId == 0x0) {
+        ALOGD("start PAT filter in demuxId = %d", mDemux->getDemuxId());
+    } else if (mTableId == 0x02) {
+        ALOGD("start PMT filter in demuxId = %d", mDemux->getDemuxId());
+    }*/
+
     if (mType.mainType == DemuxFilterMainType::IP) {
         ALOGD("start Ip Filter");
         return Result::SUCCESS;
@@ -1972,6 +1980,10 @@ DemuxFilterType Filter::getFilterType() {
 
 bool Filter::isRawData() {
     return bIsRaw;
+}
+
+timeval Filter::getTableStartTime() {
+    return mTable_start;
 }
 
 }  // namespace implementation

@@ -27,6 +27,7 @@
 #include "Frontend.h"
 #include "Lnb.h"
 #include "HwFeState.h"
+#include "stbtrace.h"
 
 #define FE_POLL_TIMEOUT_MS 50
 #define FE_STATE_TIMEOUT_MS 3000
@@ -324,6 +325,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
     props.props = cmds;
     ALOGD("%s, frequency = %d", __FUNCTION__, mDev.tuneFreq);
 
+    gettimeofday(&tune_start_time, NULL);
     if (ioctl(mDev.devFd, FE_SET_PROPERTY, &props) == -1) {
          ALOGE("tune failed, (%s)", strerror(errno));
          sem_post(&threadSemaphore);
@@ -629,6 +631,7 @@ bool FrontendDevice::threadLoop() {
     uint32_t start_time;
     struct pollfd pfd;
     struct dvb_frontend_event fe_event;
+    memset(&mStbTrace_info, 0, sizeof(stbtrace_info));
 
     if (state == FrontendDevice::STATE_TUNE_START
        || state == FrontendDevice::STATE_SCAN_START
@@ -684,6 +687,12 @@ bool FrontendDevice::threadLoop() {
             } else if (state == STATE_TUNE_START) {
                 ALOGI("%s-(id:%d): send tune event.", __FUNCTION__, mDev.id);
                 mDev.islocked = locked;
+                gettimeofday(&tune_end_time, NULL);
+                timeval mTune_start_time = tuneStartTime();
+                timersub(&tune_end_time, &mTune_start_time, &tune_elapsed_time);
+                //ALOGD("%s locked elapsed time: mTune_elapsed = %ld ms", __FUNCTION__, tune_elapsed_time.tv_sec * 1000 + tune_elapsed_time.tv_usec / 1000);
+                snprintf(mStbTrace_info.module_name, sizeof(mStbTrace_info.module_name), "droidlogic_frontend");
+                tune_time_trace_log(&mStbTrace_info, "locked elapsed time",  tune_elapsed_time);
                 updateThreadState(FrontendDevice::STATE_TUNE_IDLE);
                 if (locked) {
                   mContext->sendEventCallBack(FrontendEventType::LOCKED);
@@ -751,6 +760,10 @@ void FrontendDevice::requestTuneStop(void) {
 
 FrontendSettings* FrontendDevice::getFeSetting() {
     return mDev.feSettings;
+}
+
+timeval FrontendDevice::tuneStartTime() {
+    return tune_start_time;
 }
 
 }  // namespace implementation

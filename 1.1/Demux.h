@@ -30,6 +30,7 @@
 #include "MediaSyncWrap.h"
 #include "AmDvr.h"
 #include "AmPesFilter.h"
+#include "stbtrace.h"
 
 using namespace std;
 
@@ -235,6 +236,9 @@ class Demux : public IDemux {
     int mPesRecordFid = -1;
     bool bSupportSoftDemuxForSubtitle = false;
     bool bCheckVts = true;
+    stbtrace_info mStbTrace_info;
+    struct timeval mTable_end;
+    struct timeval mTable_elapsed;
     //int mfd;
     vector<uint8_t> mScrambledCache;
     vector<uint8_t> mClearCache;
