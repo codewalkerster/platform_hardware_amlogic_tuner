@@ -30,6 +30,7 @@
 #include <string.h>
 #include <errno.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 /*add for config define for linux dvb *.h*/
 //#include <am_config.h>
 #include <AmLinuxDvb.h>
@@ -68,7 +69,11 @@ AM_ErrorCode_t AmLinuxDvb::dvb_open(AM_DMX_Device *dev) {
     snprintf(dmx->dev_name, sizeof(dmx->dev_name), "/dev/dvb0.demux%d", dev->dev_no);
     for (i = 0; i < DMX_FILTER_COUNT; i++) {
         dmx->fd[i] = -1;
-       }
+    }
+
+    dmx->evtfd = eventfd(0, 0);
+    if (dmx->evtfd == -1)
+        ALOGI("eventfd error");
     dev->drv_data = dmx;
     return AM_SUCCESS;
 }
@@ -79,6 +84,10 @@ AM_ErrorCode_t AmLinuxDvb::dvb_close(AM_DMX_Device *dev) {
     DVBDmx_t *dmx = (DVBDmx_t*)dev->drv_data;
     if (dmx != NULL) {
         free(dmx);
+    }
+    if (dmx->evtfd != -1) {
+        close(dmx->evtfd);
+        dmx->evtfd = -1;
     }
     return AM_SUCCESS;
 }
@@ -266,6 +275,13 @@ AM_ErrorCode_t AmLinuxDvb::dvb_poll(AM_DMX_Device *dev, AM_DMX_FilterMask_t *mas
         return AM_DMX_ERR_TIMEOUT;
     }
 
+    if (dmx->evtfd != -1) {
+        fds[cnt].events = POLLIN|POLLERR;
+        fds[cnt].fd     = dmx->evtfd;
+        fids[cnt] = i;
+        cnt++;
+    }
+
     ret = poll(fds, cnt, timeout);
     if (ret <= 0) {
         pollFailCount++;
@@ -281,9 +297,22 @@ AM_ErrorCode_t AmLinuxDvb::dvb_poll(AM_DMX_Device *dev, AM_DMX_FilterMask_t *mas
             pollFailCount = 0;
             //ALOGI("dvb_poll  i:%d cnt:%d fd:%d\n",i,cnt,fds[i].fd);
             AM_DMX_FILTER_MASK_SET(mask, fids[i]);
+            if (fds[i].fd == dmx->evtfd) {
+                int64_t data;
+                ret = read(dmx->evtfd, &data, sizeof(int64_t));
+                ALOGV("dvb_poll_exit read:%d\n", ret);
+            }
         }
     }
 
+    return AM_SUCCESS;
+}
+
+AM_ErrorCode_t AmLinuxDvb::dvb_poll_exit(AM_DMX_Device *dev) {
+    DVBDmx_t *dmx = (DVBDmx_t*)dev->drv_data;
+    int64_t pad = 1;
+    ALOGV("dvb_poll_exit");
+    write(dmx->evtfd, &pad, sizeof(pad));
     return AM_SUCCESS;
 }
 

@@ -23,7 +23,8 @@
 
 typedef struct {
     char dev_name[32];
-    int fd[DMX_FILTER_COUNT];
+    int  fd[DMX_FILTER_COUNT];
+    int  evtfd;
 } DVBDmx_t;
 
 class AmLinuxDvb : public RefBase {
@@ -43,6 +44,7 @@ public:
     AM_ErrorCode_t dvb_get_filter_mem_info(AM_DMX_Device *dev, dmx_filter_mem_info* mDmxFilterMemInfo);
     AM_ErrorCode_t dvb_set_buf_size(AM_DMX_Device *dev, AM_DMX_Filter *filter, int size);
     AM_ErrorCode_t dvb_poll(AM_DMX_Device *dev, AM_DMX_FilterMask_t *mask, int timeout);
+    AM_ErrorCode_t dvb_poll_exit(AM_DMX_Device *dev);
     AM_ErrorCode_t dvb_read(AM_DMX_Device *dev, AM_DMX_Filter *filter, uint8_t *buf, int *size,bool pollflag = true);
     AM_ErrorCode_t dvb_set_source(AM_DMX_Device *dev, dmx_input_source_t inputSource);
     AM_ErrorCode_t dvr_open(AM_DMX_Device *dev,dmx_input_source_t inputSource);

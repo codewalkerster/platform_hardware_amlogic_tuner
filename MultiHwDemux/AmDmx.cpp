@@ -541,6 +541,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_StartFilter(int fhandle) {
 
         if (ret == AM_SUCCESS) {
             filter->enable = true;
+            ret = drv->dvb_poll_exit(this);
         }
     }
 
