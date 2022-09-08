@@ -17,4 +17,7 @@ LOCAL_REQUIRED_MODULES := droidlogic.software.core
 LOCAL_JAVA_LIBRARIES := droidlogic.software.core
 LOCAL_USES_LIBRARIES := droidlogic.software.core
 endif
+LOCAL_LICENSE_KINDS := SPDX-license-identifier-Apache-2.0
+LOCAL_LICENSE_CONDITIONS := notice
+LOCAL_NOTICE_FILE := $(LOCAL_PATH)/../LICENSE
 include $(BUILD_PACKAGE)
