@@ -643,6 +643,8 @@ Return<Result> Demux::close() {
     mFilters.clear();
     mMapFilter.clear();
     mLastUsedFilterId = -1;
+    if (!mScrambledCache.empty())
+        mScrambledCache.clear();
 
     mDvrPlayback = nullptr;
     destroyMediaSync();
@@ -756,19 +758,35 @@ Result Demux::removeFilter(uint32_t filterId) {
 void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
 
     uint16_t pid = ((data[1] & 0x1f) << 8) | ((data[2] & 0xff));
+    uint8_t scb = data[3] >> 6;
     bool needWriteData = false;
+    bool isDscReady = false;
+
     if (DEBUG_DEMUX)
         ALOGD("%s/%d write to dvr %d size:%d pid:0x%x", __FUNCTION__, __LINE__, mDemuxId, data.size(), pid);
 
     {
         std::lock_guard<std::mutex> lock(mFilterLock);
+
+        if (scb != 0 && mDescramblers.size() == 0) {
+            ALOGV("dsc has not been created. scb:%d pid:0x%x", scb, pid);
+            return;
+        }
+
         for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
             if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
-                if (DEBUG_DEMUX)
-                    ALOGD("[Demux] found descrambler for pid: 0x%x", pid);
-                if (!descramblerIt->second->isDescramblerReady())
-                    ALOGV("[Demux] dsc isn't ready for pid: %d", pid);
-                continue;
+                isDscReady = descramblerIt->second->isDescramblerReady();
+                if (!isDscReady) {
+                    ALOGV("dsc is not ready. cache pid:0x%x cache size:%d", pid, mScrambledCache.size());
+                    if (isValidTsPacket(data))
+                        mScrambledCache.insert(mScrambledCache.end(), data.begin(), data.end());
+                    if (mScrambledCache.size() > MAX_SCRAMBLED_CACHE_SIZE) {
+                        ALOGW("reset scrambled cache! cache size:%d", mScrambledCache.size());
+                        vector<uint8_t>().swap(mScrambledCache);
+                    }
+                    return;
+                }
+                break;
             }
         }
 
@@ -782,6 +800,19 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
    }
 
     if (needWriteData) {
+        if (isDscReady && !mScrambledCache.empty()) {
+            if (isValidTsPacket(data))
+                mScrambledCache.insert(mScrambledCache.end(), data.begin(), data.end());
+            int writeRetry = 0;
+            ALOGD("write scrambled cache size:%d", mScrambledCache.size());
+            while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mScrambledCache.data(), mScrambledCache.size(), 300 * 1000) == -1 && writeRetry <= 100) {
+                usleep(100 * 1000);
+                writeRetry ++;
+                ALOGW("write scrambled cache retry: %d", writeRetry);
+            }
+            vector<uint8_t>().swap(mScrambledCache);
+            return;
+        }
         if (isValidTsPacket(data)) {
             while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
                 ALOGD("[Demux] wait for 100ms to write dvr device");

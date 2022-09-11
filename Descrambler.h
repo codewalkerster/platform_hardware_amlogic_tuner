@@ -52,6 +52,7 @@ namespace implementation {
 } while(0);
 
 #define TUNERHAL_DSC_TYPE_PROP "vendor.media.tunerhal.dsc_type"
+#define MAX_SCRAMBLED_CACHE_SIZE 30 * 1024 * 1024
 
 class Tuner;
 
