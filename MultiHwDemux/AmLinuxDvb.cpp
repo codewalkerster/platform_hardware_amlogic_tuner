@@ -258,8 +258,8 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_buf_size(AM_DMX_Device *dev, AM_DMX_Filter *f
 
 AM_ErrorCode_t AmLinuxDvb::dvb_poll(AM_DMX_Device *dev, AM_DMX_FilterMask_t *mask, int timeout) {
     DVBDmx_t *dmx = (DVBDmx_t*)dev->drv_data;
-    struct pollfd fds[DMX_FILTER_COUNT];
-    int fids[DMX_FILTER_COUNT];
+    struct pollfd fds[DMX_FILTER_COUNT + 1];
+    int fids[DMX_FILTER_COUNT + 1];
     int i, cnt = 0, ret;
 
     for (i = 0; i < DMX_FILTER_COUNT; i++) {
