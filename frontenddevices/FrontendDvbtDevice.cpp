@@ -97,12 +97,21 @@ int FrontendDvbtDevice::getFeDeliverySystem(FrontendType type) {
     if (type != FrontendType::DVBT) {
         fe_system = SYS_UNDEFINED;
     } else {
-       if (getFeDevice()->feSettings->dvbt().standard == FrontendDvbtStandard::T2)
-            fe_system = SYS_DVBT2;
-       else
+        if (NULL != getFeDevice()->feSettings) {
+            if (getFeDevice()->feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt) {
+                if (getFeDevice()->feSettings->dvbt().standard == FrontendDvbtStandard::T2)
+                    fe_system = SYS_DVBT2;
+                else
+                    fe_system = SYS_DVBT;
+            } else {
+                fe_system = SYS_DVBT;
+                ALOGW("%s: set default fe_system .\n", __FUNCTION__);
+            }
+        } else {
             fe_system = SYS_DVBT;
+            ALOGW("%s: not init feSettings set default fe_system\n", __FUNCTION__);
+        }
     }
-
     return (int)(fe_system);
 }
 
