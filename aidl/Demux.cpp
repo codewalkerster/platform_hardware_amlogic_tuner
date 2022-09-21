@@ -45,6 +45,7 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define PRIVATE_STREAM_1   0x1bd
 #define PRIVATE_STREAM_2   0x1bf
 #define SUPPORT_SOFTWARE_DEMUX_SUBTITLE "vendor.tunerhal.softwaredemux.subtitle"
+#define TUNERHAL_DUMP_TS_DATA "vendor.tf.dump.ts"
 
 static vector<int8_t> uint8DataToInt8Data(vector<uint8_t> uInt8Data) {
     vector<int8_t> int8Data;
@@ -131,6 +132,17 @@ void Demux::postDvrData(void* demux) {
             dmxDev->getAmPesFilter()->extractPesDataFromTsPacket(pid, dvrData.data(), cnt);
         }
     } else {
+       if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
+            FILE *filedump = fopen("/data/local/tmp/dump_dvr.ts", "ab+");
+            if (filedump != NULL) {
+                fwrite(dvrData.data(), 1, dvrData.size(), filedump);
+                fflush(filedump);
+                fclose(filedump);
+                filedump = NULL;
+            } else {
+               ALOGE("Open dump_dvr.ts failed!\n");
+            }
+        }
         dmxDev->sendFrontendInputToRecord(uint8DataToInt8Data(dvrData));
         dmxDev->startRecordFilterDispatcher();
     }
@@ -813,6 +825,17 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
                  ALOGD("[Demux] wait for 100ms to write dvr device");
                  usleep(100 * 1000);
              }
+            if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
+                FILE *filedump = fopen("/data/local/tmp/demux_inject.ts", "ab+");
+                if (filedump != NULL) {
+                    fwrite(data.data(), 1, data.size(), filedump);
+                    fflush(filedump);
+                    fclose(filedump);
+                    filedump = NULL;
+                } else {
+                   ALOGE("Open demux_inject.ts failed!\n");
+                }
+            }
          } else {
              ALOGD("[Demux] data[0] = 0x%x", data[0]);
          }

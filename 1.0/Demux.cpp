@@ -52,6 +52,8 @@ static int mDropTsPktNum = 0;
 static int mDumpEsData = 0;
 #endif
 
+#define TUNERHAL_DUMP_TS_DATA "vendor.tf.dump.ts"
+
 Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     mDemuxId = demuxId;
     mTunerService = tuner;
@@ -142,6 +144,17 @@ void Demux::postDvrData(void* demux) {
             dmxDev->getAmPesFilter()->extractPesDataFromTsPacket(pid, dvrData.data(), cnt);
         }
     } else {
+       if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
+            FILE *filedump = fopen("/data/local/tmp/dump_dvr.ts", "ab+");
+            if (filedump != NULL) {
+                fwrite(dvrData.data(), 1, dvrData.size(), filedump);
+                fflush(filedump);
+                fclose(filedump);
+                filedump = NULL;
+            } else {
+               ALOGE("Open dump_dvr.ts failed!\n");
+            }
+        }
         dmxDev->sendFrontendInputToRecord(dvrData);
         dmxDev->startRecordFilterDispatcher();
     }
@@ -755,6 +768,7 @@ Result Demux::removeFilter(uint32_t filterId) {
     return Result::SUCCESS;
 }
 
+
 void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
 
     uint16_t pid = ((data[1] & 0x1f) << 8) | ((data[2] & 0xff));
@@ -817,6 +831,17 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
             while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
                 ALOGD("[Demux] wait for 100ms to write dvr device");
                 usleep(100 * 1000);
+            }
+            if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
+                FILE *filedump = fopen("/data/local/tmp/demux_inject.ts", "ab+");
+                if (filedump != NULL) {
+                    fwrite(data.data(), 1, data.size(), filedump);
+                    fflush(filedump);
+                    fclose(filedump);
+                    filedump = NULL;
+                } else {
+                   ALOGE("Open demux_inject.ts failed!\n");
+                }
             }
         } else {
             ALOGD("[Demux] data[0] = 0x%x", data[0]);
