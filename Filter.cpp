@@ -406,9 +406,10 @@ Return<Result> Filter::configure(const DemuxFilterSettings &settings)
             pparam.input = DMX_IN_FRONTEND;
             pparam.output = DMX_OUT_TS_TAP;
             pparam.pes_type = DMX_PES_OTHER;
+            /*
             if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(mFilterId, 10 * 1024 * 1024) != 0) {
                 return Result::UNAVAILABLE;
-            }
+            }*/
             if (mDemux->getAmDmxDevice()->AM_DMX_SetPesFilter(mFilterId, &pparam) != 0) {
                 ALOGE("record AM_DMX_SetPesFilter");
                 return Result::UNAVAILABLE;

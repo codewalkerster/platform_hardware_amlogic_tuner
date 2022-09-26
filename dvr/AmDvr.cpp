@@ -38,6 +38,12 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
         ALOGD("cannot open \"%s\" (%s)", dev_name, strerror(errno));
         return AM_DVR_ERR_CANNOT_OPEN_DEV;
     }
+    int ret = ioctl(fd, DMX_SET_BUFFER_SIZE, 10 * 1024 * 1024);
+    if (ret == -1) {
+        ALOGE("set buffer size failed (%s)", strerror(errno));
+        return -1;
+
+    }
     //fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
     int ret_0 = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
     if (ret_0<0) {
