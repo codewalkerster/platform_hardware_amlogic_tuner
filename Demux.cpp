@@ -774,7 +774,7 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
 
         set<uint32_t>::iterator it;
         for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
-            if (pid == mFilters[*it]->getTpid()) {
+            if (mFilters[*it] != nullptr && pid == mFilters[*it]->getTpid()) {
                 needWriteData = true;
                 break;
             }
@@ -904,7 +904,7 @@ void Demux::frontendInputThreadLoop() {
         return;
     }
 
-    while (mFrontendInputThreadRunning && mDvrPlayback->getDvrEventFlag() != NULL) {
+    while (mFrontendInputThreadRunning && mDvrPlayback && mDvrPlayback->getDvrEventFlag() != nullptr) {
         uint32_t efState = 0;
         status_t status = mDvrPlayback->getDvrEventFlag()->wait(
                 static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY), &efState, WAIT_TIMEOUT,

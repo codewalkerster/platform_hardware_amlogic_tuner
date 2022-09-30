@@ -177,9 +177,9 @@ Return<Result> Dvr::close() {
     if (mDvrMQ.get() != NULL)
        mDvrMQ.reset();
 
-    if (mDvrEventFlag != NULL) {
+    if (mDvrEventFlag != nullptr) {
         EventFlag::deleteEventFlag(&mDvrEventFlag);
-        mDvrEventFlag = NULL;
+        mDvrEventFlag = nullptr;
     }
     return Result::SUCCESS;
 }

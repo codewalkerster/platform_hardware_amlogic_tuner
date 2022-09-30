@@ -533,9 +533,9 @@ void Filter::clear() {
     if (mFilterMQ.get() != NULL)
         mFilterMQ.reset();
 
-    if (mFilterEventFlag != NULL) {
+    if (mFilterEventFlag != nullptr) {
         EventFlag::deleteEventFlag(&mFilterEventFlag);
-        mFilterEventFlag = NULL;
+        mFilterEventFlag = nullptr;
     }
 
     mCallback = nullptr;
