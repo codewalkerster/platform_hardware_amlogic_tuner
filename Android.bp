@@ -175,3 +175,27 @@ cc_binary {
         },
     },
 }
+
+cc_binary {
+    name: "android.hardware.tv.tuner@1.0-service.droidlogic-lazy",
+    vintf_fragments: ["android.hardware.tv.tuner@1.0-service.droidlogic-lazy.xml"],
+    overrides: ["android.hardware.tv.tuner@1.0-service.droidlogic"],
+    defaults: ["tuner_service_droidlogic"],
+    init_rc: ["android.hardware.tv.tuner@1.0-service.droidlogic-lazy.rc"],
+    cflags: ["-DLAZY_SERVICE"],
+
+    arch: {
+        arm: {
+            enabled: true
+        },
+        arm64: {
+            enabled: false,
+        },
+        x86: {
+            enabled: false,
+        },
+        x86_64: {
+            enabled: false,
+        },
+    },
+}
