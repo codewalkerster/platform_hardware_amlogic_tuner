@@ -35,5 +35,9 @@ func globalDefaults(ctx android.BaseContext) ([]string) {
           cppflags = append(cppflags,"-DSUPPORT_TSD")
     }
 
+    if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohm_hybrid" {
+          fmt.Printf("TARGET_PRODUCT is ohmcas, define SUPPORT_TSD\n")
+          cppflags = append(cppflags,"-DSUPPORT_TSD")
+    }
     return cppflags
 }
