@@ -183,7 +183,7 @@
                     "dataFlowConfiguration"
                 "casSystemId": the cas system id to connect to the descrambler.
                 "provisionStr": the provision string to use with the cas plugin.
-                "sesstionPrivatData": the session private data used to open the cas session.
+                "sessionPrivateData": the session private data used to open the cas session.
         -->
         <descramblers>
             <descrambler id="DESCRAMBLER_0" casSystemId="63192"/>

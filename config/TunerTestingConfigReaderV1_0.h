@@ -371,8 +371,8 @@ struct TunerTestingConfigReader1_0 {
                 } else {
                     descramblerMap[id].provisionStr = PROVISION_STR;
                 }
-                if (descramblerConfig.hasSesstionPrivatData()) {
-                    auto privateData = descramblerConfig.getSesstionPrivatData();
+                if (descramblerConfig.hasSessionPrivateData()) {
+                    auto privateData = descramblerConfig.getSessionPrivateData();
                     int size = privateData.size();
                     descramblerMap[id].hidlPvtData.resize(size);
                     memcpy(descramblerMap[id].hidlPvtData.data(), privateData.data(), size);
