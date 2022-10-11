@@ -1,0 +1,201 @@
+// *** THIS PACKAGE HAS SPECIAL LICENSING CONDITIONS.  PLEASE
+//     CONSULT THE OWNERS AND opensource-licensing@google.com BEFORE
+//     DEPENDING ON IT IN YOUR PROJECT. ***
+package {
+    default_applicable_licenses: [
+        "hardware_amlogic_tuner_license",
+    ],
+}
+
+// Added automatically by a large-scale-change that took the approach of
+// 'apply every license found to every target'. While this makes sure we respect
+// every license restriction, it may not be entirely correct.
+//
+// e.g. GPL in an MIT project might only apply to the contrib/ directory.
+//
+// Please consider splitting the single license below into multiple licenses,
+// taking care not to lose any license_kind information, and overriding the
+// default license using the 'licenses: [...]' property on targets as needed.
+//
+// For unused files, consider creating a 'fileGroup' with "//visibility:private"
+// to attach the license to, and including a comment whether the files may be
+// used in the current project.
+// See: http://go/android-license-faq
+license {
+    name: "hardware_amlogic_tuner_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+        "SPDX-license-identifier-BSD",
+        "SPDX-license-identifier-FTL",
+        "SPDX-license-identifier-GPL",
+        "SPDX-license-identifier-LGPL-2.1",
+        "SPDX-license-identifier-MIT",
+        "legacy_by_exception_only", // by exception only
+        "legacy_notice",
+    ],
+    license_text: [
+        "LICENSE",
+    ],
+}
+
+bootstrap_go_package {
+    name: "soong-droidlogic_tuner_hal",
+    pkgPath: "android/soong/droidlogic_tuner_hal",
+    deps: [
+    "blueprint",
+    "blueprint-pathtools",
+    "soong",
+    "soong-android",
+    "soong-cc",
+    "soong-genrule",
+    ],
+    srcs: [
+        "droidlogic_tuner_hal.go",
+    ],
+    pluginFor: ["soong_build"],
+}
+
+droidlogic_tuner_hal_defaults {
+    name: "droidlogic_tuner_hal_defaults",
+}
+
+cc_defaults {
+    name: "tuner_service_droidlogic",
+    defaults: ["hidl_defaults", "droidlogic_tuner_hal_defaults"],
+    vendor: true,
+    relative_install_path: "hw",
+    srcs: [
+        "frontenddevices/FrontendDevice.cpp",
+        "frontenddevices/FrontendDvbtDevice.cpp",
+        "frontenddevices/FrontendAtscDevice.cpp",
+        "frontenddevices/FrontendAnalogDevice.cpp",
+        "frontenddevices/FrontendDvbcDevice.cpp",
+        "frontenddevices/FrontendDvbsDevice.cpp",
+        "frontenddevices/FrontendIsdbtDevice.cpp",
+        "frontenddevices/HwFeState.cpp",
+        //"utils/TSPMessage.cpp",
+        "utils/TSPLooper.cpp",
+        "utils/TSPLooperRoster.cpp",
+        //"utils/String8.cpp",
+        //"utils/String16.cpp",
+        //"utils/Unicode.cpp",
+        "utils/SharedBuffer.cpp",
+        "utils/VectorImpl.cpp",
+        "utils/Threads.cpp",
+        "utils/Timers.cpp",
+        "utils/FileSystemIo.cpp",
+        "MultiHwDemux/AmDmx.cpp",
+        "MultiHwDemux/AmLinuxDvb.cpp",
+        "MultiHwDemux/AmPesFilter.cpp",
+        "mediasync/MediaSyncWrap.cpp",
+        "dvr/AmDvr.cpp",
+        "dsc/dsc_dev.c",
+        "Filter.cpp",
+        "Frontend.cpp",
+        "Descrambler.cpp",
+        "Demux.cpp",
+        "Dvr.cpp",
+        "TimeFilter.cpp",
+        "Tuner.cpp",
+        "Lnb.cpp",
+        "service.cpp",
+    ],
+
+    compile_multilib: "first",
+
+    shared_libs: [
+        "android.hardware.tv.tuner@1.0",
+        "android.hidl.memory@1.0",
+        "libcutils",
+        "libfmq",
+        "libhidlbase",
+        "libhidlmemory",
+        "libion",
+        "liblog",
+        "libstagefright_foundation",
+        "libutils",
+        "libcrypto",
+        "libsystemcontrolservice",
+        "vendor.amlogic.hardware.systemcontrol@1.0",
+        "vendor.amlogic.hardware.systemcontrol@1.1",
+        "libjsoncpp",
+        "libdsm",
+        //"libsecmem",
+        "libmediahal_mediasync",
+   ],
+    header_libs: [
+        "media_plugin_headers",
+    ],
+
+    local_include_dirs: [
+        "MultiHwDemux",
+        "mediasync",
+        "dvr",
+        "dsc",
+        "utils",
+    ],
+
+    cflags: [
+        "-Wno-unused-parameter",
+        "-Wall",
+        "-Wno-unused-function",
+        "-Wno-deprecated-declarations",
+        "-Wno-deprecated-register",
+    ],
+
+    cppflags: [
+       //"-DTUNERHAL_DBG",
+    ],
+    include_dirs: [
+       "hardware/amlogic/tuner/1.0/frontenddevices",
+        "vendor/amlogic/common/frameworks/services/systemcontrol",
+        "vendor/amlogic/common/frameworks/services/systemcontrol/PQ/include",
+    ],
+}
+
+cc_binary {
+    name: "android.hardware.tv.tuner@1.0-service.droidlogic",
+    vintf_fragments: ["android.hardware.tv.tuner@1.0-service.droidlogic.xml"],
+    defaults: ["tuner_service_droidlogic"],
+    init_rc: ["android.hardware.tv.tuner@1.0-service.droidlogic.rc"],
+
+    arch: {
+        arm: {
+            enabled: true
+        },
+        arm64: {
+            enabled: false,
+        },
+        x86: {
+            enabled: false,
+        },
+        x86_64: {
+            enabled: false,
+        },
+    },
+}
+
+cc_binary {
+    name: "android.hardware.tv.tuner@1.0-service.droidlogic-lazy",
+    vintf_fragments: ["android.hardware.tv.tuner@1.0-service.droidlogic-lazy.xml"],
+    overrides: ["android.hardware.tv.tuner@1.0-service.droidlogic"],
+    defaults: ["tuner_service_droidlogic"],
+    init_rc: ["android.hardware.tv.tuner@1.0-service.droidlogic-lazy.rc"],
+    cflags: ["-DLAZY_SERVICE"],
+
+    arch: {
+        arm: {
+            enabled: true
+        },
+        arm64: {
+            enabled: false,
+        },
+        x86: {
+            enabled: false,
+        },
+        x86_64: {
+            enabled: false,
+        },
+    },
+}

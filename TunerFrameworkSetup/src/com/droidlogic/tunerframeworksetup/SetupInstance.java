@@ -1121,7 +1121,9 @@ public class SetupInstance implements OnTuneEventListener,
                     TsRecordEvent tsRecEvent = (TsRecordEvent) event;
                     Log.d(TAG, "Receive tsRecord data, size=" + tsRecEvent.getDataLength());
                     long datalength = tsRecEvent.getDataLength();
-                    mDvrRecorder.write(datalength);
+                    if (mDvrRecorder != null) {
+                        mDvrRecorder.write(datalength);
+                    }
                 }
             }
         }
@@ -1768,6 +1770,7 @@ public class SetupInstance implements OnTuneEventListener,
     }
 
     private void parseSectionData(byte[] data) {
+        if (data.length == 0) return;
         int mTableId = data[0];
         int mSectionLen = ((((int)(data[1])) & 0x03 << 8) & 0xff) + (((int)data[2]) & 0xff);
         if (mDebugTsSection) {
