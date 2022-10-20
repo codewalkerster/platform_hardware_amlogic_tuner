@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".setup.FragmentDvbcSetup">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_marginTop="10dp"
+            android:text="@string/dvbc"
+            android:textSize="36sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/frequency_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="20dp"
+            android:text="@string/frequency"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/title" />
+
+        <EditText
+            android:id="@+id/frequency_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="30dp"
+            android:ems="10"
+            android:inputType="number"
+            android:textSize="24sp"
+            app:layout_constraintStart_toEndOf="@id/frequency_text"
+            app:layout_constraintTop_toTopOf="@id/frequency_text" />
+
+        <TextView
+            android:id="@+id/symbol_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="50dp"
+            android:text="@string/symbol"
+            app:layout_constraintStart_toStartOf="@id/frequency_text"
+            app:layout_constraintTop_toBottomOf="@id/frequency_text" />
+
+        <EditText
+            android:id="@+id/symbol_value"
+            android:layout_width="100dp"
+            android:layout_height="wrap_content"
+            android:ems="10"
+            android:hint="Auto"
+            android:inputType="number"
+            app:layout_constraintStart_toStartOf="@id/frequency_value"
+            app:layout_constraintTop_toTopOf="@id/symbol_text" />
+
+        <TextView
+            android:id="@+id/qam_mode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="50dp"
+            android:text="@string/qam_mode"
+            app:layout_constraintStart_toStartOf="@id/frequency_text"
+            app:layout_constraintTop_toBottomOf="@id/symbol_value" />
+
+        <Spinner
+            android:id="@+id/qam_spinner"
+            android:layout_width="100dp"
+            android:layout_height="wrap_content"
+            app:layout_constraintStart_toStartOf="@id/symbol_value"
+            app:layout_constraintTop_toTopOf="@id/qam_mode" />
+
+        <Button
+            android:id="@+id/button_start"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="35dp"
+            android:layout_marginBottom="35dp"
+            android:text="start"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</FrameLayout>

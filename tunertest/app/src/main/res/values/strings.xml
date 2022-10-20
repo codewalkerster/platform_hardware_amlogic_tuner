@@ -1,0 +1,43 @@
+<resources>
+    <string name="app_name">minituner</string>
+    <string name="dummy_button">Dummy Button</string>
+    <string name="dummy_content">DUMMY\nCONTENT</string>
+
+    <string name="dvbt">DVBT</string>
+    <string name="dvbc">DVBC</string>
+    <string name="dvbs">DVBS</string>
+    <string name="isdbt">ISDBT</string>
+    <string name="atsc">ATSC</string>
+    <string name="dvbt_standard">Standard</string>
+    <string name="dvbt_2">DvbT2</string>
+    <string name="frequency">Frequency</string>
+    <string name="bandwidth">Band Width</string>
+    <string name="symbol">Symbols</string>
+    <string name="transmission_mode">Mode</string>
+    <string name="qam_mode">Qam Mode</string>
+    <string name="modulation">Modulation</string>
+
+    <string name="play_mode_live">Live</string>
+    <string name="play_mode_playback">Playback</string>
+    <string name="play_mode_recorder">Rec</string>
+    <string name="playback_ready">Dvr Ready</string>
+
+    <string name="scan_status">Status</string>
+    <string name="locked_text">Locked</string>
+    <string name="scanned_channels">Channels</string>
+    <string name="strength">Strength</string>
+    <string name="quality">Quality</string>
+    <string name="plpId_num">Plp numbers</string>
+
+    <string name="satellite">Satellite</string>
+    <string name="lnb">Lnb</string>
+    <string name="satcr">Unicable</string>
+    <string name="ub_slot">Slot</string>
+    <string name="dvbs_2">DvbS2</string>
+    <string name="default_sate_symbol">27500</string>
+
+    <string name="title_activity_fullscreen">FullscreenActivity</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+</resources>
