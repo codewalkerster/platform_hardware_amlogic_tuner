@@ -85,6 +85,7 @@ cc_defaults {
         "utils/Threads.cpp",
         "utils/Timers.cpp",
         "utils/FileSystemIo.cpp",
+        "utils/stbtrace.cpp",
         "MultiHwDemux/AmDmx.cpp",
         "MultiHwDemux/AmLinuxDvb.cpp",
         "MultiHwDemux/AmPesFilter.cpp",
@@ -101,7 +102,6 @@ cc_defaults {
         "Tuner.cpp",
         "Lnb.cpp",
         "service.cpp",
-        "stbtrace.cpp",
     ],
 
     compile_multilib: "first",

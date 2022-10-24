@@ -20,7 +20,7 @@
 #include <cutils/properties.h>
 #include "Demux.h"
 #include "FileSystemIo.h"
-#include "stbtrace.h"
+#include "utils/stbtrace.h"
 
 namespace android {
 namespace hardware {
@@ -299,7 +299,7 @@ void Demux::getSectionData(uint64_t filterId) {
                 snprintf(ch, 3, "%02x", sectionData[i]);
                 strData += ch;
             }
-            ALOGD("dump bytes: %s", strData.c_str());
+            ALOGV("dump bytes: %s", strData.c_str());
         }
         if (tableId == 0x2) {
             //ALOGD("received PMT table tableId = %d, fid = %llu", tableId, filterId);

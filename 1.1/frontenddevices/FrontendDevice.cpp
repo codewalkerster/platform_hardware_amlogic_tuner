@@ -27,7 +27,7 @@
 #include "Frontend.h"
 #include "Lnb.h"
 #include "HwFeState.h"
-#include "stbtrace.h"
+#include "utils/stbtrace.h"
 
 #define FE_POLL_TIMEOUT_MS 50
 #define FE_STATE_TIMEOUT_MS 3000

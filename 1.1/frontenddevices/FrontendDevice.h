@@ -23,7 +23,7 @@
 #include "linux/dvb/frontend.h"
 #include <semaphore.h>
 #include <utils/Thread.h>
-#include "stbtrace.h"
+#include "utils/stbtrace.h"
 
 using namespace std;
 

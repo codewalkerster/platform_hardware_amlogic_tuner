@@ -30,7 +30,7 @@
 #include "MediaSyncWrap.h"
 #include "AmDvr.h"
 #include "AmPesFilter.h"
-#include "stbtrace.h"
+#include "utils/stbtrace.h"
 
 using namespace std;
 
