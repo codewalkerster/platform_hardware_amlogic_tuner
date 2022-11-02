@@ -17,6 +17,8 @@
 #define LOG_TAG "android.hardware.tv.tuner@1.0-Filter"
 
 #include "Filter.h"
+#include "Dmabufwrapper.h"
+//#include <BufferAllocator/BufferAllocator.h>
 #include <utils/Log.h>
 #include <cutils/properties.h>
 
@@ -37,6 +39,10 @@ namespace implementation {
 #define NDS_EMM_DISABLE_TID 0x00U
 #define NDS_EMM_ENABLE_TID 0x01U
 #define NDS_EMM_ENABLE_TID_NDS 0x02U
+
+#define DEFAULT_PAGE_SIZE     4096
+
+static int gFilterToken = 0;
 
 static void dhexdump(vector<uint8_t> data, int data_size)
 {
@@ -191,6 +197,9 @@ Filter::Filter() {
     mKeepFetchingDataFromFrontend = false;
     mIonFd = 0;
     bIsRaw = false;
+    mEnableDmaBuf = dmabuf_manager_support();
+    mFilterFd = -1;
+    mFilterToken = 0;
 }
 
 Filter::Filter(DemuxFilterType type, uint32_t filterId, uint32_t bufferSize,
@@ -215,6 +224,9 @@ Filter::Filter(DemuxFilterType type, uint32_t filterId, uint32_t bufferSize,
     mVideoFilterSize *= 1024 * 1024;
     ALOGD("%s mFilterEventSize:%dMB mVideoFilterSize:%dMB", __FUNCTION__, mFilterEventSize/1024/1024, mVideoFilterSize/1024/1024);
 #endif
+    mEnableDmaBuf = dmabuf_manager_support();
+    mFilterFd = -1;
+    mFilterToken = 0;
 
     switch (mType.mainType) {
         case DemuxFilterMainType::TS:
@@ -375,6 +387,12 @@ Return<Result> Filter::configure(const DemuxFilterSettings &settings)
                 vparam.output = DMX_OUT_TAP;
                 vparam.flags = 0;
                 vparam.flags |= DMX_ES_OUTPUT;
+                if (mEnableDmaBuf) {
+                    vparam.flags |= DMX_OUTPUT_RAW_MODE;
+                }
+                //if (settings.ts().filterSettings.av().isSecureMemory) {
+                //    vparam.flags |= DMX_MEM_SEC_LEVEL2;
+                //}
 #ifdef TUNERHAL_DBG
                 buffSize = mVideoFilterSize;
 #else
@@ -469,7 +487,12 @@ Return<Result> Filter::configure(const DemuxFilterSettings &settings)
 }
 
 Return<Result> Filter::start() {
-    ALOGD("%s/%d mFilterId:%d", __FUNCTION__, __LINE__, mFilterId);
+    if (mEnableDmaBuf && mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.tsFilterType() == DemuxTsFilterType::VIDEO) {
+        mDemux->getAmDmxDevice()->AM_DMX_GetFilterFd(mFilterId, &mFilterFd);
+        mFilterToken = ++gFilterToken;
+        dmabuf_wrapper_setfilterinfo(mFilterToken, mFilterFd, 0);
+    }
     if (mDemux->getAmDmxDevice()
         ->AM_DMX_StartFilter(mFilterId) != 0) {
         if (mIsMediaFilter && mFilterSettings.ts().filterSettings.av().isPassthrough) {
@@ -486,6 +509,11 @@ Return<Result> Filter::start() {
 
 Return<Result> Filter::stop() {
     ALOGD("%s/%d mFilterId:%d", __FUNCTION__, __LINE__, mFilterId);
+    if (mEnableDmaBuf && mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.tsFilterType() == DemuxTsFilterType::VIDEO) {
+        dmabuf_wrapper_setfilterinfo(mFilterToken, mFilterFd, 1);
+        mFilterToken = 0;
+    }
     if (mFilterId > DMX_FILTER_COUNT) {
         mFilterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
     }
@@ -514,16 +542,29 @@ Return<Result> Filter::releaseAvHandle(const hidl_handle& /*avMemory*/, uint64_t
     if (mDataId2Avfd.find(avDataId) == mDataId2Avfd.end()) {
         return Result::INVALID_ARGUMENT;
     }
-
+    std::lock_guard<std::mutex> lock(mFilterEventLock);
     ::close(mDataId2Avfd[avDataId]);
+    mDataId2Avfd.erase(avDataId);
     return Result::SUCCESS;
 }
 
 Return<Result> Filter::close() {
     ALOGD("%s/%d mFilterId = %d", __FUNCTION__, __LINE__, mFilterId);
+
+    Return<Result> res = Result::SUCCESS;
     mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
     mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
-    return mDemux->removeFilter(mFilterId);
+    res = mDemux->removeFilter(mFilterId);
+
+    std::lock_guard<std::mutex> lock(mFilterEventLock);
+    auto it = mDataId2Avfd.begin();
+    while (it != mDataId2Avfd.end()) {
+        ::close(it->second);
+        it++;
+    }
+    mDataId2Avfd.clear();
+    mFilterFd = -1;
+    return res;
 }
 
 
@@ -680,7 +721,6 @@ void Filter::freeAvHandle() {
         return;
     }
     for (int i = 0; i < mFilterEvent.events.size(); i++) {
-        ::close(mFilterEvent.events[i].media().avMemory.getNativeHandle()->data[0]);
         native_handle_close(mFilterEvent.events[i].media().avMemory.getNativeHandle());
     }
 }
@@ -886,7 +926,7 @@ bool Filter::postFilteredEmmSection(vector<uint8_t> data)
     return addBuf;
 }
 
-void Filter::updateFilterOutput(vector<uint8_t> data)
+void Filter::updateFilterOutput(vector<uint8_t> data, void *priv)
 {
     std::lock_guard<std::mutex> lock(mFilterOutputLock);
 
@@ -925,6 +965,8 @@ void Filter::updateFilterOutput(vector<uint8_t> data)
     }
 
     mFilterOutput.insert(mFilterOutput.end(), data.begin(), data.end());
+    if (priv)
+        mEsPrivateHeader = priv;
 }
 
 void Filter::updateRecordOutput(vector<uint8_t> data) {
@@ -1119,106 +1161,96 @@ Result Filter::startMediaFilterHandler() {
         return Result::SUCCESS;
     }
 
-#if 1
-    int av_fd = createAvIonFd(mFilterOutput.size());
-    if (av_fd == -1) {
-       return Result::UNKNOWN_ERROR;
-    }
-    // copy the filtered data to the buffer
-    uint8_t* avBuffer = getIonBuffer(av_fd, mFilterOutput.size());
-    if (avBuffer == NULL) {
-       return Result::UNKNOWN_ERROR;
-    }
-    ALOGD("%s/%d mFilterId:%d mFilterEvent size:%d", __FUNCTION__, __LINE__,
-    mFilterId, mFilterOutput.size());
-    memcpy(avBuffer, mFilterOutput.data(), mFilterOutput.size() * sizeof(uint8_t));
-
-    native_handle_t* nativeHandle = createNativeHandle(av_fd);
-    if (nativeHandle == NULL) {
-       releaseIonBuffer(avBuffer, mFilterOutput.size());
-       return Result::UNKNOWN_ERROR;
-    }
-    hidl_handle handle;
-    handle.setTo(nativeHandle, /*shouldOwn=*/true);
-
-    // Create a dataId and add a <dataId, av_fd> pair into the dataId2Avfd map
-    uint64_t dataId = mLastUsedDataId++ /*createdUID*/;
-    mDataId2Avfd[dataId] = dup(av_fd);
-
-    // Create mediaEvent and send callback
-    DemuxFilterMediaEvent mediaEvent;
-    mediaEvent = {
-           .avMemory = std::move(handle),
-           .dataLength = static_cast<uint32_t>(mFilterOutput.size()),
-           .avDataId = dataId,
-    };
-    if (mType.subType.tsFilterType() == DemuxTsFilterType::AUDIO) {
-        AudioExtraMetaData audio;
-        mediaEvent.extraMetaData.audio(audio);
-    }
-    int size = mFilterEvent.events.size();
-    mFilterEvent.events.resize(size + 1);
-    mFilterEvent.events[size].media(mediaEvent);
-    fillDataToDecoder();
-
-    // Clear and log
-    releaseIonBuffer(avBuffer, mFilterOutput.size());
-    mFilterOutput.clear();
-    mAvBufferCopyCount = 0;
-    ::close(av_fd);
-    if (DEBUG_FILTER) {
-       ALOGD("[Filter] assembled av data length %d", mediaEvent.dataLength);
-    }
-
-
-#else
-    for (int i = 0; i < mFilterOutput.size(); i += 188) {
-        if (mPesSizeLeft == 0) {
-            uint32_t prefix = (mFilterOutput[i + 4] << 16) | (mFilterOutput[i + 5] << 8) |
-                              mFilterOutput[i + 6];
-            if (DEBUG_FILTER) {
-                ALOGD("[Filter] prefix %d", prefix);
-            }
-            if (prefix == 0x000001) {
-                // TODO handle mulptiple Pes filters
-                mPesSizeLeft = (mFilterOutput[i + 8] << 8) | mFilterOutput[i + 9];
-                mPesSizeLeft += 6;
-                if (DEBUG_FILTER) {
-                    ALOGD("[Filter] pes data length %d", mPesSizeLeft);
+    if (mEnableDmaBuf && mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.tsFilterType() == DemuxTsFilterType::VIDEO) {
+        int esNum = mFilterOutput.size() / sizeof(struct dmx_sec_es_data);
+        native_handle_t* nativeHandle = NULL;
+        hidl_handle handle;
+        struct dmx_sec_es_data es;
+        int offset = 0;
+        uint32_t dataoffset = 0;
+        int av_fd = -1;
+        int es_size = 0;
+        uint64_t dataId = 0;
+        int eventsize = 0;
+        uint64_t pts = 0;
+        bool isPtsPresent = false;
+        bool isSecureMemory = false;
+        if (esNum > 0) {
+            for (int i = 0; i < esNum; i++) {
+                pts = 0;
+                isPtsPresent = false;
+                memcpy(&es, mFilterOutput.data() + offset, sizeof(es));
+                if (es.data_end >= es.data_start)
+                    es_size = es.data_end - es.data_start;
+                else
+                    es_size = es.buf_end - es.data_start + es.data_end - es.buf_start;
+                dataoffset = (es.data_start % DEFAULT_PAGE_SIZE);
+                es.data_start -= dataoffset;
+                if (es.pts_dts_flag & 0x2) {
+                    pts = es.pts;
+                    isPtsPresent = true;
                 }
-            } else {
-                continue;
+                av_fd = dmabuf_wrapper_export((void *)&es, mLastUsedDataId, mFilterToken);
+                if (av_fd < 0) {
+                    ALOGE("%s/%d Export dma buf failed %d", __FUNCTION__, __LINE__, mFilterId);
+                    return Result::UNKNOWN_ERROR;
+                }
+                nativeHandle = createNativeHandle(av_fd);
+                if (nativeHandle == NULL) {
+                  ::close(av_fd);
+                  return Result::UNKNOWN_ERROR;
+               }
+               handle.setTo(nativeHandle, true);
+               dataId = mLastUsedDataId++;
+               mDataId2Avfd[dataId] = dup(av_fd);
+               DemuxFilterMediaEvent mediaEvent;
+               mediaEvent = {
+                   .avMemory = std::move(handle),
+                   .dataLength = static_cast<uint32_t>(es_size),
+                   .avDataId = dataId,
+                   .offset = dataoffset,
+                   .isPtsPresent = isPtsPresent,
+                   .pts = pts,
+                   .isSecureMemory = isSecureMemory,
+               };
+               eventsize = mFilterEvent.events.size();
+               mFilterEvent.events.resize(eventsize + 1);
+               mFilterEvent.events[eventsize].media(mediaEvent);
+               offset += sizeof(es);
+               ::close(av_fd);
             }
+            fillDataToDecoder();
+            mFilterOutput.clear();
         }
-
-        int endPoint = min(184, mPesSizeLeft);
-        // append data and check size
-        vector<uint8_t>::const_iterator first = mFilterOutput.begin() + i + 4;
-        vector<uint8_t>::const_iterator last = mFilterOutput.begin() + i + 4 + endPoint;
-        mPesOutput.insert(mPesOutput.end(), first, last);
-        // size does not match then continue
-        mPesSizeLeft -= endPoint;
-        if (DEBUG_FILTER) {
-            ALOGD("[Filter] pes data left %d", mPesSizeLeft);
-        }
-        if (mPesSizeLeft > 0 || mAvBufferCopyCount++ < 10) {
-            continue;
-        }
-
-        int av_fd = createAvIonFd(mPesOutput.size());
+    } else {
+        uint64_t pts = 0;
+        bool isPtsPresent = false;
+        dmx_non_sec_es_header* esHeader = NULL;
+        int av_fd = createAvIonFd(mFilterOutput.size());
         if (av_fd == -1) {
-            return Result::UNKNOWN_ERROR;
+           return Result::UNKNOWN_ERROR;
         }
         // copy the filtered data to the buffer
-        uint8_t* avBuffer = getIonBuffer(av_fd, mPesOutput.size());
+        uint8_t* avBuffer = getIonBuffer(av_fd, mFilterOutput.size());
         if (avBuffer == NULL) {
-            return Result::UNKNOWN_ERROR;
+           return Result::UNKNOWN_ERROR;
         }
-        memcpy(avBuffer, mPesOutput.data(), mPesOutput.size() * sizeof(uint8_t));
-
+        memcpy(avBuffer, mFilterOutput.data(), mFilterOutput.size() * sizeof(uint8_t));
+        if (mEsPrivateHeader) {
+            esHeader = (dmx_non_sec_es_header*)mEsPrivateHeader;
+            if (esHeader->pts_dts_flag & 0x2) {
+                pts = esHeader->pts;
+                isPtsPresent = true;
+            }
+            mEsPrivateHeader = NULL;
+        }
+        ALOGV("%s/%d mFilterId:%d mFilterEvent size:%d isPtsPresent is %d pts is %lld av_fd is %d", __FUNCTION__, __LINE__,
+            mFilterId, mFilterOutput.size(), isPtsPresent, pts, av_fd);
         native_handle_t* nativeHandle = createNativeHandle(av_fd);
         if (nativeHandle == NULL) {
-            return Result::UNKNOWN_ERROR;
+           releaseIonBuffer(avBuffer, mFilterOutput.size());
+           return Result::UNKNOWN_ERROR;
         }
         hidl_handle handle;
         handle.setTo(nativeHandle, /*shouldOwn=*/true);
@@ -1230,25 +1262,32 @@ Result Filter::startMediaFilterHandler() {
         // Create mediaEvent and send callback
         DemuxFilterMediaEvent mediaEvent;
         mediaEvent = {
-                .avMemory = std::move(handle),
-                .dataLength = static_cast<uint32_t>(mPesOutput.size()),
-                .avDataId = dataId,
+               .avMemory = std::move(handle),
+               .dataLength = static_cast<uint32_t>(mFilterOutput.size()),
+               .avDataId = dataId,
+               .offset = 0,
+               .isPtsPresent = isPtsPresent,
+               .pts = pts,
+               .isSecureMemory = false,
         };
+        if (mType.subType.tsFilterType() == DemuxTsFilterType::AUDIO) {
+            AudioExtraMetaData audio;
+            mediaEvent.extraMetaData.audio(audio);
+        }
         int size = mFilterEvent.events.size();
         mFilterEvent.events.resize(size + 1);
         mFilterEvent.events[size].media(mediaEvent);
+        fillDataToDecoder();
 
         // Clear and log
-        mPesOutput.clear();
+        releaseIonBuffer(avBuffer, mFilterOutput.size());
+        mFilterOutput.clear();
         mAvBufferCopyCount = 0;
         ::close(av_fd);
         if (DEBUG_FILTER) {
             ALOGD("[Filter] assembled av data length %d", mediaEvent.dataLength);
         }
     }
-
-    mFilterOutput.clear();
-#endif
     return Result::SUCCESS;
 }
 
@@ -1364,7 +1403,7 @@ int Filter::createAvIonFd(int size) {
 }
 
 uint8_t* Filter::getIonBuffer(int fd, int size) {
-    ALOGD("%s/%d mFilterId:%d fd:%d size:%d", __FUNCTION__, __LINE__, mFilterId, fd, size);
+
     uint8_t* avBuf = static_cast<uint8_t*>(
             mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 /*offset*/));
     if (avBuf == MAP_FAILED) {

@@ -91,6 +91,7 @@ cc_defaults {
         "mediasync/MediaSyncWrap.cpp",
         "dvr/AmDvr.cpp",
         "dsc/dsc_dev.c",
+        "Dmabufwrapper.cpp",
         "Filter.cpp",
         "Frontend.cpp",
         "Descrambler.cpp",

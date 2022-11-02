@@ -93,7 +93,7 @@ class Filter : public V1_1::IFilter {
      */
     bool createFilterMQ();
     uint16_t getTpid();
-    void updateFilterOutput(vector<uint8_t> data);
+    void updateFilterOutput(vector<uint8_t> data, void * priv = NULL);
     void updateRecordOutput(vector<uint8_t> data);
     void clear();
     void updatePts(uint64_t pts);
@@ -198,6 +198,7 @@ class Filter : public V1_1::IFilter {
     int createAvIonFd(int size);
     uint8_t* getIonBuffer(int fd, int size);
     native_handle_t* createNativeHandle(int fd);
+    void releaseIonBuffer(uint8_t* avBuf, int size);
     Result createMediaFilterEventWithIon(vector<uint8_t> output);
     Result createIndependentMediaEvents(vector<uint8_t> output);
     Result createShareMemMediaEvents(vector<uint8_t> output);
@@ -258,14 +259,19 @@ class Filter : public V1_1::IFilter {
     int mStartId = 0;
     uint8_t mScramblingStatusMonitored = 0;
     uint8_t mIpCidMonitored = 0;
-    int mIonFd;
     bool bIsRaw;
     bool mIsPesFilter = false;
+
     uint64_t tempAudioFilterId;
     uint64_t tempVideoFilterId;
     uint32_t mTsIndex;
     DemuxRecordScIndexType mScIndexType;
     uint32_t mScIndex;
+    int mEnableDmaBuf;
+    int mFilterFd;
+    int mFilterToken;
+    void * mEsPrivateHeader;
+    uint64_t mMediaEventNum;
 };
 
 }  // namespace implementation

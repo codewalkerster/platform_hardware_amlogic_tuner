@@ -91,6 +91,7 @@ cc_defaults {
         "mediasync/MediaSyncWrap.cpp",
         "dvr/AmDvr.cpp",
         "dsc/dsc_dev.c",
+        "Dmabufwrapper.cpp",
         "Filter.cpp",
         "Frontend.cpp",
         "Descrambler.cpp",
@@ -121,7 +122,6 @@ cc_defaults {
         "vendor.amlogic.hardware.systemcontrol@1.1",
         "libjsoncpp",
         "libdsm",
-        //"libsecmem",
         "libmediahal_mediasync",
    ],
     header_libs: [

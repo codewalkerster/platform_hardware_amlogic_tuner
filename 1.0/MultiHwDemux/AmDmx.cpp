@@ -695,6 +695,21 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetDecodeInfo(int fhandle, int rp) {
     return ret;
 }
 
+AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetFilterFd(int fhandle, int *fd) {
+    AM_DMX_Filter *filter;
+    AM_ErrorCode_t ret = AM_FAILURE;
+
+    pthread_mutex_lock(&lock);
+
+    ret = dmx_get_used_filter(fhandle, &filter);
+
+    if (ret == AM_SUCCESS && fd) {
+        *fd = (int)filter->drv_data;
+        ret = AM_SUCCESS;
+    }
+    pthread_mutex_unlock(&lock);
+    return ret;
+}
  #if 0
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSource(AM_DMX_Source_t src)
 {

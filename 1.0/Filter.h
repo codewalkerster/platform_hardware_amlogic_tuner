@@ -82,7 +82,7 @@ class Filter : public IFilter {
      */
     bool createFilterMQ();
     uint16_t getTpid();
-    void updateFilterOutput(vector<uint8_t> data);
+    void updateFilterOutput(vector<uint8_t> data, void * priv = NULL);
     void updateRecordOutput(vector<uint8_t> data);
     void clear();
     Result startFilterHandler();
@@ -215,6 +215,11 @@ class Filter : public IFilter {
     int mIonFd;
     bool bIsRaw;
     bool mIsPesFilter = false;
+    int mEnableDmaBuf;
+    int mFilterFd;
+    int mFilterToken;
+    void * mEsPrivateHeader;
+    uint64_t mMediaEventNum;
 };
 
 }  // namespace implementation

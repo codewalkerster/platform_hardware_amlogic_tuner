@@ -123,6 +123,7 @@ public:
 
     AM_ErrorCode_t AM_DMX_WriteTs(uint8_t* data,int32_t size,uint64_t timeout);
     AM_ErrorCode_t AM_DMX_SetDecodeInfo(int fhandle, int rp);
+    AM_ErrorCode_t AM_DMX_GetFilterFd(int fhandle, int *fd);
     int dev_no;
     sp<AmLinuxDvb> drv;
     void *drv_data;

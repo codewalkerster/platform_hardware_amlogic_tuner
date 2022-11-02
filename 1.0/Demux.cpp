@@ -19,7 +19,7 @@
 #include "Demux.h"
 #include <utils/Log.h>
 #include <cutils/properties.h>
-
+#include "FileSystemIo.h"
 namespace android {
 namespace hardware {
 namespace tv {
@@ -42,6 +42,9 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define PRIVATE_STREAM_1   0x1bd
 #define PRIVATE_STREAM_2   0x1bf
 #define SUPPORT_SOFTWARE_DEMUX_SUBTITLE "vendor.tunerhal.softwaredemux.subtitle"
+#define VIDEO_BUFFER_SIZE  "/sys/module/amlogic_dvb_demux/parameters/video_buf_size"
+#define AUDIO_BUFFER_SIZE  "/sys/module/amlogic_dvb_demux/parameters/audio_buf_size"
+
 #ifdef TUNERHAL_DBG
 #define TF_DEBUG_DROP_TS_NUM "vendor.tf.drop.tsnum"
 #define TF_DEBUG_DUMP_ES_DATA "vendor.tf.dump.es"
@@ -55,6 +58,16 @@ static int mDumpEsData = 0;
 #define TUNERHAL_DUMP_TS_DATA "vendor.tf.dump.ts"
 
 Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
+
+    FileSystem_create();
+
+    if (FileSystem_writeFile(VIDEO_BUFFER_SIZE,"15728640") != 0) {
+        ALOGE("set video_buf_size erro %p\n",this);
+    }
+    if (FileSystem_writeFile(AUDIO_BUFFER_SIZE,"3145728") != 0) {
+        ALOGE("set audio_buf_size erro %p\n",this);
+    }
+
     mDemuxId = demuxId;
     mTunerService = tuner;
     mCiCamId = 0;
@@ -343,6 +356,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             if (readRet != 0) {
                 return;
             } else {
+                tmpData.resize(size);
                 dmxDev->updateFilterOutput(fid, tmpData);
                 dmxDev->startFilterHandler(fid);
             }
@@ -362,6 +376,8 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             } while(read_len < headerLen);
 
             dmx_non_sec_es_header* esHeader = (dmx_non_sec_es_header*)(tmpData.data());
+            dmx_non_sec_es_header esPriv;
+            memcpy(&esPriv, esHeader, sizeof(dmx_non_sec_es_header));
             uint32_t dataLen = esHeader->len;
             //tmpData.resize(headerLen + dataLen);
             tmpData.resize(dataLen);
@@ -410,7 +426,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
                 }
 #else
             //insert tmpData to mFilterOutput
-            dmxDev->updateFilterOutput(fid, tmpData);
+            dmxDev->updateFilterOutput(fid, tmpData, &esPriv);
             //Copy mFilterOutput to av ion buffer and create mFilterEvent
             dmxDev->startFilterHandler(fid);
 #endif
@@ -920,13 +936,13 @@ Result Demux::startFilterHandler(uint32_t filterId) {
     return Result::SUCCESS;
 }
 
-void Demux::updateFilterOutput(uint16_t filterId, vector<uint8_t> data) {
+void Demux::updateFilterOutput(uint16_t filterId, vector<uint8_t> data, void * priv) {
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (DEBUG_DEMUX)
         ALOGD("%s/%d filterId:%d", __FUNCTION__, __LINE__, filterId);
     //Copy data to mFilterOutput
     if (mFilters[filterId] != nullptr) {
-        mFilters[filterId]->updateFilterOutput(data);
+        mFilters[filterId]->updateFilterOutput(data, priv);
     } else {
         ALOGW("%s/%d filterId = %d may be removed", __FUNCTION__, __LINE__, filterId);
     }
