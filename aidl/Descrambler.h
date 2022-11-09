@@ -19,6 +19,7 @@
 #include <aidl/android/hardware/tv/tuner/BnDescrambler.h>
 #include <aidl/android/hardware/tv/tuner/ITuner.h>
 #include <inttypes.h>
+#include "Tuner.h"
 extern "C" {
 #include "libdsm.h"
 #include "dsc_dev.h"
@@ -32,9 +33,34 @@ namespace hardware {
 namespace tv {
 namespace tuner {
 
+#define TUNER_DSC_ERR(number, format, ...) \
+    ALOGE("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_WRAN(number, format, ...) \
+    ALOGW("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_INFO(number, format, ...) \
+    ALOGI("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_DBG(number, format, ...) \
+    ALOGD("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_VERB(number, format, ...) \
+    ALOGV("[No-%d][%s:%d] " format, number, __FUNCTION__, __LINE__, ## __VA_ARGS__)
+#define TUNER_DSC_TRACE(number) \
+    ALOGI("[No-%d][%s:%d] ", number, __FUNCTION__, __LINE__);
+#define TUNER_DSC_CHECK_RES(number, expr) do { \
+    res = (expr); \
+    if (res) { \
+        ALOGE("[No-%d][%s:%d] error return 0x%x!\n", \
+            number, __FUNCTION__, __LINE__, res); \
+        return res; \
+    } \
+} while(0);
+
+#define TUNERHAL_DSC_TYPE_PROP "vendor.media.tunerhal.dsc_type"
+#define MAX_SCRAMBLED_CACHE_SIZE (30 * 1024 * 1024) //30MB
+
+class Tuner;
 class Descrambler : public BnDescrambler {
   public:
-    Descrambler();
+    Descrambler(int32_t descramblerId,     std::shared_ptr<Tuner> tuner);
 
     ::ndk::ScopedAStatus setDemuxSource(int32_t in_demuxId) override;
     ::ndk::ScopedAStatus setKeyToken(const std::vector<uint8_t>& in_keyToken) override;
@@ -45,10 +71,34 @@ class Descrambler : public BnDescrambler {
             const std::shared_ptr<IFilter>& in_optionalSourceFilter) override;
     ::ndk::ScopedAStatus close() override;
 
+  bool isPidSupported(uint16_t pid);
+  bool isDescramblerReady();
+  bool allocDscChannels();
+  bool clearDscChannels();
+  bool bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle);
+  bool allocNskDscChannels();
+  bool clearNskDscChannels();
+  bool getTsnSourceStatus(bool *is_local_mode);
+
   private:
     virtual ~Descrambler();
     int32_t mSourceDemuxId;
     bool mDemuxSet = false;
+
+    int32_t mDescramblerId;
+    std::shared_ptr<Tuner> mTuner;
+    std::set<uint16_t> mAddedPid;
+    std::mutex mDescrambleLock;
+    bool mIsReady = false;
+    uint32_t mKeyToken;
+    bool mIsLocalMode = false;
+    int32_t mDsmFd = -1;
+    int32_t mDscType = -1;
+    int32_t mDscAlgo = CA_ALGO_UNKNOWN;
+    bool mIsEnc = false;
+    struct dsm_keyslot_list mKeyslotList;
+    std::map<uint16_t, uint32_t> mPidToDscChannel;
+    uint32_t mIsNskDsc = 0;
 };
 
 }  // namespace tuner

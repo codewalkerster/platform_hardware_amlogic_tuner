@@ -40,13 +40,16 @@ func globalDefaults(ctx android.BaseContext) ([]string) {
           fmt.Printf("TARGET_PRODUCT is ohm, define SUPPORT_TSD\n")
           cppflags = append(cppflags,"-DSUPPORT_TSD")
     }
-    if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohmicas" {
+    if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohmcas" {
           fmt.Printf("TARGET_PRODUCT is ohmcas, define SUPPORT_TSD\n")
           cppflags = append(cppflags,"-DSUPPORT_TSD")
     }
-
     if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohm_hybrid" {
-          fmt.Printf("TARGET_PRODUCT is ohmcas, define SUPPORT_TSD\n")
+          fmt.Printf("TARGET_PRODUCT is ohm_hybrid, define SUPPORT_TSD\n")
+          cppflags = append(cppflags,"-DSUPPORT_TSD")
+    }
+    if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohm_cbs" {
+          fmt.Printf("TARGET_PRODUCT is ohm_cbs, define SUPPORT_TSD\n")
           cppflags = append(cppflags,"-DSUPPORT_TSD")
     }
     return cppflags

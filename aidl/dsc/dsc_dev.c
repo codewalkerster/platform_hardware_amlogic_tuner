@@ -58,8 +58,9 @@ int ca_open(int devno)
         goto ERROR_EXIT;
     }
     if (dvb_dsc_dev[devno].used) {
-        ALOGW("dvb_dsc_dev[%d] has been used!", devno);
-        goto ERROR_EXIT;
+        ALOGW("dvb_dsc_dev[%d] has been opened!", devno);
+        pthread_mutex_unlock(&lock);
+        return CA_DSC_OK;
     }
 
     snprintf(buf, sizeof(buf), DEV_NAME"%d", devno);

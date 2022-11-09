@@ -33,6 +33,7 @@
 #include "MediaSyncWrap.h"
 #include "AmDvr.h"
 #include "AmPesFilter.h"
+#include "Descrambler.h"
 
 using namespace std;
 
@@ -55,6 +56,7 @@ class Filter;
 class Frontend;
 class TimeFilter;
 class Tuner;
+class Descrambler;
 
 class Demux : public BnDemux {
   public:
@@ -83,6 +85,8 @@ class Demux : public BnDemux {
     ::ndk::ScopedAStatus removeFilter(int64_t filterId);
     bool attachRecordFilter(int64_t filterId);
     bool detachRecordFilter(int64_t filterId);
+    void attachDescrambler(int32_t descramblerId, std::shared_ptr<Descrambler> descrambler);
+    void detachDescrambler(int32_t descramblerId);
     ::ndk::ScopedAStatus startFilterHandler(int64_t filterId);
     void updateFilterOutput(int64_t filterId, vector<int8_t> data);
     void updateMediaFilterOutput(int64_t filterId, vector<int8_t> data, uint64_t pts);
@@ -172,6 +176,13 @@ class Demux : public BnDemux {
      * The array number is the filter ID.
      */
     std::map<int64_t, std::shared_ptr<Filter>> mFilters;
+
+    /**
+     * A list of created Descrambler sp.
+     * The array number is the Descrambler ID.
+     */
+    std::map<int32_t, std::shared_ptr<Descrambler>> mDescramblers;
+    vector<uint8_t> mScrambledCache;
 
     /**
      * Local reference to the opened Timer Filter instance.

@@ -35,6 +35,7 @@ namespace tv {
 namespace tuner {
 
 #define NUMDEMUX 4
+#define NUMDSC 16
 #define NUMRECORD 4
 #define NUMPLAYBACK 4
 #define NUMTSFILTER 32
@@ -364,7 +365,30 @@ Tuner::~Tuner() {}
 ::ndk::ScopedAStatus Tuner::openDescrambler(std::shared_ptr<IDescrambler>* _aidl_return) {
     ALOGV("%s", __FUNCTION__);
 
-    *_aidl_return = ndk::SharedRefBase::make<Descrambler>();
+    uint32_t descramblerId = mLastUsedDescramblerId + 1;
+    if (descramblerId == NUMDSC)
+        descramblerId = 0;
+
+    std::map<int32_t, std::shared_ptr<Descrambler>>::iterator it;
+    it = mDescramblers.find(descramblerId);
+    while (it != mDescramblers.end()) {
+        descramblerId++;
+        if (descramblerId == mLastUsedDescramblerId + 1) {
+            if (descramblerId != 0) {
+                ALOGW("%s/%d reset descrambler 0!", __FUNCTION__, __LINE__);
+                descramblerId = 0;
+            }
+            break;
+        }
+        if (descramblerId == NUMDSC)
+            descramblerId = 0;
+        it = mDescramblers.find(descramblerId);
+    }
+
+    mDescramblers[descramblerId] = ndk::SharedRefBase::make<Descrambler>(descramblerId, this->ref<Tuner>());
+    *_aidl_return = mDescramblers[descramblerId];
+    mLastUsedDescramblerId = descramblerId;
+    ALOGD("%s descrambler id: %d", __FUNCTION__, descramblerId);
 
     return ndk::ScopedAStatus::ok();
 }
@@ -515,6 +539,27 @@ void Tuner::frontendStartTune(int32_t frontendId) {
         demuxId = it->second;
         mDemuxes[demuxId]->startFrontendInputLoop();
     }
+}
+
+void Tuner::attachDescramblerToDemux(int32_t descramblerId, int32_t demuxId) {
+  ALOGV("%s/%d", __FUNCTION__, __LINE__);
+
+  if (mDescramblers.find(descramblerId) != mDescramblers.end()
+      && mDemuxes.find(demuxId) != mDemuxes.end()) {
+    mDemuxes.at(demuxId)->attachDescrambler(descramblerId, mDescramblers.at(descramblerId));
+  }
+}
+
+void Tuner::detachDescramblerFromDemux(int32_t descramblerId, int32_t demuxId) {
+  ALOGV("%s/%d", __FUNCTION__, __LINE__);
+
+  if (mDescramblers.find(descramblerId) != mDescramblers.end()
+      && mDemuxes.find(demuxId) != mDemuxes.end()) {
+    mDemuxes.at(demuxId)->detachDescrambler(descramblerId);
+    mDescramblers.erase(descramblerId);
+    if (mDescramblers.size() == 0)
+        mLastUsedDescramblerId = -1;
+  }
 }
 
 uint32_t Tuner::getTsInput() {
