@@ -646,8 +646,10 @@ Return<Result> Demux::close() {
     std::lock_guard<std::mutex> lock(mFilterLock);
 
     set<uint32_t>::iterator it;
-    for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
-        mDvrPlayback->removePlaybackFilter(*it);
+    if (mDvrPlayback != nullptr) {
+        for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
+            mDvrPlayback->removePlaybackFilter(*it);
+        }
     }
     mPlaybackFilterIds.clear();
     mRecordFilterIds.clear();

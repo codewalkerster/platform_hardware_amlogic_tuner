@@ -299,8 +299,10 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
     mCallback->onScanMessage(FrontendScanMessageType::FREQUENCY, msg);
     msg.isEnd(isEnd);
     mCallback->onScanMessage(FrontendScanMessageType::END, msg);
-    msg.symbolRates(mFeDev->getSymbolRate());
-    mCallback->onScanMessage(FrontendScanMessageType::SYMBOL_RATE, msg);
+    if (isLocked) {
+        msg.symbolRates({mFeDev->getSymbolRate()});
+        mCallback->onScanMessage(FrontendScanMessageType::SYMBOL_RATE, msg);
+    }
 
     FrontendSettings* feSettings = mFeDev->getFeSetting();
     if (feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&

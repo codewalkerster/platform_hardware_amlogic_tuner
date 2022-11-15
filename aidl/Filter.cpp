@@ -915,7 +915,7 @@ void Filter::filterThreadLoop() {
         mFilterEvents.clear();
         mFilterStatus = DemuxFilterStatus::DATA_READY;
         mCallbackScheduler.onFilterStatus(mFilterStatus);
-        break;
+        //break;
     }
 
     while (mFilterThreadRunning) {

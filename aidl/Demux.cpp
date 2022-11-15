@@ -662,8 +662,10 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     stopFrontendInput();
 
     set<int64_t>::iterator it;
-    for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
-        mDvrPlayback->removePlaybackFilter(*it);
+    if (mDvrPlayback != nullptr) {
+        for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
+            mDvrPlayback->removePlaybackFilter(*it);
+        }
     }
     mPlaybackFilterIds.clear();
     mRecordFilterIds.clear();
