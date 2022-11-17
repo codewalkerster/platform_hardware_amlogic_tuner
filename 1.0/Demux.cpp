@@ -662,6 +662,7 @@ Return<Result> Demux::close() {
         mScrambledCache.clear();
 
     mDvrPlayback = nullptr;
+    mDvrRecord   = nullptr;
     destroyMediaSync();
 
     if (AmDmxDevice[mDemuxId] != NULL) {

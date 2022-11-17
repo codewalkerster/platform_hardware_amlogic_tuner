@@ -678,6 +678,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     mLastUsedFilterId = -1;
 
     mDvrPlayback = nullptr;
+    mDvrRecord   = nullptr;
     destroyMediaSync();
 
     if (AmDmxDevice[mDemuxId] != NULL) {

@@ -1467,6 +1467,7 @@ void Filter::updateRecordOutput(vector<int8_t>& data) {
 
     if (mDvr == nullptr || !mDvr->writeRecordFMQ(mRecordFilterOutput)) {
         ALOGD("[Filter] dvr fails to write into record FMQ.");
+        mRecordFilterOutput.clear();
         return ::ndk::ScopedAStatus::fromServiceSpecificError(
                 static_cast<int32_t>(Result::UNKNOWN_ERROR));
     }

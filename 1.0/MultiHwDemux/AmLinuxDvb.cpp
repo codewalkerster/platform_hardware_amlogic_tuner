@@ -82,12 +82,15 @@ AM_ErrorCode_t AmLinuxDvb::dvb_close(AM_DMX_Device *dev) {
     ALOGI("%s/%d", __FUNCTION__, __LINE__);
 
     DVBDmx_t *dmx = (DVBDmx_t*)dev->drv_data;
-    if (dmx != NULL) {
-        free(dmx);
-    }
+
     if (dmx->evtfd != -1) {
         close(dmx->evtfd);
         dmx->evtfd = -1;
+    }
+
+    if (dmx != NULL) {
+        free(dmx);
+        dmx = NULL;
     }
     return AM_SUCCESS;
 }

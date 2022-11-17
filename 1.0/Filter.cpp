@@ -1267,6 +1267,7 @@ Result Filter::startRecordFilterHandler() {
 
     if (mDvr == nullptr || !mDvr->writeRecordFMQ(mRecordFilterOutput)) {
         ALOGD("[Filter] dvr fails to write into record FMQ!");
+        mRecordFilterOutput.clear();
         return Result::UNKNOWN_ERROR;
     }
 

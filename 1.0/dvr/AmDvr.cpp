@@ -41,6 +41,7 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
     int ret = ioctl(fd, DMX_SET_BUFFER_SIZE, 10 * 1024 * 1024);
     if (ret == -1) {
         ALOGE("set buffer size failed (%s)", strerror(errno));
+        close(fd);
         return -1;
 
     }
