@@ -284,18 +284,15 @@ static bool
 GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_params &param) {
     const DemuxTsFilterSettings& tsConf = settings.get<DemuxFilterSettings::ts>();
     bool isRepeat = tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().isRepeat;
-    ALOGD("%s isRepeat:%d", __FUNCTION__, isRepeat);
     if (!isRepeat) {
         param.flags |= DMX_ONESHOT;
     }
     bool isCheckCrc = tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().isCheckCrc;
-    ALOGD("%s isCheckCrc:%d", __FUNCTION__, isCheckCrc);
     if (isCheckCrc) {
         param.flags |= DMX_CHECK_CRC;
     }
 
     bool isRaw = tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().isRaw;
-    ALOGD("%s isRaw:%d", __FUNCTION__, isRaw);
     if (isRaw) {
         param.flags |= DMX_OUTPUT_RAW_MODE;
     }
@@ -307,7 +304,6 @@ GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_pa
         if (size > 0 && size <= 16) {
             param.filter.filter[0] =
                 tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().condition.get<DemuxFilterSectionSettingsCondition::sectionBits>().filter[0];
-            ALOGD("%s param.filter.filter[0] = %d", __FUNCTION__, param.filter.filter[0]);
             for (int i = 1; i < size - 2; i++) {
                 param.filter.filter[i] =
                     tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().condition.get<DemuxFilterSectionSettingsCondition::sectionBits>().filter[i + 2];
@@ -326,8 +322,6 @@ GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_pa
                 param.filter.mode[i] =
                     tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().condition.get<DemuxFilterSectionSettingsCondition::sectionBits>().mode[i + 2];
             }
-            ALOGD("%s tableId:0x%x", __FUNCTION__, param.filter.filter[0]);
-
         }
 
     } else {
@@ -335,6 +329,7 @@ GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_pa
                 tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().condition.get<DemuxFilterSectionSettingsCondition::tableInfo>().tableId;
             param.filter.mask[0] = 0xff;
     }
+    ALOGD("%s isRepeat:%d, isCheckCrc:%d, isRaw:%d, tableId:0x%x", __FUNCTION__, isRepeat, isCheckCrc, isRaw, param.filter.filter[0]);
     return true;
 }
 
@@ -460,7 +455,7 @@ Filter::~Filter() {
     switch (mType.mainType) {
         case DemuxFilterMainType::TS:
             mTpid = in_settings.get<DemuxFilterSettings::Tag::ts>().tpid;
-            ALOGD("%s mainType:TS mTpid:0x%x", __FUNCTION__, mTpid);
+            ALOGD("%s/%d mainType:TS mTpid:0x%x", __FUNCTION__, __LINE__, mTpid);
             switch (mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>()) {
                 case DemuxTsFilterType::SECTION: {
                     ALOGD("%s subType:SECTION", __FUNCTION__);
@@ -606,10 +601,9 @@ Filter::~Filter() {
                     break;
                 }
                 case DemuxTsFilterType::PES: {
-                    ALOGD("%s subType:PES", __FUNCTION__);
                     bIsRaw =
                     in_settings.get<DemuxFilterSettings::Tag::ts>().filterSettings.get<DemuxTsFilterSettingsFilterSettings::pesData>().isRaw;
-                    ALOGD("%s bIsRaw:%d", __FUNCTION__, bIsRaw);
+                    ALOGD("%s subType:PES bIsRaw:%d", __FUNCTION__, bIsRaw);
                     struct dmx_pes_filter_params pesp;
                     memset(&pesp, 0, sizeof(pesp));
                     pesp.pid = mTpid;
@@ -650,7 +644,13 @@ Filter::~Filter() {
     ALOGD("%s/%d mFilterId:%lld", __FUNCTION__, __LINE__, mFilterId);
     if (mDemux->getAmDmxDevice()
         ->AM_DMX_StartFilter(mFilterId) != 0) {
-        ALOGE("Start filter %lld failed!", mFilterId);
+        bool isPassthrough =
+        mFilterSettings.get<DemuxFilterSettings::Tag::ts>().filterSettings.get<DemuxTsFilterSettingsFilterSettings::av>().isPassthrough;
+        if (mIsMediaFilter && isPassthrough) {
+            ALOGD("av filter will start in mediahal");
+        } else {
+            ALOGE("Start filter %lld failed!", mFilterId);
+        }
         return ::ndk::ScopedAStatus::fromServiceSpecificError(
                                     static_cast<int32_t>(Result::UNAVAILABLE));
     }

@@ -476,10 +476,10 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
 
     std::lock_guard<std::mutex> lock(mFilterLock);
     AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&dmxFilterIdx);
-    ALOGD("[%s/%d] Allocate filter subType:%d filterIdx:%d", __FUNCTION__, __LINE__, tsFilterType, dmxFilterIdx);
 
     //Use demux fd as the tuner hal filter id
     sp<Filter> filter = new Filter(type, dmxFilterIdx, bufferSize, cb, this);
+    ALOGD("[%s/%d] Allocate filter subType:%d filterIdx:%d, bufferSize:%d KB", __FUNCTION__, __LINE__, tsFilterType, dmxFilterIdx, bufferSize/1024);
 
     if (tsFilterType == DemuxTsFilterType::PCR) {
         ALOGD("DemuxTsFilterType::PCR");
@@ -550,7 +550,6 @@ Return<void> Demux::openTimeFilter(openTimeFilter_cb _hidl_cb) {
 }
 
 Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _hidl_cb) {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
     Result status;
     int fid = -1;;
     int mode = 0;
@@ -688,11 +687,10 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
     std::lock_guard<std::mutex> lock(mFilterLock);
 
     //bufferSize is used to create DvrMQ
-    ALOGD("%s/%d bufferSize:%d KB", __FUNCTION__, __LINE__,  bufferSize/1024);
     set<uint32_t>::iterator it;
     switch (type) {
         case DvrType::PLAYBACK:
-            ALOGD("DvrType::PLAYBACK");
+            ALOGD("%s/%d DvrType::PLAYBACK bufferSize:%d KB", __FUNCTION__, __LINE__,  bufferSize/1024);
             mDvrPlayback = new Dvr(type, bufferSize, cb, this);
             if (bCheckVts) {
                 ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL");
@@ -713,7 +711,7 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
             _hidl_cb(Result::SUCCESS, mDvrPlayback);
             return Void();
         case DvrType::RECORD:
-            ALOGD("DvrType::RECORD");
+            ALOGD("%s/%d DvrType::RECORD bufferSize:%d KB", __FUNCTION__, __LINE__,  bufferSize/1024);
             mDvrRecord = new Dvr(type, bufferSize, cb, this);
             //ALOGD("[Demux] dmx_dvr_open INPUT_DEMOD");
             //mAmDvrDevice->AM_DVR_Open(INPUT_DEMOD);

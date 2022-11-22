@@ -480,9 +480,9 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     std::lock_guard<std::mutex> lock(mFilterLock);
     AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&dmxFilterIdx);
     filterId = dmxFilterIdx;
-    ALOGD("%s get filterid = %lld", __FUNCTION__, filterId);
     std::shared_ptr<Filter> filter = ndk::SharedRefBase::make<Filter>(
             in_type, filterId, in_bufferSize, in_cb, this->ref<Demux>());
+    ALOGD("[%s/%d] Allocate filter subType:%d filterIdx:%lld, bufferSize:%d KB", __FUNCTION__, __LINE__, tsFilterType, filterId, in_bufferSize/1024);
     if (!filter->createFilterMQ()) {
         *_aidl_return = nullptr;
         return ::ndk::ScopedAStatus::fromServiceSpecificError(
@@ -712,7 +712,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     set<int64_t>::iterator it;
     switch (in_type) {
         case DvrType::PLAYBACK:
-            ALOGD("DvrType::PLAYBACK");
+            ALOGD("%s/%d DvrType::PLAYBACK bufferSize:%d KB", __FUNCTION__, __LINE__,  in_bufferSize/1024);
             mDvrPlayback = ndk::SharedRefBase::make<Dvr>(in_type, in_bufferSize, in_cb,
                                                         this->ref<Demux>());
             if (bCheckVts) {
@@ -739,6 +739,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             *_aidl_return = mDvrPlayback;
             return ::ndk::ScopedAStatus::ok();
         case DvrType::RECORD:
+            ALOGD("%s/%d DvrType::RECORD bufferSize:%d KB", __FUNCTION__, __LINE__,  in_bufferSize/1024);
             mDvrRecord = ndk::SharedRefBase::make<Dvr>(in_type, in_bufferSize, in_cb,
                                                        this->ref<Demux>());
             //ALOGD("[Demux] dmx_dvr_open INPUT_DEMOD");
