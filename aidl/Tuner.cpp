@@ -120,7 +120,7 @@ void Tuner::init() {
                         switch (frontType)
                         {
                             case static_cast<int>(FrontendType::ANALOG):{
-                                FrontendAnalogCapabilities analogCaps{
+                                FrontendAnalogCapabilities analogCaps {
                                     .typeCap = arrayFronts[i]["analogTypeCap"].asInt(),
                                     .sifStandardCap = arrayFronts[i]["sifCap"].asInt(),
                                 };
@@ -128,14 +128,14 @@ void Tuner::init() {
                             }
                             break;
                             case static_cast<int>(FrontendType::ATSC): {
-                                FrontendAtscCapabilities atscCaps{
+                                FrontendAtscCapabilities atscCaps {
                                     .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
                                 };
                                 caps.set<FrontendCapabilities::Tag::atscCaps>(atscCaps);
                             }
                             break;
                             case static_cast<int>(FrontendType::DVBC): {
-                                FrontendDvbcCapabilities dvbcCaps{
+                                FrontendDvbcCapabilities dvbcCaps {
                                     .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
                                     .fecCap = arrayFronts[i]["fecCap"].asInt64(),
                                     .annexCap =  static_cast<int8_t>(arrayFronts[i]["annexCap"].asInt()),
@@ -144,7 +144,7 @@ void Tuner::init() {
                             }
                             break;
                             case static_cast<int>(FrontendType::DVBS): {
-                                FrontendDvbsCapabilities dvbsCaps{
+                                FrontendDvbsCapabilities dvbsCaps {
                                     .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
                                     .innerfecCap = arrayFronts[i]["fecCap"].asUInt(),
                                     .standard =  static_cast<int8_t>(arrayFronts[i]["stdCap"].asInt()),
@@ -153,7 +153,7 @@ void Tuner::init() {
                             }
                             break;
                             case static_cast<int>(FrontendType::DVBT): {
-                                FrontendDvbtCapabilities dvbtCaps{
+                                FrontendDvbtCapabilities dvbtCaps {
                                     .transmissionModeCap = arrayFronts[i]["transmissionCap"].asInt(),
                                     .bandwidthCap = arrayFronts[i]["bandwidthCap"].asInt(),
                                     .constellationCap = arrayFronts[i]["constellationCap"].asInt(),
@@ -167,7 +167,7 @@ void Tuner::init() {
                             }
                             break;
                             case static_cast<int>(FrontendType::ISDBT): {
-                                FrontendIsdbtCapabilities isdbtCaps{
+                                FrontendIsdbtCapabilities isdbtCaps {
                                     .modeCap = arrayFronts[i]["modeCap"].asInt(),
                                     .bandwidthCap = arrayFronts[i]["bandwidthCap"].asInt(),
                                     .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
@@ -175,6 +175,18 @@ void Tuner::init() {
                                     .guardIntervalCap = arrayFronts[i]["guardIntervalCap"].asInt(),
                                 };
                                 caps.set<FrontendCapabilities::Tag::isdbtCaps>(isdbtCaps);
+                            }
+                            break;
+                            case static_cast<int>(FrontendType::DTMB): {
+                                FrontendDtmbCapabilities dtmbCaps {
+                                    .transmissionModeCap = arrayFronts[i]["transmissionCap"].asInt(),
+                                    .bandwidthCap = arrayFronts[i]["bandwidthCap"].asInt(),
+                                    .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
+                                    .codeRateCap = arrayFronts[i]["coderateCap"].asInt(),
+                                    .guardIntervalCap = arrayFronts[i]["guardIntervalCap"].asInt(),
+                                    .interleaveModeCap = arrayFronts[i]["interleaveModeCap"].asInt(),
+                                };
+                                caps.set<FrontendCapabilities::Tag::dtmbCaps>(dtmbCaps);
                             }
                             break;
                             default:

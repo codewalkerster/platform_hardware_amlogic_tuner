@@ -9,14 +9,14 @@ import android.view.Surface;
 
 import androidx.annotation.NonNull;
 
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class MediaCodecPlayer {
-    private final static String TAG = Constans.TAG;
+    private final static String TAG = Constants.TAG;
     private MediaFormat mVideoMediaFormat;
     private Surface mSurface;
     private MediaCodec.OnFrameRenderedListener mRenderedListener;

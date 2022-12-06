@@ -10,7 +10,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 import java.util.ArrayList;
@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 public class DvbsScanManager extends ScanManagerSession {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     public static final int DEFAULT_SINGLE_LNB = 5150;
     public static final int DEFAULT_DOUBLE_LNB_LOW = 9750;
     public static final int DEFAULT_DOUBLE_LNB_HIGH = 10600;

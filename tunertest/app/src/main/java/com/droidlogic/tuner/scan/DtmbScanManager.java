@@ -1,31 +1,35 @@
 package com.droidlogic.tuner.scan;
 
+import android.media.tv.tuner.frontend.DtmbFrontendSettings;
 import android.media.tv.tuner.frontend.FrontendSettings;
-import android.media.tv.tuner.frontend.IsdbtFrontendSettings;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
+
+import com.droidlogic.tuner.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class IsdbtScanManager extends ScanManagerSession {
+public class DtmbScanManager extends ScanManagerSession {
     public static final String KEY_MODULATION = "modulation";
     public static final String KEY_BANDWIDTH = "bandwidth";
     private List<Map<String, String>> mModulationList = new ArrayList<>();
     private List<Map<String, String>> mBandwidthList = new ArrayList<>();
 
     private String[] modulation_array = {
-        "Auto", "DQPSK", "QPSK", "16QAM", "64QAM"
+            "Auto", "16QAM", "32QAM", "64QAM"
     };
 
     private String[] bandwidth_array = {
-        "Auto", "8MHZ", "7MHZ", "6MHZ"
+            "Auto", "8MHZ", "6MHZ"
     };
 
-    IsdbtScanManager() {
+    DtmbScanManager() {
         for (String b : modulation_array) {
             HashMap<String, String> m = new HashMap<>();
             m.put("name", b);
@@ -41,13 +45,14 @@ public class IsdbtScanManager extends ScanManagerSession {
     private int getTunerBandwidth(int bandwidthIndex) {
         if (bandwidthIndex < bandwidth_array.length)
             return (1 << bandwidthIndex);
-        return IsdbtFrontendSettings.BANDWIDTH_AUTO;
+        return DtmbFrontendSettings.BANDWIDTH_AUTO;
     }
 
     private int getTunerModulation(int modulationIndex) {
-        if (modulationIndex < modulation_array.length)
-            return (1 << modulationIndex);
-        return IsdbtFrontendSettings.MODULATION_AUTO;
+        if (modulationIndex < modulation_array.length && modulationIndex > 0) {
+            return (1 << (modulationIndex + 2));
+        }
+        return DtmbFrontendSettings.MODULATION_CONSTELLATION_AUTO;
     }
 
     public List<Map<String, String>> getModulationSettings() {
@@ -60,12 +65,16 @@ public class IsdbtScanManager extends ScanManagerSession {
 
     @Override
     public FrontendSettings createScanSettings(int freqMhz, @NonNull Bundle bundle) {
-        int modulationIdex = bundle.getInt(KEY_MODULATION, 0);
-        int bandWidthIndex = bundle.getInt(KEY_BANDWIDTH, 0);
-        IsdbtFrontendSettings.Builder builder = IsdbtFrontendSettings.builder()
-                .setFrequency(freqMhz * 1000000)
-                .setModulation(getTunerModulation(modulationIdex))
-                .setBandwidth(getTunerBandwidth(bandWidthIndex));
-        return builder.build();
+        if (Build.VERSION.SDK_INT >= 33) {
+            Log.d(Constants.TAG, "Create dtmb settings");
+            int modulationIndex = bundle.getInt(KEY_MODULATION, 0);
+            int bandWidthIndex = bundle.getInt(KEY_BANDWIDTH, 0);
+            DtmbFrontendSettings.Builder builder = DtmbFrontendSettings.builder()
+                    .setFrequency(freqMhz * 1000000)
+                    .setBandwidth(getTunerBandwidth(bandWidthIndex))
+                    .setModulation(getTunerModulation(modulationIndex));
+            return builder.build();
+        }
+        return null;
     }
 }

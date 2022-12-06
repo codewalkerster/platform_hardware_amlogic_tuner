@@ -3,7 +3,7 @@ package com.droidlogic.tuner.player;
 import android.content.Context;
 import android.util.Log;
 
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 public class TvPlayerManager {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private static final int MAX_PLAYERS = 2;
     private static TvPlayerManager mInstance;
     private Map<Integer, Boolean> mPlayerPools;

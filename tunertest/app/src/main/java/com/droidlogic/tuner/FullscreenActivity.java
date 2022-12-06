@@ -25,7 +25,7 @@ import com.droidlogic.tuner.channel.Channel;
 import com.droidlogic.tuner.channel.ChannelManager;
 import com.droidlogic.tuner.dvr.DvrRecorder;
 import com.droidlogic.tuner.dvr.RecorderDescriptor;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.EventViewModelManager;
 import com.droidlogic.tuner.utils.ThreadManager;
 
@@ -36,7 +36,7 @@ import java.util.TimerTask;
 
 @RequiresApi(api = 31)
 public class FullscreenActivity extends AppCompatActivity {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private TvView tvView;
     private FrameLayout tipsView;
     private Handler mMainHandler = new Handler(Looper.getMainLooper());

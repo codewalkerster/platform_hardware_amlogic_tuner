@@ -27,11 +27,11 @@ import com.droidlogic.tuner.channel.Channel;
 import com.droidlogic.tuner.scan.ScanManager;
 import com.droidlogic.tuner.scan.ScanManagerSession;
 import com.droidlogic.tuner.scan.TunerControl;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 public class TvPlayer {
-    public static final String TAG = Constans.TAG;
+    public static final String TAG = Constants.TAG;
     private Surface mSurface;
     private int mId;
     private ThreadManager.MediaExecutor mExecutor;

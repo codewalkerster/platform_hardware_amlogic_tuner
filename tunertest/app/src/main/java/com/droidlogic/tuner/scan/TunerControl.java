@@ -1,21 +1,19 @@
 package com.droidlogic.tuner.scan;
 
 import android.content.Context;
-import android.icu.text.Edits;
 import android.media.tv.tuner.Tuner;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 
 public class TunerControl {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private static TunerControl mInstance;
     private HashMap<Integer, Tuner> mTunerContainer = new HashMap<>();
 

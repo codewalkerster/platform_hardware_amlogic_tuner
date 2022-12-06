@@ -8,6 +8,7 @@
     <string name="dvbs">DVBS</string>
     <string name="isdbt">ISDBT</string>
     <string name="atsc">ATSC</string>
+    <string name="dtmb">DTMB</string>
     <string name="dvbt_standard">Standard</string>
     <string name="dvbt_2">DvbT2</string>
     <string name="frequency">Frequency</string>

@@ -88,6 +88,7 @@ cc_defaults {
         "frontenddevices/FrontendDvbcDevice.cpp",
         "frontenddevices/FrontendDvbsDevice.cpp",
         "frontenddevices/FrontendIsdbtDevice.cpp",
+        "frontenddevices/FrontendDtmbDevice.cpp",
         "MultiHwDemux/AmDmx.cpp",
         "MultiHwDemux/AmLinuxDvb.cpp",
         "MultiHwDemux/AmPesFilter.cpp",

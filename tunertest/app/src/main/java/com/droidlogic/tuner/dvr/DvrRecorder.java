@@ -7,7 +7,7 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.droidlogic.tuner.channel.Channel;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.concurrent.Executor;
 
 public class DvrRecorder {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private static DvrRecorder mInstance;
     private List<Recorder> mRecorders;
     private List<RecorderDescriptor> mRecorderContents;

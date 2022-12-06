@@ -14,11 +14,11 @@ import androidx.annotation.NonNull;
 
 import com.droidlogic.tuner.channel.ChannelManager;
 import com.droidlogic.tuner.psi.SiParser;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 public class ScanManager {
-    private final String TAG = Constans.TAG;
+    private final String TAG = Constants.TAG;
     private static ScanManager mInstance = null;
     private ThreadManager.TunerExecutor mExecutor;
     private OnScanEvent mScanEvt = null;
@@ -27,6 +27,7 @@ public class ScanManager {
     private DvbsScanManager mDvbsScanManager;
     private AtscScanManager mAtscScanManager;
     private IsdbtScanManager mIsdbtScanManager;
+    private DtmbScanManager mDtmbScanManager;
 
     public final static int SIGNAL_TYPE_ATV = 0;
     public final static int SIGNAL_TYPE_ATSC = 1;
@@ -35,6 +36,7 @@ public class ScanManager {
     public final static int SIGNAL_TYPE_DVBC = 4;
     public final static int SIGNAL_TYPE_DVBS = 5;
     public final static int SIGNAL_TYPE_ISDBT = 6;
+    public final static int SIGNAL_TYPE_MAX = 7;
     public final static int SIGNAL_TYPE_NONE = 255;
 
     public final static String KEY_FREQUENCY = "frequency";
@@ -47,6 +49,7 @@ public class ScanManager {
         mDvbsScanManager = new DvbsScanManager();
         mAtscScanManager = new AtscScanManager();
         mIsdbtScanManager = new IsdbtScanManager();
+        mDtmbScanManager = new DtmbScanManager();
         mExecutor = new ThreadManager.TunerExecutor();
     }
 
@@ -62,7 +65,7 @@ public class ScanManager {
 
     public void switchSignalType(int type) {
         Log.d(TAG, "signal type switch to " + type);
-        if (type >= SIGNAL_TYPE_ATV && type <= SIGNAL_TYPE_ISDBT)
+        if (type >= SIGNAL_TYPE_ATV && type < SIGNAL_TYPE_MAX)
             mSignalType = type;
         else
             mSignalType = SIGNAL_TYPE_NONE;
@@ -84,6 +87,8 @@ public class ScanManager {
                 return mIsdbtScanManager;
             case SIGNAL_TYPE_DVBS:
                 return mDvbsScanManager;
+            case SIGNAL_TYPE_DTMB:
+                return mDtmbScanManager;
         }
         return null;
     }

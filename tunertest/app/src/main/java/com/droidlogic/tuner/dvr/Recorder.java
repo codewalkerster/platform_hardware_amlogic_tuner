@@ -20,7 +20,7 @@ import androidx.annotation.NonNull;
 import com.droidlogic.tuner.channel.Channel;
 import com.droidlogic.tuner.psi.SiParser;
 import com.droidlogic.tuner.scan.TunerControl;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 
 import java.io.File;
 import java.io.IOException;
@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.concurrent.Executor;
 
 class Recorder {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private Channel mRecordingChannel;
     private ParcelFileDescriptor fd;
     private android.media.tv.tuner.dvr.DvrRecorder mTunerRecorder;

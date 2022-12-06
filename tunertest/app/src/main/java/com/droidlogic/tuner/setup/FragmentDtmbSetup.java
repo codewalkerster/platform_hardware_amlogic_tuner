@@ -1,9 +1,6 @@
 package com.droidlogic.tuner.setup;
 
 import android.os.Bundle;
-
-import androidx.fragment.app.Fragment;
-
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,29 +10,35 @@ import android.widget.EditText;
 import android.widget.SimpleAdapter;
 import android.widget.Spinner;
 
+import androidx.fragment.app.Fragment;
+
 import com.droidlogic.tuner.R;
-import com.droidlogic.tuner.scan.AtscScanManager;
+import com.droidlogic.tuner.scan.DtmbScanManager;
 import com.droidlogic.tuner.scan.ScanManager;
 import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 /**
  * A simple {@link Fragment} subclass.
- * Use the {@link FragmentAtscSetup#newInstance} factory method to
+ * Use the {@link FragmentDtmbSetup#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class FragmentAtscSetup extends Fragment {
+public class FragmentDtmbSetup extends Fragment {
+    // TODO: Rename parameter arguments, choose names that match
+    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
     private static final String ARG_PARAM1 = "param1";
     private static final String ARG_PARAM2 = "param2";
     private static final String TAG = Constants.TAG;
-
-    private String mParam1;
-    private String mParam2;
     private EditText mEditFrequency;
     private Spinner mSpinnerModulation;
+    private Spinner mSpinnerBandwidth;
     private Button mButtonScan;
 
-    public FragmentAtscSetup() {
+    // TODO: Rename and change types of parameters
+    private String mParam1;
+    private String mParam2;
+
+    public FragmentDtmbSetup() {
         // Required empty public constructor
     }
 
@@ -45,11 +48,11 @@ public class FragmentAtscSetup extends Fragment {
      *
      * @param param1 Parameter 1.
      * @param param2 Parameter 2.
-     * @return A new instance of fragment FragmentAtscSetup.
+     * @return A new instance of fragment FragmentIsdbSetup.
      */
     // TODO: Rename and change types and number of parameters
-    static FragmentAtscSetup newInstance(String param1, String param2) {
-        FragmentAtscSetup fragment = new FragmentAtscSetup();
+    public static FragmentDtmbSetup newInstance(String param1, String param2) {
+        FragmentDtmbSetup fragment = new FragmentDtmbSetup();
         Bundle args = new Bundle();
         args.putString(ARG_PARAM1, param1);
         args.putString(ARG_PARAM2, param2);
@@ -67,21 +70,36 @@ public class FragmentAtscSetup extends Fragment {
     }
 
     @Override
+    public void onDestroy() {
+        mEditFrequency = null;
+        mSpinnerModulation = null;
+        mSpinnerBandwidth = null;
+        mButtonScan = null;
+        super.onDestroy();
+    }
+
+    @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         // Inflate the layout for this fragment
-        View view = inflater.inflate(R.layout.fragment_atsc_setup, container, false);
+        View view = inflater.inflate(R.layout.fragment_dtmb_setup, container, false);
         if (view != null) {
             mEditFrequency = view.findViewById(R.id.frequency_value);
             mSpinnerModulation = view.findViewById(R.id.modulation_spinner);
+            mSpinnerBandwidth = view.findViewById(R.id.bandwidth_spinner);
             mButtonScan = view.findViewById(R.id.button_start);
-            AtscScanManager atscScanManager = (AtscScanManager) ScanManager.getInstance()
-                    .getSession(ScanManager.SIGNAL_TYPE_ATSC);
+            DtmbScanManager dtmbScanManager = (DtmbScanManager) ScanManager.getInstance()
+                    .getSession(ScanManager.SIGNAL_TYPE_DTMB);
             SimpleAdapter modulationAdapter = new SimpleAdapter(getActivity(),
-                    atscScanManager.getModulationSettings(),
+                    dtmbScanManager.getModulationSettings(),
                     R.layout.simple_list_item,
-                    new String[] {"name"}, new int[] {R.id.name});
+                    new String[]{"name"}, new int[]{R.id.name});
             mSpinnerModulation.setAdapter(modulationAdapter);
+            SimpleAdapter bandwidthAdapter = new SimpleAdapter(getActivity(),
+                    dtmbScanManager.getBandwidthSettings(),
+                    R.layout.simple_list_item,
+                    new String[]{"name"}, new int[]{R.id.name});
+            mSpinnerBandwidth.setAdapter(bandwidthAdapter);
             mButtonScan.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -90,14 +108,6 @@ public class FragmentAtscSetup extends Fragment {
             });
         }
         return view;
-    }
-
-    @Override
-    public void onDestroyView() {
-        mEditFrequency = null;
-        mSpinnerModulation = null;
-        mButtonScan = null;
-        super.onDestroyView();
     }
 
     private void startScan() {
@@ -114,13 +124,18 @@ public class FragmentAtscSetup extends Fragment {
             mEditFrequency.setEnabled(false);
         }
         if (mSpinnerModulation != null) {
-            bundle.putInt(AtscScanManager.KEY_MODULATION,
+            bundle.putInt(DtmbScanManager.KEY_MODULATION,
                     mSpinnerModulation.getSelectedItemPosition());
             mSpinnerModulation.setEnabled(false);
         }
+        if (mSpinnerBandwidth != null) {
+            bundle.putInt(DtmbScanManager.KEY_BANDWIDTH,
+                    mSpinnerBandwidth.getSelectedItemPosition());
+            mSpinnerBandwidth.setEnabled(false);
+        }
         mButtonScan.setEnabled(false);
         final int finalFreq = freq;
-        Log.d(TAG, "start atsc scan, param:" + bundle.toString());
+        Log.d(TAG, "start dtmb scan, param:" + bundle.toString());
         ThreadManager.getInstance().runOnMainThreadDelayed(new Runnable() {
             @Override
             public void run() {

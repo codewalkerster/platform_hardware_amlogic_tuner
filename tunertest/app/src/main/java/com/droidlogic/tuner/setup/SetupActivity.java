@@ -3,6 +3,7 @@ package com.droidlogic.tuner.setup;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.viewpager.widget.ViewPager;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -14,11 +15,11 @@ import android.widget.TextView;
 import com.droidlogic.tuner.R;
 import com.droidlogic.tuner.channel.ChannelManager;
 import com.droidlogic.tuner.scan.ScanManager;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 public class SetupActivity extends AppCompatActivity {
-    private final static String TAG = Constans.TAG;
+    private final static String TAG = Constants.TAG;
     private boolean isScanning;
     private int totalPages = 0;
     private TextView mTvIndicator;
@@ -58,6 +59,9 @@ public class SetupActivity extends AppCompatActivity {
         pagerAdapter.addFragment(FragmentDvbsSetup.newInstance("dvbs", null));
         pagerAdapter.addFragment(FragmentIsdbSetup.newInstance("isdbt", null));
         pagerAdapter.addFragment(FragmentAtscSetup.newInstance("atsc", null));
+        if (Build.VERSION.SDK_INT >= 33) {
+            pagerAdapter.addFragment(FragmentDtmbSetup.newInstance("dtmb", null));
+        }
 
         totalPages = pagerAdapter.getCount();
         ViewPager pager = findViewById(R.id.viewPagerMain);
@@ -85,6 +89,9 @@ public class SetupActivity extends AppCompatActivity {
                         break;
                     case 4:
                         ScanManager.getInstance().switchSignalType(ScanManager.SIGNAL_TYPE_ATSC);
+                        break;
+                    case 5:
+                        ScanManager.getInstance().switchSignalType(ScanManager.SIGNAL_TYPE_DTMB);
                         break;
                 }
                 updateIndicator(position + 1);

@@ -1,5 +1,5 @@
 package com.droidlogic.tuner.utils;
 
-public class Constans {
+public class Constants {
     public static final String TAG = "tuner_test";
 }

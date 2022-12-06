@@ -19,13 +19,13 @@ import com.droidlogic.tuner.player.TvPlayer;
 import com.droidlogic.tuner.player.TvPlayerManager;
 import com.droidlogic.tuner.scan.ScanManager;
 import com.droidlogic.tuner.scan.TunerControl;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 import java.io.File;
 
 public class DvrPlayer {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private DvrPlayback mDvrPlayback;
     private TvPlayer mPlayer;
     private Context mContext;

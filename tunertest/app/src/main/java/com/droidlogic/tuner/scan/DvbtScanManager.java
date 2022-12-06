@@ -6,7 +6,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 public class DvbtScanManager extends ScanManagerSession {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private List<Map<String, String>> mBwList = new ArrayList<>();
     private List<Map<String, String>> mTsList = new ArrayList<>();
     public static final String KEY_BAND_WIDTH = "bandWidth";

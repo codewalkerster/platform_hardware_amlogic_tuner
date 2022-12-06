@@ -17,7 +17,7 @@ import android.widget.Spinner;
 import com.droidlogic.tuner.R;
 import com.droidlogic.tuner.scan.DvbtScanManager;
 import com.droidlogic.tuner.scan.ScanManager;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 
@@ -28,7 +28,7 @@ import com.droidlogic.tuner.utils.ThreadManager;
  */
 public class FragmentDvbtSetup extends Fragment {
     private static final String ARG_PARAM1 = "param1";
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
 
     private EditText mEditFrequency = null;
     private CheckBox mSwitchStandard = null;

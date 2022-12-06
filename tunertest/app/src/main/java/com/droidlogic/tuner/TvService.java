@@ -22,13 +22,13 @@ import com.droidlogic.tuner.dvr.RecorderDescriptor;
 import com.droidlogic.tuner.player.TvPlayer;
 import com.droidlogic.tuner.player.TvPlayerManager;
 import com.droidlogic.tuner.setup.SetupActivity;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.EventViewModelManager;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 
 public class TvService extends TvInputService {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private Handler mMainHandler = null;
 
     public TvService() {

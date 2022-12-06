@@ -16,7 +16,7 @@ import android.widget.Spinner;
 import com.droidlogic.tuner.R;
 import com.droidlogic.tuner.scan.IsdbtScanManager;
 import com.droidlogic.tuner.scan.ScanManager;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 
 /**
@@ -29,7 +29,7 @@ public class FragmentIsdbSetup extends Fragment {
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
     private static final String ARG_PARAM1 = "param1";
     private static final String ARG_PARAM2 = "param2";
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private EditText mEditFrequency;
     private Spinner mSpinnerModulation;
     private Spinner mSpinnerBandwidth;

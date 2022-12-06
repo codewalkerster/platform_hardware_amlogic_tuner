@@ -280,6 +280,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         ncmd ++;
         break;
     case FrontendType::DVBT:
+    case FrontendType::DTMB:
         if (fe_params.u.ofdm.bandwidth != BANDWIDTH_AUTO) {
             cmd->cmd = DTV_BANDWIDTH_HZ;
             cmd->u.data = bandwidth_hz(fe_params.u.ofdm.bandwidth);
@@ -297,14 +298,16 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         cmd ++;
         ncmd ++;
 
-        if ((settings.get<FrontendSettings::Tag::dvbt>().standard == FrontendDvbtStandard::T2)) {
-            cmd->cmd = DTV_DVBT2_PLP_ID_LEGACY;
-            cmd->u.data = settings.get<FrontendSettings::Tag::dvbt>().plpId;
-            ALOGD("DTV DVBT2 plpId = %d", settings.get<FrontendSettings::Tag::dvbt>().plpId);
-            mPlpId = settings.get<FrontendSettings::Tag::dvbt>().plpId;
+        if (mDev.type == FrontendType::DVBT) {
+            if ((settings.get<FrontendSettings::Tag::dvbt>().standard == FrontendDvbtStandard::T2)) {
+                cmd->cmd = DTV_DVBT2_PLP_ID_LEGACY;
+                cmd->u.data = settings.get<FrontendSettings::Tag::dvbt>().plpId;
+                ALOGD("DTV DVBT2 plpId = %d", settings.get<FrontendSettings::Tag::dvbt>().plpId);
+                mPlpId = settings.get<FrontendSettings::Tag::dvbt>().plpId;
 
-            cmd ++;
-            ncmd ++;
+                cmd ++;
+                ncmd ++;
+            }
         }
         break;
     case FrontendType::ISDBT:

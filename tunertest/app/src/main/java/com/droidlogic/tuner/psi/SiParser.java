@@ -18,7 +18,7 @@ import androidx.annotation.NonNull;
 import com.droidlogic.tuner.channel.Channel;
 import com.droidlogic.tuner.channel.ChannelManager;
 import com.droidlogic.tuner.scan.ScanManager;
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
 import com.droidlogic.tuner.utils.ThreadManager.TunerExecutor;
 
@@ -26,7 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SiParser {
-    private static final String TAG = Constans.TAG;
+    private static final String TAG = Constants.TAG;
     private static SiParser mInstance = null;
     private TunerExecutor mExecutor;
     private SiParserEvent mParserEvent;

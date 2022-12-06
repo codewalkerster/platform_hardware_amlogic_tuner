@@ -2,13 +2,13 @@ package com.droidlogic.tuner.channel;
 
 import android.util.Log;
 
-import com.droidlogic.tuner.utils.Constans;
+import com.droidlogic.tuner.utils.Constants;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class ChannelManager {
-    private static String TAG = Constans.TAG;
+    private static String TAG = Constants.TAG;
     private static ChannelManager mInstance;
     private List<Channel> mChannelList = new ArrayList<>();
 

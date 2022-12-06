@@ -27,6 +27,8 @@
 #include "FrontendDvbcDevice.h"
 #include "FrontendDvbsDevice.h"
 #include "FrontendIsdbtDevice.h"
+#include "FrontendDtmbDevice.h"
+
 
 namespace aidl {
 namespace android {
@@ -54,6 +56,8 @@ Frontend::Frontend(FrontendType type, int32_t id, std::shared_ptr<Tuner> tuner, 
         mFeDev = new FrontendDvbsDevice(id, type, this);
     } else if (type == FrontendType::ISDBT) {
         mFeDev = new FrontendIsdbtDevice(id, type, this);
+    } else if (type == FrontendType::DTMB) {
+        mFeDev = new FrontendDtmbDevice(id, type, this);
     } else {
         mFeDev = new FrontendDevice(id, type, this);
     }
