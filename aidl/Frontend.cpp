@@ -1061,6 +1061,18 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd, uint32
             symbols[0] = (int)(mFeDev->getSymbolRate());
         msg.set<FrontendScanMessage::Tag::symbolRates>(symbols);
         mCallback->onScanMessage(FrontendScanMessageType::SYMBOL_RATE, msg);
+        if (mType == FrontendType::ANALOG) {
+            FrontendAnalogType analogType = FrontendAnalogType::PAL;
+            FrontendAnalogSifStandard analogSifStandard = FrontendAnalogSifStandard::DK;
+            mFeDev->getAnalogPara(analogType, analogSifStandard);
+            msg.set<FrontendScanMessage::Tag::analogType>(analogType);
+            mCallback->onScanMessage(FrontendScanMessageType::ANALOG_TYPE, msg);
+
+            FrontendScanMessageStandard std;
+            std.set<FrontendScanMessageStandard::Tag::sifStd>(analogSifStandard);
+            msg.set<FrontendScanMessage::Tag::std>(std);
+            mCallback->onScanMessage(FrontendScanMessageType::STANDARD, msg);
+        }
     }
 
     FrontendSettings* feSettings = mFeDev->getFeSetting();

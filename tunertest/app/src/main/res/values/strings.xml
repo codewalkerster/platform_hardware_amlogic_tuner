@@ -9,6 +9,7 @@
     <string name="isdbt">ISDBT</string>
     <string name="atsc">ATSC</string>
     <string name="dtmb">DTMB</string>
+    <string name="analog">"ANALOG"</string>
     <string name="dvbt_standard">Standard</string>
     <string name="dvbt_2">DvbT2</string>
     <string name="frequency">Frequency</string>
@@ -17,6 +18,7 @@
     <string name="transmission_mode">Mode</string>
     <string name="qam_mode">Qam Mode</string>
     <string name="modulation">Modulation</string>
+    <string name="mode">Search Mode</string>
 
     <string name="play_mode_live">Live</string>
     <string name="play_mode_playback">Playback</string>

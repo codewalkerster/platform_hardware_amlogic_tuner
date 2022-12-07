@@ -21,6 +21,7 @@
 #include <android/hardware/tv/tuner/1.1/IFrontend.h>
 
 #define CONFIG_AMLOGIC_DVB_COMPAT
+#include "atv_frontend.h"
 #include <semaphore.h>
 #include <utils/Thread.h>
 #include "utils/frontend.h"
@@ -35,8 +36,20 @@ namespace tuner {
 namespace V1_0 {
 namespace implementation {
 
+#ifdef CONFIG_AMLOGIC_DVB_COMPAT
+#ifndef SYS_ANALOG
+#define SYS_ANALOG (SYS_DVBC_ANNEX_C+1)
+#endif
+#endif
+
 class Frontend;
 class HwFeState;
+
+typedef enum {
+    FE_SIGNAL_WAIT,
+    FE_SIGNAL_LOCKED,
+    FE_SIGNAL_TIMEOUT,
+}e_signal_status_t;
 
 class FrontendDevice : public Thread {
 public:
@@ -69,6 +82,7 @@ public:
     virtual int getFrontendSettingsExt(V1_1::FrontendSettingsExt1_1 *settingsExt, void* fe_params) {return -1;};
     void setHwFe(const sp<HwFeState>& hwFe);
     int getFrontendId();
+    FrontendType getFeType();
     stbtrace_info mStbTrace_info;
     struct timeval tune_start_time;
     struct timeval tune_end_time;
@@ -107,6 +121,13 @@ public:
     }e_return_ret_t;
 
     fe_dev_t* getFeDevice();
+    virtual e_signal_status_t getsignalStatus(int fd, uint32_t &locked_freq);
+    int getAnalogPara(FrontendAnalogType & at, FrontendAnalogSifStandard & ast);
+
+    const unsigned long V4L2_COLOR_STD_PAL = ((unsigned long)0x04000000);
+    const unsigned long V4L2_COLOR_STD_NTSC = ((unsigned long)0x08000000);
+    const unsigned long V4L2_COLOR_STD_SECAM = ((unsigned long)0x10000000);
+    //const unsigned long V4L2_COLOR_STD_AUTO = ((unsigned long)0x02000000);
 
 private:
     sp<Frontend>     mContext;
@@ -134,6 +155,7 @@ private:
 
     int setFeSystem();
     int internalTune(const FrontendSettings & settings, const V1_1::FrontendSettingsExt1_1 &settingsExt);
+    int interAnalogTune(const FrontendSettings & settings);
     int blindTune(const FrontendSettings& settings);
     timeval tuneStartTime();
     int dvb_wait_event (dvb_frontend_event *evt, int timeout);

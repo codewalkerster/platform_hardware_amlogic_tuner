@@ -62,7 +62,7 @@ public class SetupActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= 33) {
             pagerAdapter.addFragment(FragmentDtmbSetup.newInstance("dtmb", null));
         }
-
+        pagerAdapter.addFragment(FragmentAnalogSetup.newInstance("analog", null));
         totalPages = pagerAdapter.getCount();
         ViewPager pager = findViewById(R.id.viewPagerMain);
         pager.setAdapter(pagerAdapter);
@@ -92,6 +92,9 @@ public class SetupActivity extends AppCompatActivity {
                         break;
                     case 5:
                         ScanManager.getInstance().switchSignalType(ScanManager.SIGNAL_TYPE_DTMB);
+                        break;
+                    case 6:
+                        ScanManager.getInstance().switchSignalType(ScanManager.SIGNAL_TYPE_ATV);
                         break;
                 }
                 updateIndicator(position + 1);
@@ -198,6 +201,7 @@ public class SetupActivity extends AppCompatActivity {
             public void onScanEnd() {
                 Log.d(TAG, "scan end");
                 onScanStopped();
+                ScanManager.getInstance().releaseTuner();
             }
         });
     }

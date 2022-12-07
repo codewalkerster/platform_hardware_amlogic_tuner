@@ -2,6 +2,7 @@ package com.droidlogic.tuner.scan;
 
 import android.media.tv.tuner.frontend.DvbcFrontendSettings;
 import android.os.Bundle;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -39,6 +40,7 @@ public class DvbcScanManager extends ScanManagerSession {
 
     @Override
     public DvbcFrontendSettings createScanSettings(int freqMhz, @NonNull Bundle scanParam) {
+        Log.d("tuner_test", "create dvbc scan settings");
         int symbolRate = scanParam.getInt(KEY_SYMBOL_RATE, 0);
         int qamMode = scanParam.getInt(KEY_QAM_MODE, 0);
         DvbcFrontendSettings.Builder builder = DvbcFrontendSettings

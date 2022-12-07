@@ -38,6 +38,131 @@ FrontendAnalogDevice::FrontendAnalogDevice(uint32_t hwId, FrontendType type, con
 FrontendAnalogDevice::~FrontendAnalogDevice() {
 }
 
+int FrontendAnalogDevice::open_tvafe()
+{
+    int ret = -1;
+    struct tvin_parm_s vdinParam;
+
+    if (fd_vdin == -1) {
+        fd_vdin = open("/dev/vdin0", O_RDWR);
+        if (fd_vdin == -1)
+        {
+            ALOGE("!!! Open vdin module, error (%s).\n", strerror(errno));
+            return ret;
+        }
+
+        vdinParam.port = TVIN_PORT_CVBS3;
+        vdinParam.index = 0;
+
+        ret = ioctl(fd_vdin, TVIN_IOC_STOP_DEC);
+        if (ret < 0)
+        {
+            ALOGE("!!! ioctl TVIN_IOC_STOP_DEC, error (%s).\n", strerror(errno));
+        }
+
+        ret = ioctl(fd_vdin, TVIN_IOC_OPEN, &vdinParam);
+        if (ret < 0)
+        {
+            ALOGE("!!! ioctl TVIN_IOC_OPEN, error (%s).\n", strerror(errno));
+            return ret;
+        }
+    } else {
+            vdinParam.port = TVIN_PORT_CVBS3;
+            vdinParam.index = 0;
+            ret = ioctl(fd_vdin, TVIN_IOC_OPEN, &vdinParam);
+            if (ret < 0)
+            {
+                ALOGE("!!! ioctl TVIN_IOC_OPEN, error (%s).\n", strerror(errno));
+                return ret;
+            }
+    }
+
+    if (fd_tvafe == -1) {
+        fd_tvafe = open("/dev/tvafe0", O_RDWR);
+        if (fd_tvafe == -1)
+        {
+            ALOGE(" [%s] Open tvafe module, error (%s).\n", __FUNCTION__, strerror(errno));
+        }
+    }
+
+    ALOGI(" [%s]  vdin fd:[%d] , tvafe fd:[%d].\n", __FUNCTION__, fd_vdin, fd_tvafe);
+    return ret;
+}
+
+int FrontendAnalogDevice::close_tvafe()
+{
+    int ret = -1;
+
+    if (fd_vdin != -1)
+    {
+        ret = ioctl(fd_vdin, TVIN_IOC_STOP_DEC);
+        if (ret == -1)
+        {
+            ALOGE("!!! ioctl TVIN_IOC_STOP_DEC, error (%s).\n", strerror(errno));
+        }
+
+        ret = ioctl(fd_vdin, TVIN_IOC_CLOSE);
+        if (ret == -1)
+        {
+            ALOGE("!!! ioctl TVIN_IOC_CLOSE, error (%s).\n", strerror(errno));
+        }
+        close(fd_vdin);
+        fd_vdin = -1;
+    }
+
+    if (fd_tvafe != -1)
+    {
+        close(fd_tvafe);
+        fd_tvafe = -1;
+    }
+
+    return ret;
+}
+
+int FrontendAnalogDevice::set_tvafe(unsigned long std)
+{
+    //set CVBS
+    int ret = -1;
+    enum tvin_sig_fmt_e fmt =(enum tvin_sig_fmt_e)typeEnumToCvbsFmt (std);
+    ret = ioctl(fd_tvafe, TVIN_IOC_S_AFE_CVBS_STD, &fmt);
+    if (ret < 0) {
+        ALOGD( "set_tvafe, error: return(%d), error(%s)!\n", ret, strerror ( errno ) );
+    }
+
+    return ret;
+}
+
+int FrontendAnalogDevice::typeEnumToCvbsFmt (unsigned long feType)
+{
+    ALOGI("[%s] type:%lu", __FUNCTION__, feType);
+    enum tvin_sig_fmt_e cvbs_fmt = TVIN_SIG_FMT_NULL;
+    switch (feType) {
+        case (unsigned long)FrontendAnalogType::PAL:
+            cvbs_fmt = TVIN_SIG_FMT_CVBS_PAL_I;
+            break;
+        case (unsigned long)FrontendAnalogType::PAL_M:
+            cvbs_fmt = TVIN_SIG_FMT_CVBS_PAL_M;
+            break;
+        case (unsigned long)FrontendAnalogType::PAL_N:
+            cvbs_fmt = TVIN_SIG_FMT_CVBS_PAL_CN;
+            break;
+        case (unsigned long)FrontendAnalogType::PAL_60:
+            cvbs_fmt = TVIN_SIG_FMT_CVBS_PAL_60;
+            break;
+        case (unsigned long)FrontendAnalogType::NTSC:
+            cvbs_fmt = TVIN_SIG_FMT_CVBS_NTSC_M;
+            break;
+        case (unsigned long)FrontendAnalogType::NTSC_443:
+            cvbs_fmt = TVIN_SIG_FMT_CVBS_NTSC_443;
+            break;
+        case (unsigned long)FrontendAnalogType::SECAM:
+            cvbs_fmt = TVIN_SIG_FMT_CVBS_SECAM;
+            break;
+    }
+    ALOGI("[%s] fmt:0x%x", __FUNCTION__, cvbs_fmt);
+    return cvbs_fmt;
+}
+
 FrontendModulationStatus FrontendAnalogDevice::getFeModulationStatus() {
     FrontendModulationStatus modulationStatus;
     ALOGW("FrontendDvbtDevice: should not get modulationStatus in analog type.");
@@ -46,7 +171,7 @@ FrontendModulationStatus FrontendAnalogDevice::getFeModulationStatus() {
 }
 
 int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* fe_params) {
-    struct dvb_frontend_parameters *p_fe_params = (struct dvb_frontend_parameters*)(fe_params);
+    struct v4l2_analog_parameters *p_fe_params = (struct v4l2_analog_parameters*)(fe_params);
     unsigned long tmpTVidStd = 0;
     unsigned long tmpAudStd = 0;
 
@@ -91,25 +216,49 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
         settings->analog().sifStandard = FrontendAnalogSifStandard::AUTO;
     }
 
-    //p_fe_params->u.analog.std = tmpTVidStd;
-    //p_fe_params->u.analog.audmode = tmpAudStd;
-    //p_fe_params->u.analog.afc_range = 0;
-    //p_fe_params->u.analog.soundsys = 0xFF;
+    set_tvafe((unsigned long)settings->get<FrontendSettings::Tag::analog>().type);
+
+    p_fe_params->audmode = tmpAudStd;
+    p_fe_params->soundsys = 0xff;
+    p_fe_params->std = tmpTVidStd | tmpAudStd;
+    if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::AUTO) {
+        ALOGD("search , afc set true");
+        p_fe_params->flag  |= ANALOG_FLAG_ENABLE_AFC;
+    } else {
+        ALOGD("play , afc set fasle");
+        p_fe_params->flag  &= ~ANALOG_FLAG_ENABLE_AFC;
+    }
+    p_fe_params->afc_range = 1000000;
     return 0;
 }
 
 int FrontendAnalogDevice::getFeDeliverySystem(FrontendType type) {
-    #if 0
     enum fe_delivery_system fe_system;
 
     if (type != FrontendType::ANALOG) {
         fe_system = SYS_UNDEFINED;
     } else {
-        fe_system = SYS_UNDEFINED;
+        fe_system = (enum fe_delivery_system)SYS_ANALOG;
     }
-    #endif
 
-    return SYS_UNDEFINED;
+    return (int)(fe_system);
+}
+
+e_signal_status_t FrontendAnalogDevice::getsignalStatus(int fd, uint32_t &locked_freq) {
+    struct v4l2_frontend_event v4l2_evt;
+    e_signal_status_t sig_status = FE_SIGNAL_WAIT;
+
+    if (ioctl(fd, V4L2_GET_EVENT, &v4l2_evt) >= 0) {
+      if ((v4l2_evt.status & V4L2_HAS_LOCK) != 0) {
+          sig_status = FE_SIGNAL_LOCKED;
+          locked_freq = v4l2_evt.parameters.frequency;
+      } else if ((v4l2_evt.status & V4L2_TIMEDOUT) != 0) {
+          sig_status = FE_SIGNAL_TIMEOUT;
+      } else {
+          sig_status = FE_SIGNAL_WAIT;
+      }
+    }
+    return sig_status;
 }
 
 }  // namespace implementation

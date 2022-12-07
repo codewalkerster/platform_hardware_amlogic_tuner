@@ -29,7 +29,8 @@
 #include "HwFeState.h"
 
 #define FE_POLL_TIMEOUT_MS 50
-#define FE_STATE_TIMEOUT_MS 3000
+#define FE_STATE_DTV_TIMEOUT_MS 3000
+#define FE_STATE_ATV_TIMEOUT_MS 500
 #define FE_SIGNAL_CHECK_INTERVAL_MS 200
 #define MAX_PLP_NUMBER 256
 
@@ -98,6 +99,10 @@ void FrontendDevice::setHwFe(const sp<HwFeState>& hwFe) {
 
 int FrontendDevice::getFrontendId() {
     return mDev.id;
+}
+
+FrontendType FrontendDevice::getFeType() {
+    return mDev.type;
 }
 
 void FrontendDevice::release() {
@@ -178,7 +183,10 @@ bool FrontendDevice::checkOpen(bool autoOpen) {
 int FrontendDevice::tune(const FrontendSettings & settings) {
     requestTuneStop();
     updateThreadState(FrontendDevice::STATE_TUNE_START);
-    return internalTune(settings);
+    if (mDev.type == FrontendType::ANALOG)
+        return interAnalogTune(settings);
+    else
+        return internalTune(settings);
 }
 
 static int bandwidth_hz (enum fe_bandwidth bw) {
@@ -207,6 +215,82 @@ static int bandwidth_hz (enum fe_bandwidth bw) {
     }
 
     return hz;
+}
+
+int FrontendDevice::getAnalogPara(FrontendAnalogType & at, FrontendAnalogSifStandard & ast) {
+    struct v4l2_analog_parameters v4l2_para;
+
+    if (!checkOpen(true)) {
+        ALOGE("Open fe failed.");
+        return UNAVAILABLE;
+    }
+
+    if (ioctl(mDev.devFd, V4L2_GET_FRONTEND, &v4l2_para) == -1)
+    {
+        ALOGE("ioctl V4L2_GET_FRONTEND failed, error:%s", strerror(errno));
+        return UNAVAILABLE;
+    }
+
+    if ((v4l2_para.std & V4L2_COLOR_STD_PAL) == V4L2_COLOR_STD_PAL) {
+        if ((v4l2_para.audmode & V4L2_STD_PAL_M) == V4L2_STD_PAL_M)
+          at = FrontendAnalogType::PAL_M;
+        else
+          at = FrontendAnalogType::PAL;
+    } else if ((v4l2_para.std & V4L2_COLOR_STD_NTSC) == V4L2_COLOR_STD_NTSC) {
+        at = FrontendAnalogType::NTSC;
+    } else if ((v4l2_para.std & V4L2_COLOR_STD_SECAM) == V4L2_COLOR_STD_SECAM) {
+        at = FrontendAnalogType::SECAM;
+    } else {
+        at = FrontendAnalogType::AUTO;
+    }
+
+    if (((v4l2_para.audmode & V4L2_STD_PAL_DK) == V4L2_STD_PAL_DK) ||
+        ((v4l2_para.audmode & V4L2_STD_SECAM_DK) == V4L2_STD_SECAM_DK)) {
+        ast = FrontendAnalogSifStandard::DK;
+    } else if ((v4l2_para.audmode & V4L2_STD_PAL_I) == V4L2_STD_PAL_I) {
+        ast = FrontendAnalogSifStandard::I;
+    } else if (((v4l2_para.audmode & V4L2_STD_PAL_BG) == V4L2_STD_PAL_BG) ||
+               ((v4l2_para.audmode & V4L2_STD_SECAM_B) == V4L2_STD_SECAM_B) ||
+               ((v4l2_para.audmode & V4L2_STD_SECAM_G) == V4L2_STD_SECAM_G )) {
+        ast = FrontendAnalogSifStandard::BG;
+    } else if (((v4l2_para.audmode & V4L2_STD_PAL_M) == V4L2_STD_PAL_M) ||
+               ((v4l2_para.audmode & V4L2_STD_NTSC_M) == V4L2_STD_NTSC_M)) {
+        ast = FrontendAnalogSifStandard::M;
+    } else if ((v4l2_para.audmode & V4L2_STD_SECAM_L) == V4L2_STD_SECAM_L) {
+        ast = FrontendAnalogSifStandard::L;
+    } else {
+        ast = FrontendAnalogSifStandard::DK;
+    }
+
+    return 0;
+}
+
+int FrontendDevice::interAnalogTune(const FrontendSettings & settings) {
+    struct v4l2_analog_parameters v4l2_para;
+
+    ALOGD("%s, id(%d)", __FUNCTION__, mDev.id);
+    FrontendSettings tuneSettings = settings;
+    mDev.feSettings = &tuneSettings;
+    if (getFrontendSettings(&tuneSettings, &v4l2_para) <0) {
+        ALOGE("[id:%d] Wrong delivery system in FrontendSettings, or not support it.", mDev.id);
+        sem_post(&threadSemaphore);
+        return INVALID_ARGUMENT;
+    }
+
+    mDev.tuneFreq = v4l2_para.frequency;
+    if (!checkOpen(true)) {
+        ALOGE("Open fe failed.");
+        sem_post(&threadSemaphore);
+        return UNAVAILABLE;
+    }
+    ALOGD("%s, frequency = %d", __FUNCTION__, mDev.tuneFreq);
+    if (ioctl(mDev.devFd, V4L2_SET_FRONTEND, &v4l2_para) == -1) {
+         ALOGE("tune failed, (%s)", strerror(errno));
+         sem_post(&threadSemaphore);
+         return UNAVAILABLE;
+    }
+    sem_post(&threadSemaphore);
+    return 0;
 }
 
 int FrontendDevice::internalTune(const FrontendSettings & settings) {
@@ -437,7 +521,10 @@ int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType typ
         mDev.blindFreq = 0;
         requestTuneStop();
         updateThreadState(FrontendDevice::STATE_SCAN_START);
-        ret = internalTune(settings);
+        if (mDev.type == FrontendType::ANALOG)
+          ret = interAnalogTune(settings);
+        else
+          ret = internalTune(settings);
     } else if (type == FrontendScanType::SCAN_BLIND) {
         ret = blindTune(settings);
     } else {
@@ -654,12 +741,30 @@ void FrontendDevice::onFirstRef(void) {
     run("DroidFeTask");
 }
 
+e_signal_status_t FrontendDevice::getsignalStatus(int fd, uint32_t &locked_freq) {
+    struct dvb_frontend_event fe_event;
+    e_signal_status_t sig_status = FE_SIGNAL_WAIT;
+
+    if (ioctl(fd, FE_GET_EVENT, &fe_event) >= 0) {
+      if ((fe_event.status & FE_HAS_LOCK) != 0) {
+         sig_status = FE_SIGNAL_LOCKED;
+         locked_freq = fe_event.parameters.frequency;
+      } else if ((fe_event.status & FE_TIMEDOUT) != 0) {
+         sig_status = FE_SIGNAL_TIMEOUT;
+      } else {
+         sig_status = FE_SIGNAL_WAIT;
+      }
+    }
+    return sig_status;
+}
+
 bool FrontendDevice::threadLoop() {
     int state = getThreadState();
     bool stop;
-    uint32_t start_time;
+    uint32_t start_time, fe_timeout;
     struct pollfd pfd;
-    struct dvb_frontend_event fe_event;
+    e_signal_status_t sig_st = FE_SIGNAL_WAIT;
+    uint32_t locked_freq = mDev.tuneFreq;
 
     if (state == FrontendDevice::STATE_TUNE_START
        || state == FrontendDevice::STATE_SCAN_START
@@ -677,16 +782,21 @@ bool FrontendDevice::threadLoop() {
             std::lock_guard<std::mutex> lock(mHwDevLock);
             pfd.fd = mDev.devFd;
         }
+
+        if (mDev.type == FrontendType::ANALOG)
+            fe_timeout = FE_STATE_DTV_TIMEOUT_MS;
+        else
+            fe_timeout = FE_STATE_ATV_TIMEOUT_MS;
+
         pfd.events = POLLIN;
         pfd.revents = 0;
         for (start_time = getClockMilliSeconds();
-             !stop && ((getClockMilliSeconds() - start_time) < FE_STATE_TIMEOUT_MS);) {
+             !stop && ((getClockMilliSeconds() - start_time) < fe_timeout);) {
             if (poll(&pfd, 1, FE_POLL_TIMEOUT_MS) == 1) {
-                if (ioctl(mDev.devFd, FE_GET_EVENT, &fe_event) >= 0) {
-                    if ((fe_event.status & FE_HAS_LOCK) !=0
-                        || (fe_event.status & FE_TIMEDOUT) != 0) {
-                        break;
-                    }
+                sig_st = getsignalStatus(mDev.devFd, locked_freq);
+                if (sig_st == FE_SIGNAL_LOCKED ||
+                    sig_st == FE_SIGNAL_TIMEOUT) {
+                      break;
                 }
             } else {
                 if (state == FrontendDevice::STATE_TUNE_IDLE) {
@@ -704,13 +814,14 @@ bool FrontendDevice::threadLoop() {
         if (mRequestTunningStop || newState == FrontendDevice::STATE_STOP) {
             stop = true;
         }
-        if (fe_event.status != 0 && !stop) {
-            bool locked = ((fe_event.status & FE_HAS_LOCK) !=0);
-            ALOGI("%s-(id:%d): get fe event: 0x%02x, locked=%d, dev_locked=%d", __FUNCTION__, mDev.id, fe_event.status, locked, mDev.islocked);
+
+        if (sig_st != FE_SIGNAL_WAIT && !stop) {
+            bool locked = (sig_st == FE_SIGNAL_LOCKED);
+            ALOGI("%s-(id:%d): getsignalStatus: %d, locked=%d, dev_locked=%d", __FUNCTION__, mDev.id, sig_st, locked, mDev.islocked);
             if (state == STATE_SCAN_START) {
                 ALOGD("%s-(id:%d): send scan event.", __FUNCTION__, mDev.id);
                 mDev.islocked = locked;
-                mContext->sendScanCallBack(mDev.tuneFreq, locked, false);
+                mContext->sendScanCallBack(locked_freq, locked, false);
                 updateThreadState(FrontendDevice::STATE_STOP);
             } else if (state == STATE_TUNE_START) {
                 ALOGI("%s-(id:%d): send tune event.", __FUNCTION__, mDev.id);

@@ -39,6 +39,10 @@ class HwFeState : public ::android::RefBase {
    void releaseFromLnb();
 
   private:
+  int atv_open(void);
+  int atv_close(int feId);
+  int dtv_open(void);
+  int dtv_close(int feId);
    virtual ~HwFeState();
    int hwId;
    int fd;

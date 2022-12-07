@@ -28,7 +28,8 @@ public class ScanManager {
     private AtscScanManager mAtscScanManager;
     private IsdbtScanManager mIsdbtScanManager;
     private DtmbScanManager mDtmbScanManager;
-
+    private AnalogScanManager mAnalogScanManager;
+    private Tuner mTuner = null;
     public final static int SIGNAL_TYPE_ATV = 0;
     public final static int SIGNAL_TYPE_ATSC = 1;
     public final static int SIGNAL_TYPE_DTMB = 2;
@@ -50,6 +51,7 @@ public class ScanManager {
         mAtscScanManager = new AtscScanManager();
         mIsdbtScanManager = new IsdbtScanManager();
         mDtmbScanManager = new DtmbScanManager();
+        mAnalogScanManager = new AnalogScanManager();
         mExecutor = new ThreadManager.TunerExecutor();
     }
 
@@ -89,6 +91,8 @@ public class ScanManager {
                 return mDvbsScanManager;
             case SIGNAL_TYPE_DTMB:
                 return mDtmbScanManager;
+            case SIGNAL_TYPE_ATV:
+                return mAnalogScanManager;
         }
         return null;
     }
@@ -101,6 +105,15 @@ public class ScanManager {
         return null;
     }
 
+    public void releaseTuner () {
+        if (mTuner != null) {
+        Log.d(TAG, "releaseTuner: " + mTuner);
+        TunerControl.getInstance().releaseTuner(mTuner);
+        mTuner = null;
+        } else {
+            Log.d(TAG, "releaseTuner: mTuner has released");
+        }
+    }
     public void startScan(@NonNull Context context, int freqMhz, @NonNull Bundle scanParam) {
         int tuneRest = 0;
         if (mScanEvt != null) {
@@ -115,12 +128,14 @@ public class ScanManager {
             }
             return;
         }
+        mTuner = tuner;
         ChannelManager.getInstance().clearChannels();
         tuner.clearOnTuneEventListener();
         tuner.cancelScanning();
         getSession(mSignalType).onEarlyScan(tuner, scanParam);
         FrontendSettings setting = getFrontendSettings(freqMhz, scanParam);
         if (setting != null) {
+            Log.d(TAG, "start tuner scan.");
             tuneRest = tuner.scan(
                     setting,
                     Tuner.SCAN_TYPE_AUTO, mExecutor, new OnScanListenerImpl(tuner,

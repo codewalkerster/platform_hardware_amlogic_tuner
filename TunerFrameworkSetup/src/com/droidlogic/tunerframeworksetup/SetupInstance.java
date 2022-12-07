@@ -158,6 +158,8 @@ public class SetupInstance implements OnTuneEventListener,
     private AtomicBoolean mDvrReadStart = new AtomicBoolean(false);
     private AtomicBoolean mDvrReadThreadExit = new AtomicBoolean(true);
 
+    private AnalogFrontendSettings mAnalogFeSetting  = null;
+
     /**
      * The event to indicate that the status of CAS system is changed by the removal or insertion of
      * physical CAS modules.
@@ -317,6 +319,11 @@ public class SetupInstance implements OnTuneEventListener,
         mLocalTsFileForPlayback = file;
     }
 
+    public void setScanMode(String m) {
+        mScanMode = m;
+        Log.d(TAG, "setScanMode=" + mScanMode);
+    }
+
     public void setFrequency(int frequency) {
         mFrequency = frequency;
     }
@@ -348,10 +355,21 @@ public class SetupInstance implements OnTuneEventListener,
                     searchStop();
                     break;
                 case TaskMsg.TASK_MSG_START_PLAY:
-                    playStart(true);
+                    if (!"Analog".equals(mScanMode)) {
+                        playStart(true);
+                    } else {
+                        mUiHandler.sendMessage(mUiHandler.obtainMessage(SetupActivity.UI_MSG_STATUS, "play atv"));
+                        if (mTuner != null) {
+                            FrontendSettings feSettings = mAnalogFeSetting;
+                            int res = mTuner.tune(feSettings);
+                            Log.d(TAG, "antest mTuner.tune ret=" + res);
+                        }
+                    }
                     break;
                 case TaskMsg.TASK_MSG_STOP_PLAY:
-                    stopDvrPlayback();
+                    if (!"Analog".equals(mScanMode)) {
+                        stopDvrPlayback();
+                    }
                     break;
                 case TaskMsg.TASK_MSG_PULL_SECTION:
                     startSectionFilter(message.arg1, message.arg2);
@@ -880,6 +898,7 @@ public class SetupInstance implements OnTuneEventListener,
             mUiHandler.sendMessage(mUiHandler.obtainMessage(SetupActivity.UI_MSG_STATUS, "Frequency invalid"));
             return;
         }
+        Log.d(TAG, "antest searchStart mScanMode=" + mScanMode);
         switch (mScanMode) {
             case "Dvbt":
             case "Dvbt2": {
@@ -930,12 +949,13 @@ public class SetupInstance implements OnTuneEventListener,
             }
             break;
             case "Analog": {
-                feSettings = AnalogFrontendSettings
+                mAnalogFeSetting = AnalogFrontendSettings
                 .builder()
-                .setFrequency(freqMhz  * 1000000)
-                .setSignalType(AnalogFrontendSettings.SIGNAL_TYPE_NTSC)
-                .setSifStandard(AnalogFrontendSettings.SIF_M)
+                .setFrequency(freqMhz  * 1000000 + 250000)
+                .setSignalType(AnalogFrontendSettings.SIGNAL_TYPE_AUTO)
+                .setSifStandard(AnalogFrontendSettings.SIF_AUTO)
                 .build();
+                feSettings = mAnalogFeSetting;
             }
             break;
             case "Atsc": {
@@ -994,7 +1014,8 @@ public class SetupInstance implements OnTuneEventListener,
                     mTuner.setOnTuneEventListener(mExecutor, this);
                 }
             }
-            mTuner.scan(feSettings, Tuner.SCAN_TYPE_AUTO, mExecutor, this);
+            int result = mTuner.scan(feSettings, Tuner.SCAN_TYPE_AUTO, mExecutor, this);
+            Log.d(TAG, "antest mTuner.scan ret=" + result);
         } else {
             Log.e(TAG, "feSettings is null");
             mUiHandler.sendMessage(mUiHandler.obtainMessage(SetupActivity.UI_MSG_STATUS, "Error with fe settings"));
@@ -1003,11 +1024,13 @@ public class SetupInstance implements OnTuneEventListener,
     }
 
     private void searchStop() {
-        if (mPatSectionFilter != null) {
-            mPatSectionFilter.stop();
-        }
-        if (mPmtSectionFilter != null) {
-            mPmtSectionFilter.stop();
+        if (!"Analog".equals(mScanMode)) {
+            if (mPatSectionFilter != null) {
+                mPatSectionFilter.stop();
+            }
+            if (mPmtSectionFilter != null) {
+                mPmtSectionFilter.stop();
+            }
         }
 
         if (mTuner != null && !mEnableLocalPlay) {
@@ -2831,7 +2854,7 @@ public class SetupInstance implements OnTuneEventListener,
     }
     @Override
     public void onFrequenciesReported(int[] frequency) {
-        Log.d(TAG, "onFrequenciesReported");
+        Log.d(TAG, "onFrequenciesReported frequency =" + frequency[0]);
         if (mTuner != null) {
             if (!mTuner.getFrontendStatus(new int[]{FrontendStatus.FRONTEND_STATUS_TYPE_RF_LOCK}).isRfLocked()) {
                 Log.d(TAG, "unlock, should stop");
@@ -2840,6 +2863,14 @@ public class SetupInstance implements OnTuneEventListener,
             } else {
                 Log.d(TAG, "locked, waiting to build psi.");
             }
+        }
+        if ("Analog".equals(mScanMode)) {
+            mAnalogFeSetting = AnalogFrontendSettings
+            .builder()
+            .setFrequency(frequency[0])
+            .setSignalType(mAnalogFeSetting.getSignalType())
+            .setSifStandard(mAnalogFeSetting.getSifStandard())
+            .build();
         }
     }
     @Override
@@ -2868,7 +2899,18 @@ public class SetupInstance implements OnTuneEventListener,
     }
     @Override
     public void onAnalogSifStandardReported(int sif) {
-        Log.d(TAG, "onAnalogSifStandardReported");
+        Log.d(TAG, "onAnalogSifStandardReported sif =" + sif);
+        mAnalogFeSetting = AnalogFrontendSettings
+        .builder()
+        .setFrequency(mAnalogFeSetting.getFrequency())
+        .setSignalType(mAnalogFeSetting.getSignalType())
+        .setSifStandard(sif)
+        .build();
+        searchStop();
+        Message msg = mTaskHandler.obtainMessage(TaskMsg.TASK_MSG_START_PLAY);
+        msg.arg1 = 0;
+        msg.arg2 = 0;
+        mTaskHandler.sendMessage(msg);
     }
     @Override
     public void onAtsc3PlpInfosReported(Atsc3PlpInfo[] atsc3PlpInfos) {
@@ -2880,7 +2922,13 @@ public class SetupInstance implements OnTuneEventListener,
     }
     @Override
     public void onSignalTypeReported(int signalType) {
-        Log.d(TAG, "onSignalTypeReported");
+        Log.d(TAG, "onSignalTypeReported signalType =" + signalType);
+        mAnalogFeSetting = AnalogFrontendSettings
+        .builder()
+        .setFrequency(mAnalogFeSetting.getFrequency())
+        .setSignalType(signalType)
+        .setSifStandard(mAnalogFeSetting.getSifStandard())
+        .build();
     }
     public class TunerExecutor implements Executor {
         public void execute(Runnable r) {

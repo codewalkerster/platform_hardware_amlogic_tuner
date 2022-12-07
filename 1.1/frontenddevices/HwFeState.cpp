@@ -15,10 +15,13 @@
  */
 
 #define LOG_TAG "droidlogic_frontend"
-
+#include <sys/ioctl.h>
+#include <sys/poll.h>
+#include <math.h>
 #include <utils/Log.h>
 //#include <fcntl.h>
 #include "HwFeState.h"
+#include "FrontendDevice.h"
 
 namespace android {
 namespace hardware {
@@ -43,15 +46,76 @@ HwFeState::~HwFeState() {
     }
 }
 
-int HwFeState::acquire(sp<FrontendDevice> device) {
+int HwFeState::atv_open(void) {
     char fe_name[32];
+    int ret;
+    int fe_mode = 1;
 
+    snprintf(fe_name, sizeof(fe_name), "/dev/v4l2_frontend");
+    if ((ret = open(fe_name, O_RDWR | O_NONBLOCK)) != -1) { // open atv fe
+      ALOGE("[HWFE(%d)]:open hw atv tuner with fd(%d)", this->hwId, ret);
+      if (ioctl(ret, V4L2_SET_MODE, &fe_mode) == -1) { //enter atv
+        ALOGE("ioctl V4L2_SET_MODE failed, error:%s", strerror(errno));
+      }
+    } else {
+      ALOGW("[HWFE(%d)]:open %s failed: %s", this->hwId, fe_name, strerror(errno));
+    }
+    return ret;
+}
+
+int HwFeState::atv_close(int feId) {
+    int ret;
+    int fe_mode = 0;
+
+    // close atv fe
+    if (ioctl(fd, V4L2_SET_MODE, &fe_mode) == -1) { //leave atv
+      ALOGE("ioctl V4L2_SET_MODE failed, error:%s", strerror(errno));
+    }
+    ret = close(fd);
+    ALOGI("release atv fe fd(%d) with feId(%d), ret(%d)",
+          fd, feId, ret);
+    return ret;
+}
+
+int HwFeState::dtv_open(void) {
+    char fe_name[32];
+    int ret;
+
+    snprintf(fe_name, sizeof(fe_name),
+             "/dev/dvb0.frontend%d", hwId);
+    if ((ret = open(fe_name, O_RDWR | O_NONBLOCK)) != -1) { // open dtv fe
+      ALOGD("[HWFE(%d)]:open hw dtv tuner with fd(%d)", this->hwId, ret);
+    } else {
+      ALOGE("[HWFE(%d)]:open %s failed: %s", this->hwId, fe_name, strerror(errno));
+    }
+    return ret;
+}
+
+int HwFeState::dtv_close(int feId) {
+    int ret;
+
+    struct dtv_property p =
+    { .cmd = DTV_DELIVERY_SYSTEM,
+      .u.data = SYS_ANALOG };
+    struct dtv_properties props = { .num = 1, .props = &p };
+    if (ioctl(fd, FE_SET_PROPERTY, &props) == -1) {
+      ALOGE("[HWFE(%d)]:Set fe system failed: %s", this->hwId, strerror(errno));
+    }
+    ret = close(fd); // close dtv fe
+    ALOGI("release hw fe fd(%d) with feId(%d), ret(%d)",
+          fd, feId, ret);
+    return ret;
+}
+
+int HwFeState::acquire(sp<FrontendDevice> device) {
     if (device == nullptr)
         return -1;
 
     ALOGI("[HWFE(%d)]:acquire hw frontend from fontendId(%d) lnbUsing = %d fd = %d", this->hwId, device->getFrontendId(), lnbUsing, fd);
     if (fd != -1) {
-        if (owner == nullptr && lnbUsing) {
+        if (owner == nullptr &&
+            lnbUsing &&
+            device->getFeType() != FrontendType::ANALOG) {
             owner = device;
             return fd;
         }
@@ -60,17 +124,25 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
         } else {
             if (owner != nullptr) {
                 owner->stopByHw();
+                if (device->getFeType() == FrontendType::ANALOG) {
+                    //to atv from dtv
+                    dtv_close(owner->getFrontendId());
+                    fd = atv_open();
+                } else if (owner->getFeType() == FrontendType::ANALOG) {
+                    //to dtv from atv
+                    atv_close(owner->getFrontendId());
+                    fd = dtv_open();
+                }
             }
             owner = device;
         }
     } else {
-        snprintf(fe_name, sizeof(fe_name),
-                 "/dev/dvb0.frontend%d", hwId);
-        if ((fd = open(fe_name, O_RDWR | O_NONBLOCK)) != -1) {
-            ALOGD("[HWFE(%d)]:open hw tuner with fd(%d)", this->hwId, fd);
+        if (device->getFeType() == FrontendType::ANALOG)
+           fd = atv_open();
+        else
+           fd = dtv_open();
+        if (fd != -1) {
             owner = device;
-        } else {
-            ALOGW("[HWFE(%d)]:open %s failed: %s", this->hwId, fe_name, strerror(errno));
         }
     }
     return fd;
@@ -102,8 +174,10 @@ void HwFeState::release(int fd, sp<FrontendDevice> device) {
     }
 
     if (this->fd != -1 && owner->getFrontendId() == device->getFrontendId()) {
-        int ret = close(this->fd);
-        ALOGI("release hw frontend fd(%d) with fontendId(%d), ret(%d)", fd, device->getFrontendId(), ret);
+        if (owner->getFeType() == FrontendType::ANALOG)
+          atv_close(owner->getFrontendId());
+        else
+          dtv_close(owner->getFrontendId());
         this->fd = -1;
         owner = nullptr;
     }

@@ -384,10 +384,10 @@ public class SetupActivity extends Activity {
                 if (!localMode) {
                     if ("Dvbc".equals(mScanMode)) {
                         mLayoutSymbol.setVisibility(View.VISIBLE);
-                        mSymbol.setHint(6900);
+                        mSymbol.setHint("6900");
                     } else if ("Dvbs".equals(mScanMode)) {
                         mLayoutSymbol.setVisibility(View.VISIBLE);
-                        mSymbol.setHint(27500);
+                        mSymbol.setHint("27500");
                     }
                 }
                 mStatus.setVisibility(tunerVisible);
@@ -467,11 +467,27 @@ public class SetupActivity extends Activity {
                     Log.d(TAG, "Click search start " + mInstance);
                     mPlayerViews[mInstance].setVisibility(View.VISIBLE);
                     mUiHandler.sendMessage(mUiHandler.obtainMessage(UI_MSG_STATUS, "search_start"));
-                    mInstances[mInstance].setFrequency(Integer.parseInt(mFrequency.getText().toString()));
-                    if ("Dvbc".equals(mScanMode) || "Dvbs".equals(mScanMode))
-                        mInstances[mInstance].setSymbol(Integer.parseInt(mSymbol.getText().toString()));
+                    mInstances[mInstance].setScanMode(mScanMode);
+                    String mfreq = mFrequency.getText().toString();
+                    if (mfreq != null && !mfreq.isEmpty()) {
+                        mInstances[mInstance].setFrequency(Integer.parseInt(mfreq));
+                    } else {
+                        mInstances[mInstance].setFrequency(0);
+                    }
+                    if ("Dvbc".equals(mScanMode) || "Dvbs".equals(mScanMode)) {
+                        String sym = mSymbol.getText().toString();
+                        if (sym.equals(""))
+                            mInstances[mInstance].setSymbol(6900);
+                        else
+                            mInstances[mInstance].setSymbol(Integer.parseInt(sym));
+                    }
                     mInstances[mInstance].setEnableLocalPlay(mEnableLocalPlay);
-                    mInstances[mInstance].setProgramId(Integer.parseInt(mChannelIds[mInstance].getText().toString()));
+                    String mid = mChannelIds[mInstance].getText().toString();
+                    if (mid != null && !mid.isEmpty()) {
+                        mInstances[mInstance].setProgramId(Integer.parseInt(mid));
+                    } else {
+                        mInstances[mInstance].setProgramId(0);
+                    }
                     mInstances[mInstance].getTaskHandler().sendEmptyMessage(TaskMsg.TASK_MSG_START_SEARCH);
                     break;
                 case R.id.search_stop:
