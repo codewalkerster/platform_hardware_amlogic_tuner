@@ -373,7 +373,7 @@ bool Dvr::processEsDataOnPlayback(bool isVirtualFrontend, bool isRecording) {
     }
 
     if (metaDataSize + audioEsDataSize + videoEsDataSize != size) {
-        ALOGE("[Dvr] Invalid meta data, metaSize=%d, videoSize=%d, audioSize=%d, totolSize=%d",
+        ALOGE("[Dvr] Invalid meta data, metaSize=%d, videoSize=%d, audioSize=%d, totalSize=%d",
               metaDataSize, videoEsDataSize, audioEsDataSize, size);
         return false;
     }

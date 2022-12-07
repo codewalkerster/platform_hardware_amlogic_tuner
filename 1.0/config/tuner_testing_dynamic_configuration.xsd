@@ -453,13 +453,13 @@
                         "dataFlowConfiguration"
                     "casSystemId": the cas system id to connect to the descrambler.
                     "provisionStr": the provision string to use with the cas plugin.
-                    "sessionPrivatData": the session private data used to open the cas session.
+                    "sessionPrivateData": the session private data used to open the cas session.
             </xs:documentation>
         </xs:annotation>
         <xs:attribute name="id" type="descramblerId" use="required"/>
         <xs:attribute name="casSystemId" type="xs:nonNegativeInteger" use="required"/>
         <xs:attribute name="provisionStr" type="xs:string" use="optional"/>
-        <xs:attribute name="sessionPrivatData" type="sessionPrivateData" use="optional"/>
+        <xs:attribute name="sessionPrivateData" type="sessionPrivateData" use="optional"/>
     </xs:complexType>
 
     <!-- HARDWARE CONFIGURATION SESSION -->

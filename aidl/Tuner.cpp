@@ -482,7 +482,7 @@ binder_status_t Tuner::dump(int fd, const char** args, uint32_t numArgs) {
         }
     }
     {
-        dprintf(fd, "Demuxs:\n");
+        dprintf(fd, "Demuxes:\n");
         map<int32_t, std::shared_ptr<Demux>>::iterator it;
         for (it = mDemuxes.begin(); it != mDemuxes.end(); it++) {
             it->second->dump(fd, args, numArgs);
