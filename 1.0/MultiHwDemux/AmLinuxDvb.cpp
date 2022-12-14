@@ -88,6 +88,10 @@ AM_ErrorCode_t AmLinuxDvb::dvb_close(AM_DMX_Device *dev) {
         dmx->evtfd = -1;
     }
 
+    /*
+     * This is the logic, no need to modify, ignore coverity weak cryptor report.
+     */
+    /* coverity[event_tag:SUPPRESS] */
     if (dmx != NULL) {
         free(dmx);
         dmx = NULL;

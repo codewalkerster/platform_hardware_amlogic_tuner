@@ -65,6 +65,7 @@ FrontendDevice::FrontendDevice(uint32_t thId, FrontendType type, const sp<Fronte
     mDev.islocked = false;
     mRequestTunningStop = false;
     mThreadState = STATE_INITIAL_IDLE;
+    mPlpId = 0;
     if (type == FrontendType::ATSC3
         || type == FrontendType::ISDBS
         || type == FrontendType::ISDBS3) {

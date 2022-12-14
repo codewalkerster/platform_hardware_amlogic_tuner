@@ -1350,7 +1350,11 @@ int Filter::createAvIonFd(int size) {
         return -1;
     }
     int av_fd = -1;
-    ion_alloc_fd(dup(mIonFd), size, 0 /*align*/, ION_HEAP_SYSTEM_MASK, 0 /*flags*/, &av_fd);
+    int ret_ion_alloc_fd = ion_alloc_fd(dup(mIonFd), size, 0 /*align*/, ION_HEAP_SYSTEM_MASK, 0 /*flags*/, &av_fd);
+    if (ret_ion_alloc_fd < 0) {
+        ALOGE("[Filter] Failed to allocate ion buffer errno:%d!", errno);
+        return -1;
+    }
     if (av_fd == -1) {
         ALOGE("[Filter] Failed to create av fd errno:%d!", errno);
         return -1;

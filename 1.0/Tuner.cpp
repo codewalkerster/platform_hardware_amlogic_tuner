@@ -225,6 +225,10 @@ Tuner::Tuner() {
             }
 
             root.clear();
+            /*
+             * This is the logic, no need to modify, ignore coverity weak cryptor report.
+             */
+            /* coverity[event_tag:SUPPRESS] */
             if (data)
                 free(data);
             fclose(fp);

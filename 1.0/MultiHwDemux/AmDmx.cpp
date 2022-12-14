@@ -81,6 +81,7 @@ AM_ErrorCode_t AM_DMX_Device::dmx_get_used_filter(int filter_id, AM_DMX_Filter *
 
 #if 1
 
+/*
 static AM_ErrorCode_t read_dmx_non_sec_es_data(void *arg, int id, AM_DMX_Filter *filter, uint8_t *sec_buf, int BUF_SIZE) {
     AM_ErrorCode_t ret;
     AM_DMX_Device *dev = (AM_DMX_Device*)arg;
@@ -157,7 +158,7 @@ pthread_mutex_unlock(&dev->lock);
     // ALOGI("dmx_non_sec_es_data out \n");
     return ret;
 }
-
+*/
 
 static AM_ErrorCode_t read_dmx_sec_es_data(void *arg, int id, AM_DMX_Filter *filter, uint8_t *sec_buf, int BUF_SIZE) {
     AM_ErrorCode_t ret;
