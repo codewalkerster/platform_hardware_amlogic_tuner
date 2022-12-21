@@ -153,6 +153,14 @@ cc_defaults {
         "vendor/amlogic/common/frameworks/services/systemcontrol",
         "vendor/amlogic/common/frameworks/services/systemcontrol/PQ/include",
     ],
+    arch: {
+        x86: {
+            enabled: false,
+        },
+        x86_64: {
+            enabled: false,
+        },
+    }
 }
 
 cc_binary {
