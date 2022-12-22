@@ -110,7 +110,7 @@ private:
     e_event_stat_t   mThreadState;
     fe_dev_t         mDev;
     bool             unsupportSystem;
-    bool             mRequestTunningStop;
+    bool             mRequestTuningStop;
     int32_t          mPlpId;
 
     virtual bool     threadLoop(void);

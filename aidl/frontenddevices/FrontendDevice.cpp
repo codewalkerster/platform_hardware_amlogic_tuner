@@ -62,7 +62,7 @@ FrontendDevice::FrontendDevice(uint32_t thId, FrontendType type, const sp<Fronte
     mDev.blindFreq = 0;
     mDev.tuneFreq = 0;
     mDev.islocked = false;
-    mRequestTunningStop = false;
+    mRequestTuningStop = false;
     mThreadState = STATE_INITIAL_IDLE;
     if (type == FrontendType::ATSC3
         || type == FrontendType::ISDBS
@@ -640,7 +640,7 @@ bool FrontendDevice::threadLoop() {
        || state == FrontendDevice::STATE_TUNE_IDLE) {
         stop = false;
         int newState = getThreadState();
-        if (mRequestTunningStop || newState == FrontendDevice::STATE_STOP) {
+        if (mRequestTuningStop || newState == FrontendDevice::STATE_STOP) {
             stop = true;
         }
         if (state == FrontendDevice::STATE_TUNE_START
@@ -670,12 +670,12 @@ bool FrontendDevice::threadLoop() {
                 }
             }
             newState = getThreadState();
-            if (mRequestTunningStop || newState == FrontendDevice::STATE_STOP) {
+            if (mRequestTuningStop || newState == FrontendDevice::STATE_STOP) {
                 stop = true;
             }
         }
         newState = getThreadState();
-        if (mRequestTunningStop || newState == FrontendDevice::STATE_STOP) {
+        if (mRequestTuningStop || newState == FrontendDevice::STATE_STOP) {
             stop = true;
         }
         if (fe_event.status != 0 && !stop) {
@@ -707,7 +707,7 @@ bool FrontendDevice::threadLoop() {
                 }
             }
         }
-        if (mRequestTunningStop) {
+        if (mRequestTuningStop) {
             updateThreadState(FrontendDevice::STATE_STOP);
         }
         if (getThreadState() == FrontendDevice::STATE_TUNE_IDLE) {
@@ -743,7 +743,7 @@ void FrontendDevice::updateThreadState(int state) {
 void FrontendDevice::requestTuneStop(void) {
     bool ready = false;
 
-    mRequestTunningStop = true;
+    mRequestTuningStop = true;
     while (ready == false) {
         int state = getThreadState();
         ALOGV("%s-(id:%d): state=%d", __FUNCTION__, mDev.id, state);
@@ -752,7 +752,7 @@ void FrontendDevice::requestTuneStop(void) {
             ready = true;
         }
     }
-    mRequestTunningStop = false;
+    mRequestTuningStop = false;
 }
 
 FrontendSettings* FrontendDevice::getFeSetting() {

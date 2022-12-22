@@ -41,7 +41,7 @@ private:
     ~FrontendIsdbtDevice();
     int getFeModulationType(const FrontendIsdbtModulation& type);
     int getFeInnerFecTypeFromCodeRate(const FrontendDvbtCoderate& rate);
-    int getFeBandwithType(const FrontendIsdbtBandwidth& bandWidth);
+    int getFeBandwidthType(const FrontendIsdbtBandwidth& bandWidth);
     int getFeDvbGuardIntervalType(const FrontendIsdbtGuardInterval& type);
 };
 

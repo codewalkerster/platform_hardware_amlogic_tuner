@@ -1542,7 +1542,7 @@ void Filter::detachFilterFromRecord() {
 }
 
 int Filter::createAvIonFd(int size) {
-    // Create an DMA-BUF fd and allocate an av fd mapped to a buffer to it.
+    // Create a DMA-BUF fd and allocate an av fd mapped to a buffer to it.
     auto buffer_allocator = std::make_unique<BufferAllocator>();
     if (!buffer_allocator) {
         ALOGE("[Filter] Unable to create BufferAllocator object");

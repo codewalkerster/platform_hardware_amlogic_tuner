@@ -40,7 +40,7 @@ private:
     ~FrontendDvbtDevice();
     int getFeModulationType(const FrontendDvbtConstellation& type);
     int getFeInnerFecTypeFromCodeRate(const FrontendDvbtCoderate& rate);
-    int getFeDvbBandwithType(const FrontendDvbtBandwidth& dvbBandWidth);
+    int getFeDvbBandwidthType(const FrontendDvbtBandwidth& dvbBandWidth);
     int getFeDvbGuardIntervalType(const FrontendDvbtGuardInterval& type);
     int getFeDvbHierarchy(const FrontendDvbtHierarchy& val);
     int getFeDvbTransmissionMode(const FrontendDvbtTransmissionMode& mode);

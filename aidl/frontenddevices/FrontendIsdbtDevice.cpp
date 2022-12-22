@@ -57,7 +57,7 @@ int FrontendIsdbtDevice::getFrontendSettings(FrontendSettings *settings, void * 
         settings->set<FrontendSettings::Tag::isdbt>(isdbtSettings);
     }
     p_fe_params->u.ofdm.bandwidth =
-        (fe_bandwidth_t)(getFeBandwithType(settings->get<FrontendSettings::Tag::isdbt>().bandwidth));
+        (fe_bandwidth_t)(getFeBandwidthType(settings->get<FrontendSettings::Tag::isdbt>().bandwidth));
     /*
     if (settings->get<FrontendSettings::Tag::isdbt>().modulation == FrontendIsdbtModulation::UNDEFINED) {
         isdbtSettings.modulation = FrontendIsdbtModulation::AUTO;
@@ -159,7 +159,7 @@ int FrontendIsdbtDevice::getFeInnerFecTypeFromCodeRate(const FrontendDvbtCoderat
     return fec_inner_type;
 }
 
-int FrontendIsdbtDevice::getFeBandwithType(const FrontendIsdbtBandwidth& bandWidth) {
+int FrontendIsdbtDevice::getFeBandwidthType(const FrontendIsdbtBandwidth& bandWidth) {
     int fe_bandwidth_type = BANDWIDTH_AUTO;
     switch (bandWidth) {
         case FrontendIsdbtBandwidth::BANDWIDTH_8MHZ:
