@@ -36,21 +36,12 @@ func tuner_hal_DefaultsFactory() (android.Module) {
 
 func globalDefaults(ctx android.BaseContext) ([]string) {
     var cppflags []string
-    if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohm" {
-          fmt.Printf("TARGET_PRODUCT is ohm, define SUPPORT_TSD\n")
-          cppflags = append(cppflags,"-DSUPPORT_TSD")
-    }
-    if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohmcas" {
-          fmt.Printf("TARGET_PRODUCT is ohmcas, define SUPPORT_TSD\n")
-          cppflags = append(cppflags,"-DSUPPORT_TSD")
-    }
-    if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohm_hybrid" {
-          fmt.Printf("TARGET_PRODUCT is ohm_hybrid, define SUPPORT_TSD\n")
-          cppflags = append(cppflags,"-DSUPPORT_TSD")
-    }
-    if ctx.AConfig().Getenv("TARGET_PRODUCT") == "ohm_cbs" {
-          fmt.Printf("TARGET_PRODUCT is ohm_cbs, define SUPPORT_TSD\n")
-          cppflags = append(cppflags,"-DSUPPORT_TSD")
+    targetProduct := ctx.AConfig().Getenv("TARGET_PRODUCT")
+    switch targetProduct {
+        case "ohm", "ohmcas", "ohm_hybrid", "ohm_cbs":
+            fmt.Printf("TARGET_PRODUCT is %s, define SUPPORT_TSD\n", targetProduct)
+            cppflags = append(cppflags,"-DSUPPORT_TSD")
+        default:
     }
     return cppflags
 }
