@@ -185,6 +185,7 @@ Return<Result> Dvr::close() {
     ALOGD("%s/%d  mType = %hhu", __FUNCTION__, __LINE__, mType);
     if (mType == DvrType::PLAYBACK) {
         mStartDvrThread = false;
+        mDvrEventFlag->wake(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY));
         pthread_join(mDvrThread, NULL);
     }
     if (mDvrMQ.get() != NULL)
