@@ -7,7 +7,8 @@ PRODUCT_PACKAGES += \
     android.hardware.tv.tuner-service.droidlogic
 
 PRODUCT_COPY_FILES += \
-    frameworks/native/data/etc/android.hardware.tv.tuner.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.tv.tuner.xml
+    frameworks/native/data/etc/android.hardware.tv.tuner.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.tv.tuner.xml \
+    hardware/amlogic/tuner/config/tuner_vts_config_aidl_V1.xml:$(TARGET_COPY_OUT_VENDOR)/etc/tuner_vts_config_aidl_V1.xml
 
 ifeq ($(USE_TH_TEST_SETUP), true)
 PRODUCT_PACKAGES += \
