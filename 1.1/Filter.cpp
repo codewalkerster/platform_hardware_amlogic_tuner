@@ -328,11 +328,15 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                 if (settings.ts().filterSettings.av().isPassthrough) {
                     // aparam.flags |= DMX_OUTPUT_RAW_MODE;
                     // for passthrough mode, will set pes filter in media hal
-                    uint64_t tempFilterId = mFilterId;
+                    tempAudioFilterId = mFilterId;
                     uint32_t dmxId = mDemux->getAmDmxDevice()->dev_no;
-                    mFilterId = (dmxId << 16) | (uint32_t)(mTpid);
+                    mFilterId = (dmxId << 16) | (uint32_t)(mTpid);//dmxId 4bit
+                    /*
+                        fmt 5bits, sec 1bit,    dmxId 4bit,     pid 16bits
+                        111111     11111      1       1111   1111 1111 1111 1111
+                        unused      fmt      sec      dmxid       pid
+                    */
                     ALOGD("audio filter id = %llu", mFilterId);
-                    mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
                 } else {
                     struct dmx_pes_filter_params aparam;
                     memset(&aparam, 0, sizeof(aparam));
@@ -356,11 +360,15 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                 if (settings.ts().filterSettings.av().isPassthrough) {
                     // vparam.flags |= DMX_OUTPUT_RAW_MODE;
                     // for passthrough mode, will set pes filter in media hal
-                    uint64_t tempFilterId = mFilterId;
+                    tempVideoFilterId = mFilterId;
                     uint32_t dmxId = mDemux->getAmDmxDevice()->dev_no;
                     mFilterId = (dmxId << 16) | (uint32_t)(mTpid);
+                    /*
+                        fmt 5bits, sec 1bit,    dmxId 4bit,     pid 16bits
+                        111111     11111      1       1111   1111 1111 1111 1111
+                        unused      fmt      sec      dmxid       pid
+                    */
                     ALOGD("video filter id = %llu", mFilterId);
-                    mDemux->mapPassthroughMediaFilter(mFilterId, tempFilterId);
                 } else {
                     int buffSize = 0;
                     struct dmx_pes_filter_params vparam;
@@ -638,9 +646,15 @@ Return<Result> Filter::configureAvStreamType(const V1_1::AvStreamType& avStreamT
     switch (avStreamType.getDiscriminator()) {
         case V1_1::AvStreamType::hidl_discriminator::audio:
             mAudioStreamType = static_cast<uint32_t>(avStreamType.audio());
+            mFilterId = mFilterId | (mAudioStreamType << 21);// 5bit
+            ALOGD("%s/%d  audio mFilterId = %llu, mAudioStreamType = %d ", __FUNCTION__, __LINE__, mFilterId, mAudioStreamType);
+            mDemux->mapPassthroughMediaFilter(mFilterId, tempAudioFilterId);
             break;
         case V1_1::AvStreamType::hidl_discriminator::video:
             mVideoStreamType = static_cast<uint32_t>(avStreamType.video());
+            mFilterId = mFilterId | (mVideoStreamType << 21);// 5bit
+            ALOGD("%s/%d  video mFilterId = %llu, mVideoStreamType = %d", __FUNCTION__, __LINE__, mFilterId, mVideoStreamType);
+            mDemux->mapPassthroughMediaFilter(mFilterId, tempVideoFilterId);
             break;
         default:
             break;

@@ -261,6 +261,8 @@ class Filter : public V1_1::IFilter {
     int mIonFd;
     bool bIsRaw;
     bool mIsPesFilter = false;
+    uint64_t tempAudioFilterId;
+    uint64_t tempVideoFilterId;
 };
 
 }  // namespace implementation
