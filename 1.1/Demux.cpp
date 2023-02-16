@@ -134,7 +134,10 @@ void Demux::postDvrData(void* demux) {
                ALOGE("Open dump_dvr.ts failed!\n");
             }
         }
-        dmxDev->sendFrontendInputToRecord(dvrData);
+
+        uint16_t pid = ((dvrData[1] & 0x1f) << 8) | ((dvrData[2] & 0xff));
+        //ALOGD("%s/%d dvr pid:0x%x", __FUNCTION__, __LINE__, pid);
+        dmxDev->sendFrontendInputToRecord(dvrData, pid, 0); //set pts to 0, use system time clock.
         dmxDev->startRecordFilterDispatcher();
     }
 }

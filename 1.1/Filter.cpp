@@ -396,6 +396,15 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
             }
             case DemuxTsFilterType::RECORD: {
                 ALOGD("%s subType:RECORD", __FUNCTION__);
+                mTsIndex     = settings.ts().filterSettings.record().tsIndexMask;
+                mScIndexType = settings.ts().filterSettings.record().scIndexType;
+                if (settings.ts().filterSettings.record().scIndexMask.getDiscriminator()
+                    == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::sc) {
+                    mScIndex = settings.ts().filterSettings.record().scIndexMask.sc();
+                } else if (settings.ts().filterSettings.record().scIndexMask.getDiscriminator()
+                    == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::scHevc) {
+                    mScIndex =  settings.ts().filterSettings.record().scIndexMask.scHevc();
+                }
                 struct dmx_pes_filter_params pparam;
                 memset(&pparam, 0, sizeof(pparam));
                 pparam.pid = mTpid;
@@ -851,7 +860,6 @@ void Filter::fillDataToDecoder() {
     // After successfully write, send a callback and wait for the read to be done
     if (mCallback_1_1 != nullptr) {
         mCallback_1_1->onFilterEvent_1_1(mFilterEvent, mFilterEventExt);
-        mFilterEventExt.events.resize(0);
     } else if (mCallback != nullptr){
         mCallback->onFilterEvent(mFilterEvent);
     } else {
@@ -860,6 +868,7 @@ void Filter::fillDataToDecoder() {
     }
     freeAvHandle();
     mFilterEvent.events.resize(0);
+    mFilterEventExt.events.resize(0);
     mFilterStatus = DemuxFilterStatus::DATA_READY;
     if (mCallback != nullptr) {
         mCallback->onFilterStatus(mFilterStatus);
@@ -1387,14 +1396,17 @@ Result Filter::startRecordFilterHandler() {
     V1_0::DemuxFilterTsRecordEvent recordEvent;
     DemuxPid demuxPid;
     demuxPid.tPid(static_cast<DemuxTpid>(mTpid));
+    DemuxFilterTsRecordEvent::ScIndexMask mask;
+    mask.sc(mScIndex);
     recordEvent = {
-            .pid       = demuxPid,
-            .byteNumber =  static_cast<uint64_t>(mRecordFilterOutput.size()),
+            .pid         = demuxPid,
+            .tsIndexMask = mTsIndex,
+            .scIndexMask = mask,
+            .byteNumber  = static_cast<uint64_t>(mRecordFilterOutput.size()),
     };
-    /*
     V1_1::DemuxFilterTsRecordEventExt recordEventExt;
     recordEventExt = {
-            .pts = (mPts == 0) ? time(NULL) * 900000 : mPts,
+            .pts = (mPts == 0) ? (time(NULL) * 900000) & 0x1ffffffffull : mPts,
             .firstMbInSlice = 0,     // random address
     };
 
@@ -1402,8 +1414,7 @@ Result Filter::startRecordFilterHandler() {
     size = mFilterEventExt.events.size();
     mFilterEventExt.events.resize(size + 1);
     mFilterEventExt.events[size].tsRecord(recordEventExt);
-    */
-    int size;
+
     size = mFilterEvent.events.size();
     mFilterEvent.events.resize(size + 1);
     mFilterEvent.events[size].tsRecord(recordEvent);

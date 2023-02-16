@@ -263,6 +263,9 @@ class Filter : public V1_1::IFilter {
     bool mIsPesFilter = false;
     uint64_t tempAudioFilterId;
     uint64_t tempVideoFilterId;
+    uint32_t mTsIndex;
+    DemuxRecordScIndexType mScIndexType;
+    uint32_t mScIndex;
 };
 
 }  // namespace implementation
