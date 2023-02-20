@@ -29,6 +29,7 @@ import com.droidlogic.tuner.scan.ScanManagerSession;
 import com.droidlogic.tuner.scan.TunerControl;
 import com.droidlogic.tuner.utils.Constants;
 import com.droidlogic.tuner.utils.ThreadManager;
+import com.droidlogic.tuner.utils.TunerHelper;
 
 public class TvPlayer {
     public static final String TAG = Constants.TAG;
@@ -38,10 +39,14 @@ public class TvPlayer {
     private final Object playerEnvLock = new Object();
     private PlayerEnv mEnv;
     private TvPlayerCallback mCallback;
+    private String mVideoMimeType = null;
+    private String mAudioMimeType = null;
+    private AudioCodecRenderer mAudioCodecRenderer = null;
 
     TvPlayer(int id) {
         mId = id;
         mExecutor = new ThreadManager.MediaExecutor();
+        mAudioCodecRenderer = new AudioCodecRenderer();
     }
 
     public void setCallback(TvPlayerCallback callback) {
@@ -54,11 +59,12 @@ public class TvPlayer {
                 if (mEnv.mCodecPlayer != null) {
                     mEnv.mCodecPlayer.stop();
                 }
+                /*
                 if (mEnv.mAudioTrack != null) {
                     mEnv.mAudioTrack.stop();
                     mEnv.mAudioTrack.release();
                     mEnv.mAudioTrack = null;
-                }
+                }*/
                 if (mEnv.mVideoFilter != null) {
                     mEnv.mVideoFilter.stop();
                     mEnv.mVideoFilter.close();
@@ -106,8 +112,8 @@ public class TvPlayer {
 
             if (channel.videos.size() > 0) {
                 Channel.Video v = channel.videos.get(0);
-                mEnv.mVideoFilter = openVideoFilter(tuner, v.pid);
                 videoFormat = createVideoFormat(channel);
+                mEnv.mVideoFilter = openVideoFilter(tuner, v.pid);
                 if (mEnv.mVideoFilter == null || videoFormat == null)
                     return;
                 videoFormat.setInteger("vendor.tunerhal.video-filter-id",
@@ -117,10 +123,8 @@ public class TvPlayer {
             }
             if (channel.audios.size() > 0) {
                 Channel.Audio a = channel.audios.get(0);
+                audioFormat = createAudioFormat(channel);
                 mEnv.mAudioFilter = openAudioFilter(tuner, a.pid);
-                if (mEnv.mAudioFilter != null) {
-                    audioFormat = createAudioFormat(channel);
-                }
             }
             //openPcrFilter(tuner, channel.pcrId);
             int avSyncId = tuner.getAvSyncHwId((mEnv.mVideoFilter != null) ?
@@ -138,8 +142,7 @@ public class TvPlayer {
             mEnv.mCodecPlayer.setVideoMediaFormat(videoFormat);
             if (audioFormat != null) {
                 //mEnv.mCodecPlayer.setAudioMediaFormat(audioFormat);
-                mEnv.mAudioTrack =
-                        CreateAudioTrack(audioFormat, mEnv.mAudioFilter.getId(), avSyncId);
+                mEnv.mAudioTrack = mAudioCodecRenderer.configure(audioFormat, mEnv.mAudioFilter.getId(), avSyncId);
             }
             mEnv.mCodecPlayer.startPlayer();
             if (mEnv.mAudioFilter != null) {
@@ -154,41 +157,20 @@ public class TvPlayer {
         }
     }
 
-    private AudioTrack CreateAudioTrack(AudioFormat audioFormat, int audioFilterId, int syncId) {
-        AudioTrack track = null;
-        if (audioFormat != null) {
-            try {
-                track = new AudioTrack.Builder()
-                        .setAudioAttributes(new AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                                .build())
-                        .setAudioFormat(audioFormat)
-                        .setBufferSizeInBytes(256)
-                        .setEncapsulationMode(AudioTrack.ENCAPSULATION_MODE_HANDLE)
-                        .setTunerConfiguration(
-                                new AudioTrack.TunerConfiguration(audioFilterId, syncId))
-                        .build();
-                Log.d(TAG, "CreateAudioTrack done!");
-            }
-            catch (UnsupportedOperationException e) {
-                Log.d(TAG, "CreateAudioTrack err:" + e.toString());
-            }
-        } else {
-            Log.e(TAG, "mAudioformat is null!");
-        }
-        return track;
-    }
-
     public void stopPlaying(@NonNull Context context) {
         synchronized (playerEnvLock) {
             if (mEnv != null) {
                 if (mEnv.mCodecPlayer != null) {
                     mEnv.mCodecPlayer.stop();
                 }
+                /*
                 if (mEnv.mAudioTrack != null) {
                     mEnv.mAudioTrack.stop();
-                }
+                }*/
+            }
+
+            if (mAudioCodecRenderer != null) {
+                mAudioCodecRenderer.release();
             }
         }
     }
@@ -226,14 +208,18 @@ public class TvPlayer {
             return null;
         }
 
-        Settings videoSettings = AvSettings
+        AvSettings.Builder videoSettingsBuilder  = AvSettings
                 .builder(Filter.TYPE_TS, false)
-                .setPassthrough(true)
-                .build();
+                .setPassthrough(true);
+        if (TunerHelper.TunerVersionChecker
+                .isHigherOrEqualVersionTo(TunerHelper.TunerVersionChecker.TUNER_VERSION_1_1)) {
+            int streamType = getVideoStreamType(mVideoMimeType);
+            videoSettingsBuilder.setVideoStreamType(streamType);
+        }
         FilterConfiguration videoConfig = TsFilterConfiguration
                 .builder()
                 .setTpid(pid)
-                .setSettings(videoSettings)
+                .setSettings(videoSettingsBuilder.build())
                 .build();
         filter.configure(videoConfig);
         return filter;
@@ -253,14 +239,19 @@ public class TvPlayer {
             return null;
         }
 
-        Settings audioSettings = AvSettings
+        AvSettings.Builder audioSettingsBuilder  = AvSettings
                 .builder(Filter.TYPE_TS, true)
-                .setPassthrough(true)
-                .build();
+                .setPassthrough(true);
+        if (TunerHelper.TunerVersionChecker
+                .isHigherOrEqualVersionTo(TunerHelper.TunerVersionChecker.TUNER_VERSION_1_1)) {
+            int streamType = getAudioStreamType(mAudioMimeType);
+            Log.d(TAG, "audio stream type =" + streamType);
+            audioSettingsBuilder.setAudioStreamType(streamType);
+        }
         FilterConfiguration audioConfig = TsFilterConfiguration
                 .builder()
                 .setTpid(pid)
-                .setSettings(audioSettings)
+                .setSettings(audioSettingsBuilder.build())
                 .build();
         filter.configure(audioConfig);
         return filter;
@@ -285,32 +276,50 @@ public class TvPlayer {
     }
 
     private MediaFormat createVideoFormat(@NonNull Channel channel) {
-        String videoMimeType = null;
         if (channel.videos.size() > 0) {
             Channel.Video v = channel.videos.get(0);
             switch (v.streamType) {
                 case 0x01:
                 case 0x02:
-                    videoMimeType = MediaFormat.MIMETYPE_VIDEO_MPEG2;
+                    mVideoMimeType = MediaFormat.MIMETYPE_VIDEO_MPEG2;
                     break;
                 case 0x10:
-                    videoMimeType = MediaFormat.MIMETYPE_VIDEO_MPEG4;
+                    mVideoMimeType = MediaFormat.MIMETYPE_VIDEO_MPEG4;
                     break;
                 case 0x1b:
-                    videoMimeType = MediaFormat.MIMETYPE_VIDEO_AVC;
+                    mVideoMimeType = MediaFormat.MIMETYPE_VIDEO_AVC;
                     break;
                 case 0x24:
-                    videoMimeType = MediaFormat.MIMETYPE_VIDEO_HEVC;
+                    mVideoMimeType = MediaFormat.MIMETYPE_VIDEO_HEVC;
                     break;
                 default:
                     break;
             }
         }
-        if (videoMimeType != null) {
-            return MediaFormat.createVideoFormat(videoMimeType,
+        if (mVideoMimeType != null) {
+            return MediaFormat.createVideoFormat(mVideoMimeType,
                     1280, 720);
         }
         return null;
+    }
+
+    private int getVideoStreamType(String mimeType) {
+        if (mimeType == null) {
+            Log.d(TAG, "invalid track information");
+            return AvSettings.VIDEO_STREAM_TYPE_UNDEFINED;
+        }
+
+        switch (mimeType) {
+            case MediaFormat.MIMETYPE_VIDEO_MPEG2:
+                return AvSettings.VIDEO_STREAM_TYPE_MPEG2;
+            case MediaFormat.MIMETYPE_VIDEO_AVC:
+                return AvSettings.VIDEO_STREAM_TYPE_AVC;
+            case MediaFormat.MIMETYPE_VIDEO_HEVC:
+                return AvSettings.VIDEO_STREAM_TYPE_HEVC;
+            default:
+                Log.e(TAG, "not implemented for mimetype:" + mimeType);
+                return AvSettings.VIDEO_STREAM_TYPE_UNDEFINED;
+        }
     }
 
     private AudioFormat createAudioFormat(@NonNull Channel channel) {
@@ -320,6 +329,7 @@ public class TvPlayer {
             switch (a.streamType) {
                 case 0x03:
                 case 0x04:
+                    mAudioMimeType = MediaFormat.MIMETYPE_AUDIO_MPEG;
                     format = new AudioFormat.Builder()
                             .setEncoding(AudioFormat.ENCODING_MP3)
                             .setSampleRate(48000)
@@ -331,6 +341,7 @@ public class TvPlayer {
                     break;
                 case 0x0f:
                 case 0x11:
+                    mAudioMimeType = MediaFormat.MIMETYPE_AUDIO_AAC;
                     format = new AudioFormat.Builder()
                             .setEncoding(AudioFormat.ENCODING_AAC_HE_V2)
                             .setSampleRate(48000)
@@ -338,6 +349,7 @@ public class TvPlayer {
                             .build();
                     break;
                 case 0x81:
+                    mAudioMimeType = MediaFormat.MIMETYPE_AUDIO_AC3;
                     format = new AudioFormat.Builder()
                             .setEncoding(AudioFormat.ENCODING_AC3)
                             .setSampleRate(48000)
@@ -346,6 +358,7 @@ public class TvPlayer {
                     break;
                 case 0x06:
                 case 0x87:
+                    mAudioMimeType = MediaFormat.MIMETYPE_AUDIO_EAC3;
                     format = new AudioFormat.Builder()
                             .setEncoding(AudioFormat.ENCODING_E_AC3)
                             .setSampleRate(48000)
@@ -357,6 +370,54 @@ public class TvPlayer {
             }
         }
         return format;
+    }
+
+    private int getAudioStreamType(String mimeType) {
+        if (mimeType == null) {
+            Log.d(TAG, "invalid track information");
+            return AvSettings.AUDIO_STREAM_TYPE_UNDEFINED;
+        }
+
+        Log.d(TAG, "track information:" + mimeType);
+        switch (mimeType) {
+            case MediaFormat.MIMETYPE_AUDIO_MPEG:
+                return AvSettings.AUDIO_STREAM_TYPE_MP3;
+            case MediaFormat.MIMETYPE_AUDIO_AC3:
+                return AvSettings.AUDIO_STREAM_TYPE_AC3;
+            case MediaFormat.MIMETYPE_AUDIO_EAC3:
+                return AvSettings.AUDIO_STREAM_TYPE_EAC3;
+            case MediaFormat.MIMETYPE_AUDIO_AC4:
+                return AvSettings.AUDIO_STREAM_TYPE_AC4;
+            case MediaFormat.MIMETYPE_AUDIO_AAC:
+            /*
+                // ATV T-13 AAC types
+                if (track.codec != null) {
+                    switch (track.codec) {
+                        // AAC LATM
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_AAC_LATM:
+                            return AudioUtils.AUDIO_STREAM_TYPE_AAC_LATM;
+
+                        // AAC HE LATM
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_HEAAC_LATM:
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_HEAAC_V2_LATM:
+                            return AudioUtils.AUDIO_STREAM_TYPE_AAC_HE_LATM;
+
+                        // AAC ADTS
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_AAC_ADTS:
+                            return AudioUtils.AUDIO_STREAM_TYPE_AAC_ADTS;
+
+                        // AAC HE ADTS
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_HEAAC_ADTS:
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_HEAAC_V2_ADTS:
+                            return AudioUtils.AUDIO_STREAM_TYPE_AAC_HE_ADTS;
+                    }
+                }*/
+                Log.d(TAG, "AUDIO_AAC, default AUDIO_STREAM_TYPE_AAC");
+                return AvSettings.AUDIO_STREAM_TYPE_AAC;
+            default:
+                Log.d(TAG, "not implemented for mimetype:" + mimeType);
+                return AvSettings.AUDIO_STREAM_TYPE_UNDEFINED;
+        }
     }
 
     private void startTunerForPlaying(@NonNull Tuner tuner, @NonNull Channel channel) {

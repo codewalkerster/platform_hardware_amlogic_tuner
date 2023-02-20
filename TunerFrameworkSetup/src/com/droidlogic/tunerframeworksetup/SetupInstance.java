@@ -58,6 +58,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.os.SystemClock;
 
 import android.util.Log;
 import android.view.Surface;
@@ -68,6 +69,8 @@ import android.view.View;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 import java.util.concurrent.Executor;
 import java.io.File;
@@ -252,6 +255,13 @@ public class SetupInstance implements OnTuneEventListener,
     public static boolean mEnableDvr = false;
     public static boolean mEnableExtendEcmTid = false;
     public static boolean mUseFixedOpVault = false;
+    private DecoderThread mDecoderThread;
+    private static final int AUDIO_BUFFER_SIZE = 256;
+    private final ByteBuffer mEmptyPacket = ByteBuffer.allocate(AUDIO_BUFFER_SIZE);
+    private Map<Integer, String> audioTrackMap = new HashMap<Integer, String>();
+    private Map<Integer, String> videoTrackMap = new HashMap<Integer, String>();
+    private final Object mLock;
+    private static final long AUDIO_TRACK_PREPARE_TIMEOUT = 200;
 
     private boolean mEnableSmp = false;
 
@@ -268,6 +278,7 @@ public class SetupInstance implements OnTuneEventListener,
         mUiHandler = mActivity.getUiHandler();
         mPlayerView = playerView;
         mPlayerView.getHolder().addCallback(mSurfaceHolderCallback);
+        mLock = new Object();
 
         if (mInstance == 0)
             mPlayAudio = true;
@@ -1698,9 +1709,11 @@ public class SetupInstance implements OnTuneEventListener,
            pos += esInfoLen;
            if (mIsVideo) {
                pmtInfo.mPmtStreams.add(new PmtStreamInfo(streamType, esPid, mEsCasInfo[VIDEO_CHANNEL_INDEX].getEcmPid(), mIsVideo));
+               videoTrackMap.put(esPid, mVideoMimeType);
                Log.d(TAG, "mPmtStreams add a video track");
            } else {
                pmtInfo.mPmtStreams.add(new PmtStreamInfo(streamType, esPid, mEsCasInfo[AUDIO_CHANNEL_INDEX].getEcmPid(), mIsVideo));
+               audioTrackMap.put(esPid, mAudioMimeType);
                Log.d(TAG, "mPmtStreams add a audio track, streamType is " + streamType);
            }
            Log.d(TAG, "mPmtInfo.mPmtStreams.size: " + mPmtInfo.mPmtStreams.size());
@@ -1743,26 +1756,113 @@ public class SetupInstance implements OnTuneEventListener,
         mVideoMediaFormat.setFeatureEnabled(CodecCapabilities.FEATURE_TunneledPlayback, true);
     }
 
+    private void prepareAudioTrack() {
+        long timeout = SystemClock.elapsedRealtime() + AUDIO_TRACK_PREPARE_TIMEOUT;
+        while (true) {
+            if (SystemClock.elapsedRealtime() >= timeout || !write()) {
+                break;
+            }
+        }
+    }
+
+    private boolean write() {
+        int written;
+        int expectedToWrite;
+
+        if (mEmptyPacket.remaining() <= 0) {
+            mEmptyPacket.rewind();
+        }
+        expectedToWrite = mEmptyPacket.remaining();
+        written = mAudioTrack.write(mEmptyPacket, expectedToWrite,
+                AudioTrack.WRITE_NON_BLOCKING);
+        if (expectedToWrite != AUDIO_BUFFER_SIZE ||
+                expectedToWrite != written && written > 0 ) {
+            Log.d(TAG, "expected: " + expectedToWrite + ", written: " + written);
+        }
+        return written == expectedToWrite;
+    }
+
+    class DecoderThread extends Thread {
+        @Override
+        public void run() {
+            super.run();
+            Log.d(TAG, "DecoderThread started.");
+
+            synchronized (mLock) {
+                while (!isInterrupted()) {
+                   write();
+                    try {
+                        mLock.wait(100);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+            Log.d(TAG, "DecoderThread exiting..");
+        }
+
+    }
+
+    private void startDecoderThread() {
+        if (mDecoderThread != null) {
+            releaseDecoderThread();
+        }
+        mDecoderThread = new DecoderThread();
+        mDecoderThread.start();
+    }
+
+    private void releaseDecoderThread() {
+        if (mDecoderThread != null) {
+            mDecoderThread.interrupt();
+            try {
+                mDecoderThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                Thread.currentThread().interrupt();
+            }
+            mDecoderThread = null;
+        }
+    }
+
     private void CreateAudioTrack() {
-    Log.d(TAG, "CreateAudioTrack mPlayAudio:" + mPlayAudio);
+        Log.d(TAG, "CreateAudioTrack mPlayAudio:" + mPlayAudio);
         if (mPlayAudio == false)
             return;
         if (mAudioformat != null) {
-            try {
-                mAudioTrack = new AudioTrack.Builder()
-                    .setAudioAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build())
-                    .setAudioFormat(mAudioformat)
-                    .setBufferSizeInBytes(256)
-                    .setEncapsulationMode(AudioTrack.ENCAPSULATION_MODE_HANDLE)
-                    .setTunerConfiguration(new AudioTrack.TunerConfiguration(mAudioFilterId /* contentId */, mAvSyncHwId /* syncId */))
-                    .build();
-                Log.d(TAG, "CreateAudioTrack done!");
-            }
-            catch (UnsupportedOperationException e) {
-                Log.d(TAG, "CreateAudioTrack err:" + e.toString());
+           try {
+               AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .build();
+
+                AudioTrack.Builder builder = new AudioTrack.Builder()
+                .setAudioAttributes(audioAttributes)
+                .setBufferSizeInBytes(256 * 10)
+                .setOffloadedPlayback(true);
+
+                Log.d(TAG,"audio filter id:" + mAudioFilterId + " av sync id:" + mAvSyncHwId);
+                TunerHelper.AudioTrack.setTunerConfiguration(builder, mAudioFilterId, mAvSyncHwId);
+
+                if (TunerHelper.TunerVersionChecker
+                        .isHigherOrEqualVersionTo(TunerHelper.TunerVersionChecker.TUNER_VERSION_1_1)) {
+                    mAudioformat = new AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_DEFAULT)
+                        .setSampleRate(48000)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+                        .build();
+                    builder.setAudioFormat(mAudioformat);
+                } else {
+                    builder.setAudioFormat(mAudioformat);
+                }
+
+                mAudioTrack = builder.build();
+                prepareAudioTrack();
+                mAudioTrack.play();
+                startDecoderThread();
+            }catch(Exception exception) {
+                Log.e(TAG, "Failed to configure AudioTrack:" + exception);
+                releaseDecoderThread();
+                mAudioTrack.release();
+                mAudioTrack = null;
             }
         } else {
             Log.e(TAG, "mAudioformat is null!");
@@ -2004,6 +2104,73 @@ public class SetupInstance implements OnTuneEventListener,
         }
     }
 
+    private int getVideoStreamType(String mimeType) {
+        if (mimeType == null) {
+            Log.d(TAG, "invalid track information");
+            return AvSettings.VIDEO_STREAM_TYPE_UNDEFINED;
+        }
+
+        switch (mimeType) {
+            case MediaFormat.MIMETYPE_VIDEO_MPEG2:
+                return AvSettings.VIDEO_STREAM_TYPE_MPEG2;
+            case MediaFormat.MIMETYPE_VIDEO_AVC:
+                return AvSettings.VIDEO_STREAM_TYPE_AVC;
+            case MediaFormat.MIMETYPE_VIDEO_HEVC:
+                return AvSettings.VIDEO_STREAM_TYPE_HEVC;
+            default:
+                Log.e(TAG, "not implemented for mimetype:" + mimeType);
+                return AvSettings.VIDEO_STREAM_TYPE_UNDEFINED;
+        }
+    }
+
+    private int getAudioStreamType(String mimeType) {
+        if (mimeType == null) {
+            Log.d(TAG, "invalid track information");
+            return AvSettings.AUDIO_STREAM_TYPE_UNDEFINED;
+        }
+
+        Log.d(TAG, "track information:" + mimeType);
+        switch (mimeType) {
+            case MediaFormat.MIMETYPE_AUDIO_MPEG:
+                return AvSettings.AUDIO_STREAM_TYPE_MP3;
+            case MediaFormat.MIMETYPE_AUDIO_AC3:
+                return AvSettings.AUDIO_STREAM_TYPE_AC3;
+            case MediaFormat.MIMETYPE_AUDIO_EAC3:
+                return AvSettings.AUDIO_STREAM_TYPE_EAC3;
+            case MediaFormat.MIMETYPE_AUDIO_AC4:
+                return AvSettings.AUDIO_STREAM_TYPE_AC4;
+            case MediaFormat.MIMETYPE_AUDIO_AAC:
+            /*
+                // ATV T-13 AAC types
+                if (track.codec != null) {
+                    switch (track.codec) {
+                        // AAC LATM
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_AAC_LATM:
+                            return AudioUtils.AUDIO_STREAM_TYPE_AAC_LATM;
+
+                        // AAC HE LATM
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_HEAAC_LATM:
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_HEAAC_V2_LATM:
+                            return AudioUtils.AUDIO_STREAM_TYPE_AAC_HE_LATM;
+
+                        // AAC ADTS
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_AAC_ADTS:
+                            return AudioUtils.AUDIO_STREAM_TYPE_AAC_ADTS;
+
+                        // AAC HE ADTS
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_HEAAC_ADTS:
+                        case DtvChannelInfo.DtvTrack.CODEC_AUDIO_HEAAC_V2_ADTS:
+                            return AudioUtils.AUDIO_STREAM_TYPE_AAC_HE_ADTS;
+                    }
+                }*/
+                Log.d(TAG, "AUDIO_AAC, default AUDIO_STREAM_TYPE_AAC");
+                return AvSettings.AUDIO_STREAM_TYPE_AAC;
+            default:
+                Log.d(TAG, "not implemented for mimetype:" + mimeType);
+                return AvSettings.AUDIO_STREAM_TYPE_UNDEFINED;
+        }
+    }
+
     private Filter openVideoFilter(int pid) {
         Log.d(TAG, "Open video filter pid: 0x" + Integer.toHexString(pid));
         long vFilterBufSize = 1024 * 1024 * 10;
@@ -2018,15 +2185,20 @@ public class SetupInstance implements OnTuneEventListener,
             return filter;
         }
 
-        Settings videoSettings = AvSettings
+        AvSettings.Builder videoSettingsBuilder  = AvSettings
         .builder(Filter.TYPE_TS, false)
-        .setPassthrough(mPassthroughMode)
-        .build();
+        .setPassthrough(mPassthroughMode);
+        if (TunerHelper.TunerVersionChecker
+                .isHigherOrEqualVersionTo(TunerHelper.TunerVersionChecker.TUNER_VERSION_1_1)) {
+            String videoStreamType = videoTrackMap.get(pid);
+            int streamType = getVideoStreamType(videoStreamType);
+            videoSettingsBuilder.setVideoStreamType(streamType);
+        }
 
         FilterConfiguration videoConfig = TsFilterConfiguration
         .builder()
         .setTpid(pid)
-        .setSettings(videoSettings)
+        .setSettings(videoSettingsBuilder.build())
         .build();
         filter.configure(videoConfig);
         return filter;
@@ -2046,15 +2218,22 @@ public class SetupInstance implements OnTuneEventListener,
             return filter;
         }
 
-         Settings audioSettings = AvSettings
+         AvSettings.Builder audioSettingsBuilder  = AvSettings
         .builder(Filter.TYPE_TS, true)
-        .setPassthrough(mPassthroughMode)
-        .build();
+        .setPassthrough(mPassthroughMode);
+        if (TunerHelper.TunerVersionChecker
+                .isHigherOrEqualVersionTo(TunerHelper.TunerVersionChecker.TUNER_VERSION_1_1)) {
+            String audioStreamType = audioTrackMap.get(pid);
+            int streamType = getAudioStreamType(audioStreamType);
+            Log.d(TAG, "audio stream type =" + streamType);
+            audioSettingsBuilder.setAudioStreamType(streamType);
+        }
+
 
          FilterConfiguration audioConfig = TsFilterConfiguration
         .builder()
         .setTpid(pid)
-        .setSettings(audioSettings)
+        .setSettings(audioSettingsBuilder.build())
         .build();
          filter.configure(audioConfig);
          return filter;
@@ -2340,6 +2519,7 @@ public class SetupInstance implements OnTuneEventListener,
     }
 
     public void stopTuner() {
+        releaseDecoderThread();
         if (mDvrPlayback != null) {
             Log.d(TAG, "mDvrPlayback stop and close ...");
             mDvrPlayback.stop();
