@@ -750,14 +750,14 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
         mCallback->onScanMessage(FrontendScanMessageType::SYMBOL_RATE, msg);
     }
 
-    FrontendSettings* feSettings = mFeDev->getFeSetting();
+    /*FrontendSettings* feSettings = mFeDev->getFeSetting();
     if (feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&
         feSettings->dvbt().standard == FrontendDvbtStandard::T2 && mIsLocked) {
         msg.hierarchy((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());
         mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
         msg.plpIds(mFeDev->getMPLPIDList());
         mCallback->onScanMessage(FrontendScanMessageType::PLP_IDS, msg);
-    }
+    }*/
 }
 
 void Frontend::sendEventCallBack(FrontendEventType locked) {
@@ -768,7 +768,7 @@ void Frontend::sendEventCallBack(FrontendEventType locked) {
     } else {
       mIsLocked = false;
     }
-    FrontendSettings* feSettings = mFeDev->getFeSetting();
+    /*FrontendSettings* feSettings = mFeDev->getFeSetting();
     if (feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&
         feSettings->dvbt().standard == FrontendDvbtStandard::T2 && mIsLocked) {
         FrontendScanMessage msg;
@@ -776,7 +776,7 @@ void Frontend::sendEventCallBack(FrontendEventType locked) {
         mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
         msg.plpIds(mFeDev->getMPLPIDList());
         mCallback->onScanMessage(FrontendScanMessageType::PLP_IDS, msg);
-    }
+    }*/
 }
 
 }  // namespace implementation
