@@ -18,7 +18,7 @@ import com.droidlogic.tuner.utils.Constants;
 
 public class AudioCodecRenderer {
     public static final String TAG = Constants.TAG;
-    private AudioTrack mAudioTrack;
+    private AudioTrack mAudioTrack = null;
     private static final int AUDIO_BUFFER_SIZE = 256;
     private final Object mLock;
     private DecoderThread mDecoderThread;
@@ -30,6 +30,8 @@ public class AudioCodecRenderer {
     }
     public AudioTrack configure(AudioFormat format, int audioFilterId, int avSyncId) {
         releaseDecoderThread();
+        releaseAudioTrack(mAudioTrack);
+        mAudioTrack = null;
 
         Log.d(TAG, "source format:" + format);
         try {
@@ -65,7 +67,7 @@ public class AudioCodecRenderer {
         } catch (Exception exception) {
             Log.e(TAG, "Failed to configure AudioTrack:" + exception);
             releaseDecoderThread();
-            mAudioTrack.release();
+            releaseAudioTrack(mAudioTrack);
             mAudioTrack = null;
         }
 
@@ -139,15 +141,23 @@ public class AudioCodecRenderer {
             mDecoderThread = null;
         }
     }
+    private void releaseAudioTrack(AudioTrack audioTrack) {
+        if (audioTrack == null)
+            return;
+
+        try {
+            audioTrack.pause();
+            audioTrack.flush();
+        } catch (IllegalStateException exception) {
+            Log.e(TAG, "can't flush the audiotrack which is in bad state");
+        }
+
+        audioTrack.release();
+    }
 
     public void release() {
         releaseDecoderThread();
-        if (mAudioTrack != null) {
-            mAudioTrack.pause();
-            mAudioTrack.flush();
-            mAudioTrack.release();
-            mAudioTrack = null;
-        }
+        releaseAudioTrack(mAudioTrack);
     }
 }
 

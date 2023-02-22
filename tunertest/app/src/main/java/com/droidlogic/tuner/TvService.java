@@ -180,6 +180,7 @@ public class TvService extends TvInputService {
                 if (mLivePlayer != null) {
                     //Currently, we only design a simple player that cannot change to different
                     // channel, so we should release the exist player
+                    mLivePlayer.stopPlaying(getApplicationContext());
                     TvPlayerManager.getInstance()
                             .releasePlayer(getApplicationContext(), mLivePlayer);
                 }
