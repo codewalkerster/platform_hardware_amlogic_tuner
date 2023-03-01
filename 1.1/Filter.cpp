@@ -1424,7 +1424,6 @@ Result Filter::startTemiFilterHandler() {
 
 bool Filter::writeSectionsAndCreateEvent(vector<uint8_t> data) {
     // TODO check how many sections has been read
-    ALOGD("[Filter] section handler");
     std::lock_guard<std::mutex> lock(mFilterEventLock);
     if (!writeDataToFilterMQ(data)) {
         return false;
