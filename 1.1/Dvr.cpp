@@ -316,7 +316,7 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
     }
     // Read playback data from the input FMQ
     int size = mDvrMQ->availableToRead();
-    int playbackPacketSize = mDvrSettings.playback().packetSize;//188 bytes
+    int playbackPacketSize = mDvrSettings.playback().packetSize * 100;//188 bytes
     vector<uint8_t> dataOutputBuffer;
     dataOutputBuffer.resize(playbackPacketSize);
     // Dispatch the packet to the PID matching filter output buffer

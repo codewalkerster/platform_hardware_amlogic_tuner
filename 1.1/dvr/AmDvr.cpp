@@ -287,6 +287,8 @@ void* AmDvr::dvr_data_thread(void *arg) {
             ALOGE("read from DVR0 return %d bytes\n", cnt);
         }*/
 
+        } else {
+             usleep(10 * 1000);
         }
     }
 

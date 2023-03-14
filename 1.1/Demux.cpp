@@ -29,10 +29,10 @@ namespace V1_0 {
 namespace implementation {
 
 namespace {
-constexpr int kTsPacketSize = 188;
+constexpr int kTsPacketSize = 188 * 100;
 
 bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
-  return tsPacket.size() == kTsPacketSize && tsPacket[0] == 0x47;
+  return kTsPacketSize == tsPacket.size() && tsPacket[0] == 0x47;
 }
 
 }  // namespace
@@ -769,7 +769,6 @@ Result Demux::removeFilter(uint64_t filterId) {
 void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
         uint16_t pid = ((data[1] & 0x1f) << 8) | ((data[2] & 0xff));
         uint8_t scb = data[3] >> 6;
-        bool needWriteData = false;
         bool isDscReady = false;
         if (DEBUG_DEMUX)
             ALOGD("%s/%d write to dvr %d size:%d pid:0x%x", __FUNCTION__, __LINE__, mDemuxId, data.size(), pid);
@@ -795,49 +794,39 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
                     break;
                 }
             }
-
-            set<uint64_t>::iterator it;
-            for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
-                if (mFilters[*it] != nullptr && pid == mFilters[*it]->getTpid()) {
-                    needWriteData = true;
-                    break;
-                }
-            }
        }
 
-        if (needWriteData) {
-            if (isDscReady && !mScrambledCache.empty()) {
-                if (isValidTsPacket(data))
-                    mScrambledCache.insert(mScrambledCache.end(), data.begin(), data.end());
-                int writeRetry = 0;
-                ALOGD("write scrambled cache size:%d", mScrambledCache.size());
-                while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mScrambledCache.data(), mScrambledCache.size(), 300 * 1000) == -1 && writeRetry <= 100) {
-                    usleep(100 * 1000);
-                    writeRetry ++;
-                    ALOGW("write scrambled cache retry: %d", writeRetry);
-                }
-                vector<uint8_t>().swap(mScrambledCache);
-                return;
+        if (isDscReady && !mScrambledCache.empty()) {
+            if (isValidTsPacket(data))
+                mScrambledCache.insert(mScrambledCache.end(), data.begin(), data.end());
+            int writeRetry = 0;
+            ALOGD("write scrambled cache size:%d", mScrambledCache.size());
+            while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mScrambledCache.data(), mScrambledCache.size(), 300 * 1000) == -1 && writeRetry <= 100) {
+                usleep(100 * 1000);
+                writeRetry ++;
+                ALOGW("write scrambled cache retry: %d", writeRetry);
             }
-            if (isValidTsPacket(data)) {
-                while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
-                    ALOGD("[Demux] wait for 100ms to write dvr device");
-                    usleep(100 * 1000);
-                }
-                if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
-                    FILE *filedump = fopen("/data/local/tmp/demux_inject.ts", "ab+");
-                    if (filedump != NULL) {
-                        fwrite(data.data(), 1, data.size(), filedump);
-                        fflush(filedump);
-                        fclose(filedump);
-                        filedump = NULL;
-                    } else {
-                       ALOGE("Open demux_inject.ts failed!\n");
-                    }
-                }
-            } else {
-                ALOGD("[Demux] data[0] = 0x%x", data[0]);
+            vector<uint8_t>().swap(mScrambledCache);
+            return;
+        }
+        if (isValidTsPacket(data)) {
+            while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
+                ALOGD("[Demux] wait for 100ms to write dvr device");
+                usleep(100 * 1000);
             }
+            if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
+                FILE *filedump = fopen("/data/local/tmp/demux_inject.ts", "ab+");
+                if (filedump != NULL) {
+                    fwrite(data.data(), 1, data.size(), filedump);
+                    fflush(filedump);
+                    fclose(filedump);
+                    filedump = NULL;
+                } else {
+                   ALOGE("Open demux_inject.ts failed!\n");
+                }
+            }
+        } else {
+            ALOGD("[Demux] data[0] = 0x%x", data[0]);
         }
 
 }
