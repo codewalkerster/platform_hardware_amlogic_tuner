@@ -22,7 +22,7 @@ void AmPesFilter::postPesData() {
     ALOGD("[%s/%d]", __FUNCTION__, __LINE__);
 
     uint8_t *p = NULL;
-    int      len;
+    //int      len;
     if (mPesFilter != NULL) {
         if (!mPesFilter->pes_len)
             return;
@@ -39,11 +39,12 @@ void AmPesFilter::postPesData() {
             return;
         }
 
+        /*
         len = (p[4] << 8) | p[5];
         if (len && (len + 6 > mPesFilter->pes_len)) {
             ALOGE("PES packet length error");
             return;
-        }
+        }*/
         mPesFilter->cb(mPesFilter->user_data, mPesFilter->fid, mPesFilter->pes_data, mPesFilter->pes_len);
     }
 }
