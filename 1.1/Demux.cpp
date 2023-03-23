@@ -135,9 +135,9 @@ void Demux::postDvrData(void* demux) {
             }
         }
 
-        uint16_t pid = ((dvrData[1] & 0x1f) << 8) | ((dvrData[2] & 0xff));
+        //uint16_t pid = ((dvrData[1] & 0x1f) << 8) | ((dvrData[2] & 0xff));
         //ALOGD("%s/%d dvr pid:0x%x", __FUNCTION__, __LINE__, pid);
-        dmxDev->sendFrontendInputToRecord(dvrData, pid, 0); //set pts to 0, use system time clock.
+        dmxDev->sendFrontendInputToRecord(dvrData);
         dmxDev->startRecordFilterDispatcher();
     }
 }
@@ -852,7 +852,7 @@ void Demux::sendFrontendInputToRecord(vector<uint8_t> data, uint16_t pid, uint64
     sendFrontendInputToRecord(data);
     set<uint64_t>::iterator it;
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-        if (pid == mFilters[*it]->getTpid()) {
+        if (mFilters[*it] != nullptr && pid == mFilters[*it]->getTpid()) {
             mFilters[*it]->updatePts(pts);
         }
     }
