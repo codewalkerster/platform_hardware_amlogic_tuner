@@ -1,7 +1,6 @@
 package droidlogic_tuner_hal_1_1
 
 import (
-    "fmt"
     "android/soong/android"
     "android/soong/cc"
     "github.com/google/blueprint/proptools"
@@ -22,10 +21,8 @@ func tuner_hal_DefaultsFactory() (android.Module) {
         p.Cflags = globalDefaults(ctx)
         PlatformVndkVersion := ctx.DeviceConfig().PlatformVndkVersion()
         if PlatformVndkVersion == "30" {
-            fmt.Println("Disable tunerhal1.1")
             p.Enabled = proptools.BoolPtr(false)
         } else {
-            fmt.Println("Enable tunerhal1.1")
             p.Enabled = proptools.BoolPtr(true)
         }
         ctx.AppendProperties(p)
@@ -39,7 +36,6 @@ func globalDefaults(ctx android.BaseContext) ([]string) {
     targetProduct := ctx.AConfig().Getenv("TARGET_PRODUCT")
     switch targetProduct {
         case "ohm", "ohmcas", "ohm_hybrid", "ohm_cbs":
-            fmt.Printf("TARGET_PRODUCT is %s, define SUPPORT_TSD\n", targetProduct)
             cppflags = append(cppflags,"-DSUPPORT_TSD")
         default:
     }
