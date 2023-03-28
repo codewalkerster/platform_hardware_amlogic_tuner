@@ -465,7 +465,10 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
             break;
         case DemuxFilterMainType::MMTP:
             break;
-        case DemuxFilterMainType::IP:
+        case DemuxFilterMainType::IP: {
+                ALOGD("%s subType:IP", __FUNCTION__);
+                DemuxIpAddress ipAddr = settings.ip().ipAddr;
+            }
             break;
         case DemuxFilterMainType::TLV:
             break;
@@ -481,6 +484,11 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
 
 Return<Result> Filter::start() {
     ALOGD("%s/%d mFilterId:%llu", __FUNCTION__, __LINE__, mFilterId);
+    if (mType.mainType == DemuxFilterMainType::IP) {
+        ALOGD("start Ip Filter");
+        return Result::SUCCESS;
+    }
+
     if (mDemux->getAmDmxDevice()
         ->AM_DMX_StartFilter(mFilterId) != 0) {
         if (mIsMediaFilter && mFilterSettings.ts().filterSettings.av().isPassthrough) {
@@ -601,7 +609,7 @@ void Filter::clear() {
 }
 
 Return<Result> Filter::configureIpCid(uint32_t ipCid) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGV("%s  ipCid =%d", __FUNCTION__, ipCid);
 
     if (mType.mainType != DemuxFilterMainType::IP) {
         return Result::INVALID_STATE;
@@ -1317,6 +1325,11 @@ Result Filter::startMediaFilterHandler() {
     if (mFilterOutput.empty()) {
         return Result::SUCCESS;
     }
+
+    //tunerhal1.1 vts
+    mFilterEventExt.events.resize(1);
+    mFilterEventExt.events[0].startId(mStartId++);
+    fillDataToDecoder();
 
     Result result;
     if (mPts) {
