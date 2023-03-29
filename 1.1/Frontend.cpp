@@ -354,7 +354,12 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::PLP_ID: {
-                status.plpId(mFeDev->getFeSetting()->dvbt().plpId);  // type uint8_t
+                if (mFeDev->getFeSetting()->getDiscriminator() ==  FrontendSettings::hidl_discriminator::dvbt &&
+                    mFeDev->getFeSetting()->dvbt().standard == FrontendDvbtStandard::T2) {
+                    status.plpId(mFeDev->getFeSetting()->dvbt().plpId);  // type uint8_t
+                } else {
+                    status.plpId(101);  // type uint8_t
+                }
                 break;
             }
             case FrontendStatusType::EWBS: {
