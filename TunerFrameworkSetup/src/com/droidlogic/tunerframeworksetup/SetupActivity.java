@@ -103,7 +103,12 @@ public class SetupActivity extends Activity {
     @Override
     protected void onResume() {
         Log.d(TAG, "onResume");
+        setPlaybackParas();
         setDscMode(CA_DSC_COMMON_TYPE);
+        if (mStreamMode != null) {
+            String requireTsnSource = mStreamMode.equals("local") ? TSN_SOURCE_LOCAL : TSN_SOURCE_DEMOD;
+            setTsnSource(requireTsnSource);
+        }
         super.onResume();
     }
 
@@ -116,13 +121,13 @@ public class SetupActivity extends Activity {
                 mInstances[instanceId].pause();
             }
         }
-        setDscMode(CA_DSC_TSD_TYPE);
         Log.d(TAG, "onPause end");
     }
 
     @Override
     protected void onStop() {
         Log.d(TAG, "onStop");
+        setDscMode(CA_DSC_TSD_TYPE);
         setTsnSource(mTsnSource);
         super.onStop();
     }

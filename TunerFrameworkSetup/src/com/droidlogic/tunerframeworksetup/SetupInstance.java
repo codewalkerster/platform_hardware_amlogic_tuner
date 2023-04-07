@@ -245,7 +245,7 @@ public class SetupInstance implements OnTuneEventListener,
 
     public static boolean mEnableLocalPlay = false;
     public static boolean mPassthroughMode = true;
-    public static boolean mEnableFlowCtl = false;
+    public static boolean mEnableFlowCtl = true;
     public static boolean mDumpVideoEs = false;
     public static int mDvrMQSize_MB = DEFAULT_DVR_MQ_SIZE_MB;
     public static long mDvrLowThreshold = DEFAULT_DVR_MQ_SIZE_MB * 1024 * 1024 * 2 / 10;
@@ -1440,6 +1440,8 @@ public class SetupInstance implements OnTuneEventListener,
             }
             //Start AV Playback after processing the first ecm
             mNeedSeekToBegin.compareAndSet(false, true);
+            ecm_data = null;
+            return;
         }
 
         try {
@@ -1747,6 +1749,9 @@ public class SetupInstance implements OnTuneEventListener,
         }
         if (mAudioFilter != null) {
             mAudioFilterId = mAudioFilter.getId();
+            if (mIsCasPlayback) {
+                mAudioFilterId |= (1 << 20);
+            }
             Log.d(TAG, "mAudioFilterId:" + mAudioFilterId);
         }
         mAvSyncHwId = mTuner.getAvSyncHwId(mVideoFilter != null ? mVideoFilter : mAudioFilter);
@@ -1882,11 +1887,8 @@ public class SetupInstance implements OnTuneEventListener,
                 Log.d(TAG, "Create new PatInfo" + " PAT section len = " + mSectionLen);
             }
             if (!mPatInfo.mPrograms.isEmpty()) {
-                //Log.d(TAG, "programs is not empty!");
-                if (mPatSectionFilter != null) {
-                    Log.d(TAG, "Stop pat section filter");
-//                    mPatSectionFilter.stop();
-                }
+                if (mDebugTsSection)
+                    Log.d(TAG, "programs is not empty!");
                 return;
             }
             parsePATSection(mPatInfo, data);
@@ -1920,7 +1922,7 @@ public class SetupInstance implements OnTuneEventListener,
             parsePMTSection(mPmtInfo, data);
             Log.d(TAG, "Find programs down. mIsCasPlayback:" + mIsCasPlayback);
 
-            mPcrFilter = openPcrFilter(mPmtInfo.mPcrPid);
+            //mPcrFilter = openPcrFilter(mPmtInfo.mPcrPid);
             //Prepare av media formats for passthrough
             mVideoMediaFormat = MediaFormat.createVideoFormat(mVideoMimeType, 1280, 720);
             mAudioMediaFormat = MediaFormat.createAudioFormat(mAudioMimeType, MediaCodecPlayer.AUDIO_SAMPLE_RATE, MediaCodecPlayer.AUDIO_CHANNEL_COUNT);
@@ -2613,6 +2615,7 @@ public class SetupInstance implements OnTuneEventListener,
         mTestFileDescriptor = mTestFd.getFileDescriptor();
         Log.i(TAG, "mProgramId:" + mProgramId);
         Log.d(TAG, "mTestFd: " + mTestFd.getFd());
+        Log.d(TAG, "File len: " + mTestLocalFile.length());
 
         if (mTuner == null) {
             mTuner = new Tuner(mActivity.getApplicationContext(),
