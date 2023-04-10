@@ -663,15 +663,19 @@ Return<Result> Filter::configureAvStreamType(const V1_1::AvStreamType& avStreamT
     switch (avStreamType.getDiscriminator()) {
         case V1_1::AvStreamType::hidl_discriminator::audio:
             mAudioStreamType = static_cast<uint32_t>(avStreamType.audio());
-            mFilterId = mFilterId | (mAudioStreamType << 21);// 5bit
-            ALOGD("%s/%d  audio mFilterId = %llu, mAudioStreamType = %d ", __FUNCTION__, __LINE__, mFilterId, mAudioStreamType);
-            mDemux->mapPassthroughMediaFilter(mFilterId, tempAudioFilterId);
+            if (mFilterSettings.ts().filterSettings.av().isPassthrough) {
+                mFilterId = mFilterId | (mAudioStreamType << 21);// 5bit
+                ALOGD("%s/%d  audio mFilterId = %llu, mAudioStreamType = %d ", __FUNCTION__, __LINE__, mFilterId, mAudioStreamType);
+                mDemux->mapPassthroughMediaFilter(mFilterId, tempAudioFilterId);
+            }
             break;
         case V1_1::AvStreamType::hidl_discriminator::video:
             mVideoStreamType = static_cast<uint32_t>(avStreamType.video());
-            mFilterId = mFilterId | (mVideoStreamType << 21);// 5bit
-            ALOGD("%s/%d  video mFilterId = %llu, mVideoStreamType = %d", __FUNCTION__, __LINE__, mFilterId, mVideoStreamType);
-            mDemux->mapPassthroughMediaFilter(mFilterId, tempVideoFilterId);
+            if (mFilterSettings.ts().filterSettings.av().isPassthrough) {
+                mFilterId = mFilterId | (mVideoStreamType << 21);// 5bit
+                ALOGD("%s/%d  video mFilterId = %llu, mVideoStreamType = %d", __FUNCTION__, __LINE__, mFilterId, mVideoStreamType);
+                mDemux->mapPassthroughMediaFilter(mFilterId, tempVideoFilterId);
+            }
             break;
         default:
             break;
