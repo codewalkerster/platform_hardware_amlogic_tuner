@@ -93,12 +93,19 @@ Return<Result> Lnb::setVoltage(LnbVoltage    voltage) {
 
     int devFd = acquireLnbDevice();
     ALOGD("%s: %d(0:13,1:18,2:off)", __FUNCTION__, devVoltage);
-    if (devFd != -1) {
-        if (ioctl(devFd, FE_SET_VOLTAGE, devVoltage) == -1)
-        {
-            ALOGE("%s failed.", __FUNCTION__);
-            return Result::SUCCESS; //make xts pass when don't support dvb-s
-        }
+
+    if (devFd == -1 || !prepareFeSystem(devFd)) {
+        if (devFd == -1)
+            ALOGE("%s failed for no device.", __FUNCTION__);
+        else
+            ALOGE("%s failed for set dvbs failed.", __FUNCTION__);
+        return Result::UNAVAILABLE;
+    }
+
+    if (ioctl(devFd, FE_SET_VOLTAGE, devVoltage) == -1)
+    {
+        ALOGE("%s failed %s.", __FUNCTION__, strerror(errno));
+        return Result::SUCCESS; //make xts pass when don't support dvb-s
     }
 
     return Result::SUCCESS;
@@ -112,12 +119,18 @@ Return<Result> Lnb::setTone(LnbTone tone) {
     ALOGD("%s: %d(0:on,1:off)", __FUNCTION__, devTone);
 
     int devFd = acquireLnbDevice();
-    if (devFd != -1) {
-        if (ioctl(devFd, FE_SET_TONE, devTone) == -1)
-        {
-            ALOGE("%s failed.", __FUNCTION__);
-            return Result::SUCCESS;//make xts pass when don't support dvb-s
-        }
+    if (devFd == -1 || !prepareFeSystem(devFd)) {
+        if (devFd == -1)
+            ALOGE("%s failed for no device.", __FUNCTION__);
+        else
+            ALOGE("%s failed for set dvbs failed.", __FUNCTION__);
+        return Result::UNAVAILABLE;
+    }
+
+    if (ioctl(devFd, FE_SET_TONE, devTone) == -1)
+    {
+        ALOGE("%s failed %s.", __FUNCTION__, strerror(errno));
+        return Result::SUCCESS;//make xts pass when don't support dvb-s
     }
 
     //Add a delay for some multi-switch devices
@@ -143,12 +156,18 @@ Return<Result> Lnb::setSatellitePosition(LnbPosition position) {
     ALOGD("%s: %d(0:a,1:b)", __FUNCTION__, cmd);
 
     int devFd = acquireLnbDevice();
-    if (devFd != -1) {
-        if (ioctl(devFd, FE_DISEQC_SEND_BURST, cmd) == -1)
-        {
-            ALOGE("%s failed.", __FUNCTION__);
-            return Result::SUCCESS;////make xts pass when don't support dvb-s
-        }
+    if (devFd == -1 || !prepareFeSystem(devFd)) {
+        if (devFd == -1)
+            ALOGE("%s failed for no device.", __FUNCTION__);
+        else
+            ALOGE("%s failed for set dvbs failed.", __FUNCTION__);
+        return Result::UNAVAILABLE;
+    }
+
+    if (ioctl(devFd, FE_DISEQC_SEND_BURST, cmd) == -1)
+    {
+        ALOGE("%s failed %s.", __FUNCTION__, strerror(errno));
+        return Result::SUCCESS;////make xts pass when don't support dvb-s
     }
 
     return Result::SUCCESS;
