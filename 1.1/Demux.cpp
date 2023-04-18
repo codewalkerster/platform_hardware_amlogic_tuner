@@ -583,7 +583,12 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     if (fid > DMX_FILTER_COUNT) {
         fid = findFilterIdByfakeFilterId(fid);
     }
-
+    if (!mPcrFilterIds.empty()) {
+        ALOGD("get avsyncid by pcrfilterid");
+        // Return the lowest pcr filter id in the default implementation as the av sync id
+        _hidl_cb(Result::SUCCESS, *mPcrFilterIds.begin());
+        return Void();
+    }
     if (mMediaSync == nullptr) {
         ALOGD("[debuglevel] new mediasync");
         mMediaSync = new MediaSyncWrap();

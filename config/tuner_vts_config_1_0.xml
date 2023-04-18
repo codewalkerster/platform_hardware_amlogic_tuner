@@ -52,14 +52,14 @@
                     config only to the hal.
         -->
         <frontends>
-            <frontend id="FE_DEFAULT" type="DVBT" isSoftwareFrontend="true"
+            <frontend id="FE_DEFAULT" type="DVBT" isSoftwareFrontend="false"
                       connectToCicamId="0" frequency="578000000" endFrequency="800000000">
-                <dvbtFrontendSettings bandwidth="8" transmissionMode="1" isHighPriority="1"
+                <dvbtFrontendSettings bandwidth="8" transmissionMode="128" isHighPriority="1"
                                       constellation="1" hierarchy="1" hpCoderate="1" lpCoderate="1"
                                       guardInterval="1" standard="1" isMiso="0" plpMode="1"
                                       plpId="0" plpGroupId="0"/>
             </frontend>
-            <frontend id="FE_DVBS_0" type="DVBS" isSoftwareFrontend="true"
+            <frontend id="FE_DVBS_0" type="DVBS" isSoftwareFrontend="false"
                       connectToCicamId="0" frequency="1000000000" endFrequency="8000000000">
                       <dvbsFrontendSettings symbolRate="27500000"/>
             </frontend>
