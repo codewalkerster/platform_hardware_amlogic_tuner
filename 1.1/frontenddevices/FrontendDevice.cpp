@@ -30,7 +30,7 @@
 
 #define FE_POLL_TIMEOUT_MS 50
 #define FE_STATE_TIMEOUT_MS 3000
-#define FE_SIGNAL_CHECK_INTERVAL_MS 200
+#define FE_SIGNAL_CHECK_INTERVAL_MS 10
 #define MAX_PLP_NUMBER 256
 
 namespace android {
@@ -227,7 +227,6 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         sem_post(&threadSemaphore);
         return UNAVAILABLE;
     }
-    ALOGD("%s, frequency = %d", __FUNCTION__, mDev.tuneFreq);
 
     /*
     if (ioctl(mDev.devFd, FE_SET_FRONTEND, &fe_params) < 0) {
@@ -323,6 +322,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
 
     props.num = ncmd;
     props.props = cmds;
+    ALOGD("%s, frequency = %d", __FUNCTION__, mDev.tuneFreq);
 
     if (ioctl(mDev.devFd, FE_SET_PROPERTY, &props) == -1) {
          ALOGE("tune failed, (%s)", strerror(errno));
@@ -658,7 +658,7 @@ bool FrontendDevice::threadLoop() {
                     }
                 }
             } else {
-                if (state == FrontendDevice::STATE_TUNE_IDLE) {
+                if (state == FrontendDevice::STATE_TUNE_IDLE || mRequestTuningStop) {
                     //scan and tune need check several seconds for signal
                     //will not stable. and in ilde state, we just poll once
                     stop = true;
@@ -737,7 +737,6 @@ void FrontendDevice::updateThreadState(int state) {
 
 void FrontendDevice::requestTuneStop(void) {
     bool ready = false;
-
     mRequestTuningStop = true;
     while (ready == false) {
         int state = getThreadState();
