@@ -673,6 +673,8 @@ Return<Result> Demux::close() {
     mLastUsedFilterId = -1;
     if (!mScrambledCache.empty())
         mScrambledCache.clear();
+    if (!mClearCache.empty())
+        mClearCache.clear();
 
     mDvrPlayback = nullptr;
     mDvrRecord   = nullptr;
@@ -787,47 +789,66 @@ Result Demux::removeFilter(uint64_t filterId) {
 }
 
 void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
-        uint16_t pid = ((data[1] & 0x1f) << 8) | ((data[2] & 0xff));
-        uint8_t scb = data[3] >> 6;
         bool isDscReady = false;
         if (DEBUG_DEMUX)
-            ALOGD("%s/%d write to dvr %d size:%d pid:0x%x", __FUNCTION__, __LINE__, mDemuxId, data.size(), pid);
+            ALOGD("write to dvr %d size:%d", mDemuxId, data.size());
+
         {
             std::lock_guard<std::mutex> lock(mFilterLock);
-            if (scb != 0 && mDescramblers.size() == 0) {
-                ALOGV("dsc has not been created. scb:%d pid:0x%x", scb, pid);
-                return;
+            for (auto descramblerIt = mDescramblers.begin(); \
+                 descramblerIt != mDescramblers.end(); \
+                 descramblerIt++) {
+                if (descramblerIt->second && descramblerIt->second->isDescramblerReady())
+                    isDscReady = true;
             }
-            for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
-                if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
-                    isDscReady = descramblerIt->second->isDescramblerReady();
-                    if (!isDscReady) {
-                        ALOGV("dsc is not ready. cache pid:0x%x cache size:%d", pid, mScrambledCache.size());
-                        if (isValidTsPacket(data))
-                            mScrambledCache.insert(mScrambledCache.end(), data.begin(), data.end());
-                        if (mScrambledCache.size() > MAX_SCRAMBLED_CACHE_SIZE) {
-                            ALOGW("reset scrambled cache! cache size:%d", mScrambledCache.size());
-                            vector<uint8_t>().swap(mScrambledCache);
+
+            if (!isDscReady && mDescramblers.size() > 0) {
+                for (int tsDataIdx = 0; tsDataIdx < data.size(); tsDataIdx += 188) {
+                    if (data[tsDataIdx] != 0x47)
+                        ALOGW("ts sync byte: 0x%x", data[tsDataIdx]);
+                    uint16_t pid = ((data[tsDataIdx + 1] & 0x1f) << 8) | ((data[tsDataIdx + 2] & 0xff));
+                    for (auto descramblerIt = mDescramblers.begin(); \
+                         descramblerIt != mDescramblers.end(); \
+                         descramblerIt++) {
+                        if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
+                            if (mScrambledCache.size() > MAX_SCRAMBLED_CACHE_SIZE) {
+                                ALOGW("reset scrambled cache! cache size:%d", mScrambledCache.size());
+                                vector<uint8_t>().swap(mScrambledCache);
+                            }
+                            mScrambledCache.insert(mScrambledCache.end(), data.begin() + tsDataIdx, data.begin() + tsDataIdx + 188);
+                            ALOGV("scrambled cache idx:%d pid:0x%x size:%d", tsDataIdx, pid, mScrambledCache.size());
+                        } else {
+                            mClearCache.insert(mClearCache.end(), data.begin() + tsDataIdx, data.begin() + tsDataIdx + 188);
+                            ALOGV("clear cache idx:%d pid:0x%x size:%d", tsDataIdx, pid, mClearCache.size());
+                            break;
                         }
-                        return;
                     }
-                    break;
                 }
+                if (!mClearCache.empty()) {
+                    int writeRetry = 0;
+                    ALOGD("write clear cache size:%d", mClearCache.size());
+                    while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mClearCache.data(), mClearCache.size(), 300 * 1000) == -1 \
+                           && writeRetry <= 100) {
+                        usleep(100 * 1000);
+                        writeRetry ++;
+                        ALOGW("write clear cache retry: %d", writeRetry);
+                    }
+                    vector<uint8_t>().swap(mClearCache);
+                }
+                return;
             }
        }
 
         if (isDscReady && !mScrambledCache.empty()) {
-            if (isValidTsPacket(data))
-                mScrambledCache.insert(mScrambledCache.end(), data.begin(), data.end());
             int writeRetry = 0;
             ALOGD("write scrambled cache size:%d", mScrambledCache.size());
-            while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mScrambledCache.data(), mScrambledCache.size(), 300 * 1000) == -1 && writeRetry <= 100) {
+            while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mScrambledCache.data(), mScrambledCache.size(), 300 * 1000) == -1 \
+                   && writeRetry <= 100) {
                 usleep(100 * 1000);
                 writeRetry ++;
                 ALOGW("write scrambled cache retry: %d", writeRetry);
             }
             vector<uint8_t>().swap(mScrambledCache);
-            return;
         }
         if (isValidTsPacket(data)) {
             while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {

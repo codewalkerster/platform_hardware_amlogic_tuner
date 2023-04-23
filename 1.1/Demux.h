@@ -237,6 +237,7 @@ class Demux : public IDemux {
     bool bCheckVts = true;
     //int mfd;
     vector<uint8_t> mScrambledCache;
+    vector<uint8_t> mClearCache;
 };
 
 }  // namespace implementation
