@@ -679,7 +679,7 @@ bool FrontendDevice::threadLoop() {
             if (state == STATE_SCAN_START) {
                 ALOGD("%s-(id:%d): send scan event.", __FUNCTION__, mDev.id);
                 mDev.islocked = locked;
-                mContext->sendScanCallBack(mDev.tuneFreq, locked, false);
+                mContext->sendScanCallBack(mDev.tuneFreq, locked, true);
                 updateThreadState(FrontendDevice::STATE_STOP);
             } else if (state == STATE_TUNE_START) {
                 ALOGI("%s-(id:%d): send tune event.", __FUNCTION__, mDev.id);
