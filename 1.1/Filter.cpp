@@ -922,11 +922,16 @@ void Filter::fillDataToDecoder() {
     freeAvHandle();
     mFilterEvent.events.resize(0);
     mFilterEventExt.events.resize(0);
-    mFilterStatus = DemuxFilterStatus::DATA_READY;
-    if (mCallback != nullptr) {
-        mCallback->onFilterStatus(mFilterStatus);
-    } else if (mCallback_1_1 != nullptr) {
-        mCallback_1_1->onFilterStatus(mFilterStatus);
+    if (mIsFirstFilterEvent) {
+        mFilterStatus = DemuxFilterStatus::DATA_READY;
+        if (mCallback != nullptr) {
+            mCallback->onFilterStatus(mFilterStatus);
+        } else if (mCallback_1_1 != nullptr) {
+            mCallback_1_1->onFilterStatus(mFilterStatus);
+        }
+        mIsFirstFilterEvent = false;
+    } else {
+        maySendFilterStatusCallback();
     }
 }
 

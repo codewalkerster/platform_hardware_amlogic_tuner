@@ -272,6 +272,7 @@ class Filter : public V1_1::IFilter {
     int mFilterToken;
     void * mEsPrivateHeader;
     uint64_t mMediaEventNum;
+    bool mIsFirstFilterEvent = true;
 };
 
 }  // namespace implementation
