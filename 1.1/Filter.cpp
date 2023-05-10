@@ -901,23 +901,31 @@ void Filter::filterThreadLoop() {
     ALOGD("[Filter] filter thread ended.");
 }
 
-void Filter::fillDataToDecoder() {
+bool Filter::fillDataToDecoder() {
     ALOGV("%s/%d mFilterId:%llu", __FUNCTION__, __LINE__, mFilterId);
 
     // For the first time of filter output, implementation needs to send the filter
     // Event Callback without waiting for the DATA_CONSUMED to init the process.
     if (mFilterEvent.events.size() == 0 && mFilterEventExt.events.size() == 0) {
         ALOGV("[Filter %llu] wait for new mFilterEvent", mFilterId);
-        return;
+        return false;
     }
     // After successfully write, send a callback and wait for the read to be done
     if (mCallback_1_1 != nullptr) {
-        mCallback_1_1->onFilterEvent_1_1(mFilterEvent, mFilterEventExt);
+        auto ret = mCallback_1_1->onFilterEvent_1_1(mFilterEvent, mFilterEventExt);
+        if (!ret.isOk()) {
+            ALOGD("[Filter] return mCallback_1_1 onFilterEvent_1_1fail");
+            return false;
+        }
     } else if (mCallback != nullptr){
-        mCallback->onFilterEvent(mFilterEvent);
+        auto ret = mCallback->onFilterEvent(mFilterEvent);
+        if (!ret.isOk()) {
+            ALOGD("[Filter] return mCallback onFilterEvent fail");
+            return false;
+        }
     } else {
         ALOGD("[Filter] filter callback is not configured yet.");
-        return;
+        return false;
     }
     freeAvHandle();
     mFilterEvent.events.resize(0);
@@ -925,14 +933,23 @@ void Filter::fillDataToDecoder() {
     if (mIsFirstFilterEvent) {
         mFilterStatus = DemuxFilterStatus::DATA_READY;
         if (mCallback != nullptr) {
-            mCallback->onFilterStatus(mFilterStatus);
+            auto ret = mCallback->onFilterStatus(mFilterStatus);
+            if (!ret.isOk()) {
+                ALOGD("[Filter] return mCallback onFilterStatus fail");
+                return false;
+            }
         } else if (mCallback_1_1 != nullptr) {
-            mCallback_1_1->onFilterStatus(mFilterStatus);
+            auto ret = mCallback_1_1->onFilterStatus(mFilterStatus);
+            if (!ret.isOk()) {
+                ALOGD("[Filter] return mCallback_1_1  onFilterStatus fail");
+                return false;
+            }
         }
         mIsFirstFilterEvent = false;
     } else {
         maySendFilterStatusCallback();
     }
+    return true;
 }
 
 void Filter::freeAvHandle() {

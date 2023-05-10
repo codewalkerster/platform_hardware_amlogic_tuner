@@ -106,7 +106,7 @@ class Filter : public V1_1::IFilter {
     bool isMediaFilter() { return mIsMediaFilter; };
     bool isPcrFilter() { return mIsPcrFilter; };
     bool isRecordFilter() { return mIsRecordFilter; };
-    void fillDataToDecoder();
+    bool fillDataToDecoder();
     DemuxFilterType getFilterType();
     bool isRawData();
 
