@@ -39,10 +39,14 @@ typedef struct dmabuf_wrapper {
 } * dmabuf_wrapper_t;
 
 static dmabuf_wrapper_t gDmabufWrapper = NULL;
+static bool gDmabufWrapperInit = false;
+static std::mutex mDmaBufWrapperLock;
 
 static dmabuf_wrapper_t dmabuf_wrapper_init(void) {
-    if (gDmabufWrapper)
+    if (gDmabufWrapper || gDmabufWrapperInit)
         return gDmabufWrapper;
+
+    std::lock_guard<std::mutex> lock(mDmaBufWrapperLock);
     if (gDmabufWrapper == NULL) {
         gDmabufWrapper = (dmabuf_wrapper_t)malloc(sizeof(*gDmabufWrapper));
         if (!gDmabufWrapper)
@@ -89,10 +93,12 @@ static dmabuf_wrapper_t dmabuf_wrapper_init(void) {
             goto ERROR;
         }
     }
+    gDmabufWrapperInit = true;
     return gDmabufWrapper;
 ERROR:
     free(gDmabufWrapper);
     gDmabufWrapper = NULL;
+    gDmabufWrapperInit = true;
     return NULL;
 }
 
