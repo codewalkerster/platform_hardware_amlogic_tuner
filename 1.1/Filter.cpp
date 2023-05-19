@@ -620,10 +620,14 @@ Return<Result> Filter::releaseAvHandle(const hidl_handle& avMemory, uint64_t avD
 
 Return<Result> Filter::close() {
     ALOGD("%s/%d mFilterId = %llu", __FUNCTION__, __LINE__, mFilterId);
-
+    if (mFilterId > DMX_FILTER_COUNT) {
+        mFilterId = mDemux->findFilterIdByfakeFilterId(mFilterId);
+    }
     Return<Result> res = Result::SUCCESS;
-    mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
-    mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
+    if (mDemux->getAmDmxDevice() != NULL) {
+        mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
+        mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
+    }
     res = mDemux->removeFilter(mFilterId);
 
     std::lock_guard<std::mutex> lock(mFilterEventLock);
