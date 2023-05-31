@@ -38,7 +38,7 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
         ALOGD("cannot open \"%s\" (%s)", dev_name, strerror(errno));
         return AM_DVR_ERR_CANNOT_OPEN_DEV;
     }
-    int ret = ioctl(fd, DMX_SET_BUFFER_SIZE, 10 * 1024 * 1024);
+    int ret = ioctl(fd, DMX_SET_BUFFER_SIZE, 60 * 188 * 1024);
     if (ret == -1) {
         ALOGE("set buffer size failed (%s)", strerror(errno));
         close(fd);
@@ -141,7 +141,7 @@ static AM_ErrorCode_t dvr_read(AM_DVR_Device_t *dev, uint8_t *buf, int *size)
     {
         if (errno == ETIMEDOUT)
             return AM_DVR_ERR_TIMEOUT;
-        ALOGD("read dvr failed (%s) %d", strerror(errno), errno);
+        //ALOGD("read dvr failed (%s) %d", strerror(errno), errno);
         return AM_DVR_ERR_SYS;
     }
 
@@ -275,7 +275,7 @@ void* AmDvr::dvr_data_thread(void *arg) {
         ret = dvr_poll(dev->mDvrDevice, 1000);
         if (ret == AM_SUCCESS ) {
             if (dev->mData != NULL && dev->mData->cb != NULL) {
-                dev->mData->cb(dev->mData->user_data);
+                 dev->mData->cb(dev->mData->user_data);
             }
         /*
             ret = dev->drv->dvr_read(buf, &cnt);

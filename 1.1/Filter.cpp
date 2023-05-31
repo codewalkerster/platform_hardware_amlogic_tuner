@@ -418,15 +418,23 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                 break;
             }
             case DemuxTsFilterType::RECORD: {
-                ALOGD("%s subType:RECORD", __FUNCTION__);
-                mTsIndex     = settings.ts().filterSettings.record().tsIndexMask;
+                mTsIndexMask     = settings.ts().filterSettings.record().tsIndexMask;
+                ALOGD("%s subType:RECORD mTsIndexMask = %d", __FUNCTION__, mTsIndexMask);
+                if (mTsIndexMask && static_cast<uint32_t>(V1_1::DemuxTsIndex::MPT_INDEX_AUDIO) != 0) {
+                    mRecordAudioPid = mTpid;
+                    ALOGD("%s set mRecordAudioPid pid = %d", __FUNCTION__, mRecordAudioPid);
+                }
                 mScIndexType = settings.ts().filterSettings.record().scIndexType;
+                if (mScIndexType ==  DemuxRecordScIndexType::SC || mScIndexType ==  DemuxRecordScIndexType::SC_HEVC) {
+                    mRecordVideoPid = mTpid;
+                    ALOGD("%s set mRecordVideoPid pid = %d", __FUNCTION__, mRecordVideoPid);
+                }
                 if (settings.ts().filterSettings.record().scIndexMask.getDiscriminator()
                     == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::sc) {
-                    mScIndex = settings.ts().filterSettings.record().scIndexMask.sc();
+                    mScIndexMask = settings.ts().filterSettings.record().scIndexMask.sc();
                 } else if (settings.ts().filterSettings.record().scIndexMask.getDiscriminator()
                     == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::scHevc) {
-                    mScIndex =  settings.ts().filterSettings.record().scIndexMask.scHevc();
+                    mScIndexMask =  settings.ts().filterSettings.record().scIndexMask.scHevc();
                 }
                 struct dmx_pes_filter_params pparam;
                 memset(&pparam, 0, sizeof(pparam));
@@ -1220,8 +1228,27 @@ void Filter::updateFilterOutput(vector<uint8_t> data, void *priv) {
 }
 
 void Filter::updatePts(uint64_t pts) {
-    std::lock_guard<std::mutex> lock(mFilterOutputLock);
+    std::lock_guard<std::mutex> lock(mRecordFilterOutputLock);
     mPts = pts;
+    //ALOGD("%s/%d mPts = 0x%llx, pts = 0x%llx",  __FUNCTION__, __LINE__, mPts, pts);
+}
+
+void Filter::updateIndexType(int scIndexType, int tsIndexType) {
+    std::lock_guard<std::mutex> lock(mRecordFilterOutputLock);
+    if (scIndexType != -1) {
+        mScIndType = scIndexType;
+    }
+
+    if (tsIndexType != -1) {
+        mTsIndType = tsIndexType;
+    }
+    //ALOGD("%s/%d mTsIndexType = %d, mScIndexType = %d",  __FUNCTION__, __LINE__, mTsIndType, mScIndType);
+}
+
+void Filter::updateCurrentOffset(uint64_t offset) {
+    std::lock_guard<std::mutex> lock(mRecordFilterOutputLock);
+    mCurrentOffset = offset;
+    //ALOGD("%s/%d offset = 0x%llx, mCurrentOffset = 0x%llx",  __FUNCTION__, __LINE__, offset, mCurrentOffset);
 }
 
 void Filter::updateRecordOutput(vector<uint8_t> data) {
@@ -1595,31 +1622,84 @@ Result Filter::createMediaFilterEventWithIon(vector<uint8_t> output) {
     return createIndependentMediaEvents(output);
 }
 
+static FILE *filedump_IFrame = NULL;
 Result Filter::startRecordFilterHandler() {
     std::lock_guard<std::mutex> lock(mRecordFilterOutputLock);
-    if (mRecordFilterOutput.empty()) {
-        return Result::SUCCESS;
+   // ALOGD("%s/%d mTsIndType = %d, mScIndType = %d, mCurrentOffset = 0x%llx", __FUNCTION__, __LINE__, mTsIndType,
+   // mScIndType, mCurrentOffset);
+   // if (mRecordFilterOutput.empty()) {
+    //    ALOGD("%s/%d mTsIndexerType = %d", __FUNCTION__, __LINE__, mTsIndexerType);
+    //    return Result::SUCCESS;
+    //}
+
+    if (!mRecordFilterOutput.empty()) {
+        if (mDvr == nullptr || !mDvr->writeRecordFMQ(mRecordFilterOutput)) {
+            ALOGD("[Filter] dvr fails to write into record FMQ.");
+            mRecordFilterOutput.clear();
+            return Result::UNKNOWN_ERROR;
+        }
     }
 
-    if (mDvr == nullptr || !mDvr->writeRecordFMQ(mRecordFilterOutput)) {
-        ALOGD("[Filter] dvr fails to write into record FMQ.");
-        return Result::UNKNOWN_ERROR;
+    if (mTsIndType == 0 && mScIndType == 2) {
+        mLastTsIndType = mTsIndType;
+        mLastScIndType = mScIndType;
+        mLastOffset = mCurrentOffset;
+        if (mDemux->getDemuxId() == 3) {
+            if (filedump_IFrame == NULL)
+                filedump_IFrame = fopen("/data/local/tmp/filedump_IFrame.ts", "wb+");
+            if (filedump_IFrame != NULL) {
+                fwrite(mRecordFilterOutput.data(), 1, mRecordFilterOutput.size(), filedump_IFrame);
+                //fflush(filedump_before);
+                //fclose(filedump);
+                //filedump = NULL;
+            } else {
+               ALOGE("Open filedump_IFrame.ts failed!\n");
+            }
+        }
+        ALOGD("I-Frame offset = %llu, pts = %llu, data size = %d", mCurrentOffset, mPts, mRecordFilterOutput.size());
     }
 
+    if (mLastTsIndType == 0 && mLastScIndType == 2 && mCurrentOffset > mLastOffset) {
+        uint64_t idatalen = mCurrentOffset - mLastOffset;
+        ALOGD("I-Frame data length = %llu, pts = %llu, mCurrentOffset = %llu, mLastOffset = %llu", idatalen, mPts, mCurrentOffset, mLastOffset);
+        mLastTsIndType = -1;
+        mLastScIndType = -1;
+        mLastOffset    = -1;
+    }
     V1_0::DemuxFilterTsRecordEvent recordEvent;
     DemuxPid demuxPid;
     demuxPid.tPid(static_cast<DemuxTpid>(mTpid));
     DemuxFilterTsRecordEvent::ScIndexMask mask;
-    mask.sc(mScIndex);
+    uint32_t scIndexmask = 0;
+    uint32_t tsIndexmask = 0;
+
+    if (mTsIndType >= 0 && mTsIndType <= 1) {
+        tsIndexmask = convertTsIndexerTypeToTsIndex(mTsIndType);
+        tsIndexmask = tsIndexmask & mTsIndexMask;
+    }
+    if (mScIndType >= 2 && mScIndType <= 17) {
+        if (mFilterSettings.ts().filterSettings.record().scIndexMask.getDiscriminator()
+            == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::sc) {
+            scIndexmask = covertTsIndexerTypeToScIndex(mScIndType);
+            //ALOGD("%s/%d mScIndType = %d, scIndexmask = %d, mScIndexMask = %d", __FUNCTION__, __LINE__, mScIndType,
+            //scIndexmask, mScIndexMask);
+        } else if (mFilterSettings.ts().filterSettings.record().scIndexMask.getDiscriminator()
+            == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::scHevc) {
+            scIndexmask = convertTsIndexerTypeToScHevcIndex(mScIndType);
+        }
+        scIndexmask = scIndexmask & mScIndexMask;
+        //ALOGD("%s/%d scIndexmask = %d", __FUNCTION__, __LINE__, scIndexmask);
+    }
+    mask.sc(scIndexmask);
     recordEvent = {
             .pid         = demuxPid,
-            .tsIndexMask = mTsIndex,
+            .tsIndexMask = tsIndexmask,
             .scIndexMask = mask,
-            .byteNumber  = static_cast<uint64_t>(mRecordFilterOutput.size()),
+            .byteNumber  = mCurrentOffset,//static_cast<uint64_t>(mRecordFilterOutput.size()),
     };
     V1_1::DemuxFilterTsRecordEventExt recordEventExt;
     recordEventExt = {
-            .pts = (mPts == 0) ? (time(NULL) * 900000) & 0x1ffffffffull : mPts,
+            .pts = (mPts == 0) ? static_cast<uint64_t>(V1_1::Constant64Bit::INVALID_PRESENTATION_TIME_STAMP) : mPts,
             .firstMbInSlice = 0,     // random address
     };
 
@@ -1633,6 +1713,9 @@ Result Filter::startRecordFilterHandler() {
     mFilterEvent.events[size].tsRecord(recordEvent);
     fillDataToDecoder();
     mRecordFilterOutput.clear();
+    mTsIndType = -1;
+    mScIndType = -1;
+    mCurrentOffset = -1;
     return Result::SUCCESS;
 }
 
@@ -2024,6 +2107,84 @@ bool Filter::isRawData() {
     return bIsRaw;
 }
 
+
+bool Filter::checkRecordByVideo() {
+    return mRecordByVideo;
+}
+
+DemuxRecordScIndexType Filter::getScIndexType() {
+    return mScIndexType;
+}
+
+int Filter::getRecordVideoPid() {
+    return mRecordVideoPid;
+}
+
+int Filter::getRecordAudioPid() {
+    return mRecordAudioPid;
+}
+
+uint32_t Filter::covertTsIndexerTypeToScIndex(uint32_t type) {
+    switch (type) {
+        case 2:
+            return static_cast<uint32_t>(DemuxScIndex::I_FRAME);
+        case 3:
+            return static_cast<uint32_t>(DemuxScIndex::P_FRAME);
+        case 4:
+            return static_cast<uint32_t>(DemuxScIndex::B_FRAME);
+        case 5:
+            return static_cast<uint32_t>(DemuxScIndex::SEQUENCE);
+        case 6:
+            return static_cast<uint32_t>(V1_1::DemuxScIndex::I_SLICE);
+        case 7:
+            return static_cast<uint32_t>(V1_1::DemuxScIndex::P_SLICE);
+        case 8:
+            return static_cast<uint32_t>(V1_1::DemuxScIndex::B_SLICE);
+        case 9:
+            return static_cast<uint32_t>(V1_1::DemuxScIndex::SI_SLICE);
+        case 10:
+            return static_cast<uint32_t>(V1_1::DemuxScIndex::SP_SLICE);
+        default:
+            ALOGD("no match sc index type");
+            return 0;
+    }
+}
+
+uint32_t Filter::convertTsIndexerTypeToScHevcIndex(uint32_t type) {
+    switch (type) {
+        case 11:
+            return static_cast<uint32_t>(DemuxScHevcIndex::SPS);
+        case 12:
+            return static_cast<uint32_t>(DemuxScHevcIndex::AUD);
+        case 13:
+            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_CE_BLA_W_LP);
+        case 14:
+            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_BLA_W_RADL);
+        case 15:
+            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_BLA_N_LP);
+        case 16:
+            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_IDR_W_RADL);
+        case 17:
+            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_IDR_N_LP);
+        case 18:
+            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_TRAIL_CRA);
+        default:
+            ALOGD("no match sc Hevc index type");
+            return 0;
+    }
+}
+
+uint32_t Filter::convertTsIndexerTypeToTsIndex(uint32_t type) {
+    switch (type) {
+        case 0:
+            return static_cast<uint32_t>(DemuxTsIndex::PAYLOAD_UNIT_START_INDICATOR);
+        case 1:
+            return static_cast<uint32_t>(DemuxTsIndex::DISCONTINUITY_INDICATOR);
+        default:
+            ALOGD("no match ts index type");
+            return 0;
+    }
+}
 
 }  // namespace implementation
 }  // namespace V1_0

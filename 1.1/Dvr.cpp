@@ -214,7 +214,6 @@ Return<Result> Dvr::close() {
         EventFlag::deleteEventFlag(&mDvrEventFlag);
         mDvrEventFlag = nullptr;
     }
-
     return Result::SUCCESS;
 }
 
@@ -342,18 +341,15 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
     dataOutputBuffer.resize(playbackPacketSize);
     // Dispatch the packet to the PID matching filter output buffer
     for (int i = 0;  !mFlushing && mDvrThreadRunning && i < size / playbackPacketSize; i++) {
+    //if (!mFlushing && mDvrThreadRunning && size > 0) {
         if (!mDvrMQ->read(dataOutputBuffer.data(), playbackPacketSize)) {
             ALOGE("%s read ts from mDvrMQ failed!", __FUNCTION__);
             return false;
         }
-        if (DEBUG_DVR)
-            ALOGD("%s isVirtualFrontend:%d isRecording:%d", __FUNCTION__, isVirtualFrontend, isRecording);
+        if (1)
+            ALOGD("%s isVirtualFrontend:%d isRecording:%d, demuxId = %d", __FUNCTION__, isVirtualFrontend, isRecording, mDemux->getDemuxId());
         if (isVirtualFrontend) {
-            if (isRecording) {
-                mDemux->sendFrontendInputToRecord(dataOutputBuffer);
-            } else {
-                mDemux->startBroadcastTsFilter(dataOutputBuffer);
-            }
+            mDemux->startBroadcastTsFilter(dataOutputBuffer);
         } else {
             startTpidFilter(dataOutputBuffer);
         }
@@ -500,11 +496,7 @@ bool Dvr::startFilterDispatcher(bool isVirtualFrontend, bool isRecording) {
         ALOGD("%s/%d isVirtualFrontend:%d isRecording:%d", __FUNCTION__, __LINE__, isVirtualFrontend, isRecording);
 
     if (isVirtualFrontend) {
-        if (isRecording) {
-            return mDemux->startRecordFilterDispatcher();
-        } else {
-            return mDemux->startBroadcastFilterDispatcher();
-        }
+        return mDemux->startBroadcastFilterDispatcher();
     }
 
     map<uint64_t, sp<IFilter>>::iterator it;
@@ -536,15 +528,19 @@ bool Dvr::writeRecordFMQ(const vector<uint8_t>& data) {
 
 void Dvr::maySendRecordStatusCallback() {
     lock_guard<mutex> lock(mRecordStatusLock);
-    int availableToRead = mDvrMQ->availableToRead();
-    int availableToWrite = mDvrMQ->availableToWrite();
+    if (mDvrMQ.get() != NULL) {
+        int availableToRead = mDvrMQ->availableToRead();
+        int availableToWrite = mDvrMQ->availableToWrite();
 
-    RecordStatus newStatus = checkRecordStatusChange(availableToWrite, availableToRead,
-                                                     mDvrSettings.record().highThreshold,
-                                                     mDvrSettings.record().lowThreshold);
-    if (mRecordStatus != newStatus) {
-        mCallback->onRecordStatus(newStatus);
-        mRecordStatus = newStatus;
+        RecordStatus newStatus = checkRecordStatusChange(availableToWrite, availableToRead,
+                                                         mDvrSettings.record().highThreshold,
+                                                         mDvrSettings.record().lowThreshold);
+        if (mRecordStatus != newStatus) {
+            if (mCallback != nullptr) {
+                mCallback->onRecordStatus(newStatus);
+                mRecordStatus = newStatus;
+            }
+        }
     }
 }
 

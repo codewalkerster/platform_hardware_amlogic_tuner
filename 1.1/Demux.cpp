@@ -32,7 +32,7 @@ namespace {
 constexpr int kTsPacketSize = 188 * 100;
 
 bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
-  return kTsPacketSize == tsPacket.size() && tsPacket[0] == 0x47;
+    return kTsPacketSize == tsPacket.size() && tsPacket[0] == 0x47;
 }
 
 }  // namespace
@@ -46,6 +46,28 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define VIDEO_BUFFER_SIZE  "/sys/module/amlogic_dvb_demux/parameters/video_buf_size"
 #define AUDIO_BUFFER_SIZE  "/sys/module/amlogic_dvb_demux/parameters/audio_buf_size"
 #define TUNERHAL_DUMP_TS_DATA "vendor.tf.dump.ts"
+
+enum {
+    INDEX_PUSI      = 0x01,
+    INDEX_IFRAME    = 0x02,
+    INDEX_PTS       = 0x04
+};
+
+#define has_pusi(_m_)    ((_m_) & INDEX_PUSI)
+#define has_iframe(_m_) ((_m_) & INDEX_IFRAME)
+#define has_pts(_m_)    ((_m_) & INDEX_PTS)
+
+static void dump(uint8_t* data, int len) {
+    int i;
+    string strData;
+    char ch[3];
+    for (i = 0; i < len; i++)
+    {
+        snprintf(ch, 3, "%02x", data[i]);
+        strData += ch;
+    }
+    ALOGD("dump bytes: %s", strData.c_str());
+}
 
 Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
 
@@ -81,6 +103,112 @@ Demux::~Demux() {
     ALOGD("~Demux");
 }
 
+static FILE *filedump_dvr = NULL;
+static FILE *filedump_tsIndexer = NULL;
+void Demux::TsIndexerCallback(TS_Indexer_t *ts_indexer, TS_Indexer_Event_t *event) {
+    ALOGD("[%s/%d] event->type = %d, event->pid = %d, event->offset = %llu, event->pts = %llu", __FUNCTION__, __LINE__, event->type,
+    event->pid, event->offset, event->pts);
+    Demux *dmxDev = (Demux*)ts_indexer->user_data;
+    uint64_t margin_len = 0;
+
+    if (!has_iframe(dmxDev->flags) &&
+           !has_pts(dmxDev->flags) &&
+           !has_pusi(dmxDev->flags) &&
+           event->type != TS_INDEXER_EVENT_TYPE_START_INDICATOR) {
+          ALOGD("wait the PUSI come %d...\n", event->type);
+          return;
+    }
+
+    if (dmxDev->last_pusi_offset <= 0) {
+        if (event->type == TS_INDEXER_EVENT_TYPE_START_INDICATOR) {
+            dmxDev->last_pusi_offset = ts_indexer->offset;
+            dmxDev->last_pusi_ptr = dmxDev->base_ptr + (ts_indexer->offset - dmxDev->cnt);
+            dmxDev->setTsIndexType(event->type);
+            dmxDev->flags = INDEX_PUSI;
+            return;
+        } else {
+            ALOGE("unexpected event: %d\n", event->type);
+            return;
+        }
+    }
+    if (event->type == TS_INDEXER_EVENT_TYPE_START_INDICATOR) {
+        if (!has_pusi(dmxDev->flags)) {
+            ALOGE("no PUSI, should not send\n");
+            return;
+        }
+        /*
+        if (has_pusi(dmxDev->flags) && has_iframe(dmxDev->flags)) {
+              ALOGD("I-Frame send %llu bytes, PUSI: %d, IFRAME: %d, PTS: %d, ctl->last_pusi_offset = %llu, ctl->last_pts = %llu\n",
+              event->offset - dmxDev->last_pusi_offset,
+              has_pusi(dmxDev->flags),
+              has_iframe(dmxDev->flags),
+              has_pts(dmxDev->flags),
+              dmxDev->last_pusi_offset,
+              dmxDev->getCurrentPts());
+        }*/
+
+        /*
+         * it does means this is the first PUSI on current block if there're
+         * cache data
+         */
+        if (dmxDev->cache_len > 0) {
+            // the length from block head to the pusi position
+            margin_len = ts_indexer->offset - dmxDev->cnt;
+            //ALOGD("[%s/%d][demuxid = %d], ts_indexer->offset = %llu, dmxDev->cnt = %llu, margin_len = %llu", __FUNCTION__, __LINE__, dmxDev->getDemuxId(), ts_indexer->offset, dmxDev->cnt, margin_len);
+            //ALOGD("[%s/%d][demuxid = %d] memcpy dmxDev->cache_len = %llu, dmxDev->cache_data[dmxDev->cache_len]= %p, dmxDev->base_ptr = %p, margin_len = %llu", __FUNCTION__, __LINE__, dmxDev->getDemuxId(), dmxDev->cache_len,&dmxDev->cache_data[dmxDev->cache_len], dmxDev->base_ptr, margin_len);
+            memcpy(&dmxDev->cache_data[dmxDev->cache_len], dmxDev->base_ptr, margin_len);
+            dmxDev->cache_len += margin_len;
+            dmxDev->last_pusi_ptr = dmxDev->base_ptr + margin_len;
+        } else {
+            // the length between the last PUSI and current PUSI
+            margin_len = ts_indexer->offset - dmxDev->last_pusi_offset;
+            //ALOGD("[%s/%d][demuxid = %d], ts_indexer->offset = %llu, dmxDev->last_pusi_offset = %llu, margin_len = %llu", __FUNCTION__, __LINE__, dmxDev->getDemuxId(), ts_indexer->offset, dmxDev->last_pusi_offset, margin_len);
+            //ALOGD("[%s/%d][demuxid = %d] memcpy dmxDev->cache_data[dmxDev->cache_len]= %p, dmxDev->last_pusi_ptr = %p, margin_len = %llu", __FUNCTION__, __LINE__, dmxDev->getDemuxId(), &dmxDev->cache_data[dmxDev->cache_len], dmxDev->last_pusi_ptr, margin_len);
+            memcpy(&dmxDev->cache_data[0], dmxDev->last_pusi_ptr, margin_len);
+            dmxDev->cache_len = margin_len;
+            dmxDev->last_pusi_ptr += margin_len;
+        }
+        vector<uint8_t> tsData;
+        tsData.resize(dmxDev->cache_len);
+        if (dmxDev->getDemuxId() == 3) {
+            if (filedump_tsIndexer == NULL)
+                filedump_tsIndexer = fopen("/data/local/tmp/filedump_tsIndexer.ts", "wb+");
+            if (filedump_tsIndexer != NULL) {
+                fwrite(dmxDev->cache_data, 1, dmxDev->cache_len, filedump_tsIndexer);
+                //fflush(filedump_before);
+                //fclose(filedump);
+                //filedump = NULL;
+            } else {
+               ALOGE("Open filedump_tsIndexer.ts failed!\n");
+            }
+        }
+        //ALOGD("[%s/%d][demuxid = %d] memcpy cache_len = %llu", __FUNCTION__, __LINE__, dmxDev->getDemuxId(), dmxDev->cache_len);
+        memcpy(tsData.data(), dmxDev->cache_data, dmxDev->cache_len * sizeof(uint8_t));
+        dmxDev->sendFrontendInputToRecord(tsData, event->pid, dmxDev->last_pusi_offset, dmxDev->getCurrentPts(), dmxDev->getIFrame(), dmxDev->getTsIndexType());
+        dmxDev->startRecordFilterDispatcher();
+        dmxDev->setTsIndexType(event->type);
+        dmxDev->setIFrame(-1);
+        dmxDev->setCurrentPts(0);
+        dmxDev->last_pusi_offset = ts_indexer->offset;
+        dmxDev->flags = INDEX_PUSI;
+        dmxDev->cache_len = 0;
+        return;
+    } else if (event->type == TS_INDEXER_EVENT_TYPE_VIDEO_PTS || event->type == TS_INDEXER_EVENT_TYPE_AUDIO_PTS){
+        // return pts event;
+        dmxDev->flags |= INDEX_PTS;
+        dmxDev->setCurrentPts(event->pts);
+        return;
+    } else if (event->type == TS_INDEXER_EVENT_TYPE_MPEG2_I_FRAME || event->type == TS_INDEXER_EVENT_TYPE_AVC_I_SLICE ||
+        event->type == TS_INDEXER_EVENT_TYPE_HEVC_IDR_W_RADL) {
+        dmxDev->flags |= INDEX_IFRAME;
+        dmxDev->setIFrame(event->type);
+        return;
+    } else {
+        ALOGD("[%s/%d]skip P frame and B frame  event->type = %d", __FUNCTION__, __LINE__, event->type);
+        return;
+    }
+}
+
 void Demux::pesDataCallback(void* demux, int fid, uint8_t *pes, int len) {
     ALOGD("[%s/%d] fid = %d", __FUNCTION__, __LINE__, fid);
 
@@ -113,53 +241,110 @@ void Demux::postDvrData(void* demux) {
         return;
     }
     int ret = -1;
-    int cnt = -1;
-    int size = 10 * 188;
-    vector<uint8_t> dvrData;
-    dvrData.resize(size);
-    cnt = size;
 
-    ret = dmxDev->getAmDvrDevice()->AM_DVR_Read(dvrData.data(), &cnt);
+    uint8_t mData[1024 * 188];
+    int cnt = 1024 * 188;
+    //int size = 1024 * 188 * 16;
+    //vector<uint8_t> dvrData;
+    //dvrData.resize(size);
+    //cnt = size;
+    //vector<uint8_t> leftData;
+
+    ret = dmxDev->getAmDvrDevice()->AM_DVR_Read(mData, &cnt);
     if (ret != 0) {
-        ALOGE("No data available from DVR");
+        //ALOGE("No data available from DVR");
         //usleep(200 * 1000);
         return;
     }
 
-    if (cnt < size) {
+    //if (cnt < size) {
         //ALOGD("read dvr read size = %d", cnt);
+    //}
+    if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0) && dmxDev->getDemuxId() == 2) {
+        if (filedump_dvr == NULL)
+            filedump_dvr = fopen("/data/local/tmp/dump_dvr_from_dvr_device.ts", "wb+");
+        if (filedump_dvr != NULL) {
+            fwrite(mData, 1, cnt, filedump_dvr);
+            //fflush(filedump_before);
+            //fclose(filedump);
+            //filedump = NULL;
+        } else {
+           ALOGE("Open dump_dvr.ts failed!\n");
+        }
     }
 
-    /*
-    ALOGD("dmxDev->mfd = %d", dmxDev->mfd);
-    if (dmxDev->mfd > 0) { //data/local/tmp/media_demux.ts
-        write(dmxDev->mfd, dvrData.data(), cnt);
-    }*/
-    dvrData.resize(cnt);
+    ALOGD("%s/%d[demuxid = %d] read data from dvr total size = %d, count = %llu", __FUNCTION__, __LINE__, dmxDev->getDemuxId(), cnt, dmxDev->count++);    //dvrData.resize(cnt);
     int pesFid = dmxDev->getPesFid();
     if (pesFid != -1) {
         int pid = dmxDev->getFilterTpid(pesFid);
         ALOGD("%s/%d pid = %d, pesFid = %d", __FUNCTION__, __LINE__, pid, pesFid);
         if (pid != -1 && dmxDev->getAmPesFilter() != NULL) {
-            dmxDev->getAmPesFilter()->extractPesDataFromTsPacket(pid, dvrData.data(), cnt);
+            dmxDev->getAmPesFilter()->extractPesDataFromTsPacket(pid, mData, cnt);
         }
     } else {
-       if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
-            FILE *filedump = fopen("/data/local/tmp/dump_dvr.ts", "ab+");
-            if (filedump != NULL) {
-                fwrite(dvrData.data(), 1, dvrData.size(), filedump);
-                fflush(filedump);
-                fclose(filedump);
-                filedump = NULL;
-            } else {
-               ALOGE("Open dump_dvr.ts failed!\n");
-            }
-        }
-
         //uint16_t pid = ((dvrData[1] & 0x1f) << 8) | ((dvrData[2] & 0xff));
         //ALOGD("%s/%d dvr pid:0x%x", __FUNCTION__, __LINE__, pid);
-        dmxDev->sendFrontendInputToRecord(dvrData);
-        dmxDev->startRecordFilterDispatcher();
+        if (1) {
+            int vpid = dmxDev->getRecordVideoPid();
+            int vFormat = dmxDev->getScIndexTypeForVideoFormat();
+            if (dmxDev->getDemuxId() == 2) {
+                ALOGD("%s/%d pid = %d, video format = %d", __FUNCTION__, __LINE__, vpid, vFormat);
+            }
+
+            dmxDev->base_ptr = &mData[0];
+            if (vpid != -1 && vFormat != 0 && dmxDev != NULL && dmxDev->getAmTsIndexer() != nullptr) {
+                dmxDev->getAmTsIndexer()->ts_indexer_set_video_pid(vpid);
+                dmxDev->getAmTsIndexer()->ts_indexer_set_video_format(dmxDev->convertVideoFormatToTsIndexFormat(vFormat));
+                dmxDev->getAmTsIndexer()->ts_indexer_parse(mData, cnt);
+                dmxDev->bUseTsIndexer = true;
+            } else {
+                int apid = dmxDev->getRecordAudioPid();
+                if (apid != -1 && dmxDev != NULL && dmxDev->getAmTsIndexer() != nullptr) {
+                    ALOGD("%s/%d get record pts by audio pid = %d", __FUNCTION__, __LINE__, apid);
+                    dmxDev->getAmTsIndexer()->ts_indexer_set_audio_pid(apid);
+                    dmxDev->getAmTsIndexer()->ts_indexer_parse(mData, cnt);
+                    dmxDev->bUseTsIndexer = true;
+                }
+            }
+
+            ALOGD("%s/%d[demuxid = %d], dmxDev->bUseTsIndexer = %d", __FUNCTION__, __LINE__, dmxDev->getDemuxId(), dmxDev->bUseTsIndexer);
+
+            if (!dmxDev->bUseTsIndexer) {
+                vector<uint8_t> tmpData;
+                tmpData.resize(cnt);
+                memcpy(tmpData.data(), mData, cnt *  sizeof(uint8_t));
+                dmxDev->sendFrontendInputToRecord(tmpData);
+                dmxDev->startRecordFilterDispatcher();
+            }
+            if (dmxDev->bUseTsIndexer) {
+                uint64_t offset = dmxDev->cache_len;
+                 /*
+                 * cache the data from PUSI position to the end of the block if current
+                 * block has PUSI.
+                 * cache the whole block data if current block has no PUSI.
+                 */
+                if (dmxDev->cache_len == 0 && dmxDev->last_pusi_ptr) {
+                    int pusi_to_end_len = ((dmxDev->base_ptr + cnt) - dmxDev->last_pusi_ptr);
+                    if (pusi_to_end_len > 0) {
+                        ALOGD("%s/%d[demuxid = %d] memcpy offset = %llu, dmxDev->cache_data[offset] = %p, dmxDev->last_pusi_ptr = %p, pusi_to_end_len = %d", __FUNCTION__, __LINE__, dmxDev->getDemuxId(),offset, &dmxDev->cache_data[offset], dmxDev->last_pusi_ptr, pusi_to_end_len);
+                        memcpy(&dmxDev->cache_data[offset], dmxDev->last_pusi_ptr, pusi_to_end_len);
+                    }
+                    dmxDev->cache_len += pusi_to_end_len;
+                 } else {
+                    ALOGD("%s/%d[demuxid = %d] memcpy offset = %llu, dmxDev->cache_data[offset] = %p,dmxDev->base_ptr = %p, cnt = %d", __FUNCTION__, __LINE__, dmxDev->getDemuxId(),offset, &dmxDev->cache_data[offset], dmxDev->base_ptr, cnt);
+                    memcpy(&dmxDev->cache_data[offset], dmxDev->base_ptr, cnt);
+                    dmxDev->cache_len += cnt;
+                 }
+                dmxDev->cnt += cnt;
+                dmxDev->last_pusi_ptr = NULL;
+            }
+        } else {
+            vector<uint8_t> tmpData;
+            tmpData.resize(cnt);
+            memcpy(tmpData.data(), mData, cnt *  sizeof(uint8_t));
+            dmxDev->sendFrontendInputToRecord(tmpData);
+            dmxDev->startRecordFilterDispatcher();
+        }
     }
 }
 
@@ -648,7 +833,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
                     mAvSyncHwId = *mPcrFilterIds.begin();
                     ALOGD("%s/%d mAvSyncHwId = %llu", __FUNCTION__, __LINE__, *mPcrFilterIds.begin());
                     mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
-                    mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
+                    //mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
                  } else {
                     mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
                     mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
@@ -676,7 +861,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
             if (mAvSyncHwId == -1) {
                 mAvSyncHwId = *mPcrFilterIds.begin();//mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
                 mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
-                mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
+                //mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
             }
         }
         ALOGD("[Demux] mPcrFilterId:%llu pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
@@ -747,6 +932,13 @@ Return<Result> Demux::close() {
         mHwDemuxOps[mDemuxId] = nullptr;
         mWriteTsSize = 0;
     }
+    if (mAmTsIndexer[mDemuxId] != nullptr) {
+        delete []cache_data;
+        cache_data = NULL;
+        ALOGD("[%s/%d] release mAmTsIndexer mDemuxId:%d", __FUNCTION__, __LINE__, mDemuxId);
+        mAmTsIndexer[mDemuxId]->ts_indexer_destroy();
+        mAmTsIndexer[mDemuxId] = nullptr;
+    }
 
     if (AmDmxDevice[mDemuxId] != NULL) {
         AmDmxDevice[mDemuxId]->AM_DMX_Close();
@@ -778,7 +970,7 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
             ALOGD("%s/%d DvrType::PLAYBACK bufferSize:%d KB", __FUNCTION__, __LINE__,  bufferSize/1024);
             mDvrPlayback = new Dvr(type, bufferSize, cb, this);
             if (bCheckVts) {
-                ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL");
+                ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL demuxId = %d", mDemuxId);
                 AmDmxDevice[mDemuxId]->dmx_dvr_open(INPUT_LOCAL);
             }
             if (!mDvrPlayback->createDvrMQ()) {
@@ -801,13 +993,19 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
         case DvrType::RECORD:
             ALOGD("%s/%d DvrType::RECORD bufferSize:%d KB", __FUNCTION__, __LINE__,  bufferSize/1024);
             mDvrRecord = new Dvr(type, bufferSize, cb, this);
-            //ALOGD("[Demux] dmx_dvr_open INPUT_DEMOD");
-            //mAmDvrDevice->AM_DVR_Open(INPUT_DEMOD);
+            //ALOGD("[Demux] AM_DVR_Open INPUT_DEMOD demuxId = %d", mDemuxId);
+            //mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput(), true);
             if (!mDvrRecord->createDvrMQ()) {
                 _hidl_cb(Result::UNKNOWN_ERROR, mDvrRecord);
                 return Void();
             }
 
+            mAmTsIndexer[mDemuxId] = new AmTsIndexer();
+            cache_data = new uint8_t[2 * 1024 *1024];
+            if (cache_data == NULL) {
+                ALOGD("new cache data fail");
+            }
+            mAmTsIndexer[mDemuxId]->ts_indexer_set_event_callback(TsIndexerCallback, this);
             _hidl_cb(Result::SUCCESS, mDvrRecord);
             return Void();
         default:
@@ -847,8 +1045,24 @@ Result Demux::removeFilter(uint64_t filterId) {
         mPesFilterIds.erase(filterId);
     }
 
+    /*
+    if (mAmTsIndexer != NULL) {
+        mAmTsIndexer->ts_indexer_destroy();
+        mAmTsIndexer = NULL;
+    }*/
+
     if (mDvrPlayback != nullptr) {
         mDvrPlayback->removePlaybackFilter(filterId);
+    }
+
+    //ALOGD(" mRecordFilterIds size = %d", mRecordFilterIds.size());
+    if (mRecordFilterIds.size() == 0) {
+        mCurPts     = -1;
+        count       = 0;
+        cache_len   = 0;
+        last_pusi_offset = 0;
+        cnt              = 0;
+        bUseTsIndexer = false;
     }
 
     if (mFilters.size() == 0) {
@@ -865,7 +1079,7 @@ Result Demux::removeFilter(uint64_t filterId) {
 
 void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
         bool isDscReady = false;
-        if (DEBUG_DEMUX)
+        if (1)
             ALOGD("write to dvr %d size:%d", mDemuxId, data.size());
 
         {
@@ -948,10 +1162,10 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
                     ALOGD("[demux] stop Inject TS, break!");
                     break;
                 }
-                ALOGD("[Demux] wait for 100ms to write dvr device");
+                ALOGD("[Demux] wait for 100ms to write dvr device demuxId = %d", mDemuxId);
             }
-            if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
-                FILE *filedump = fopen("/data/local/tmp/demux_inject.ts", "ab+");
+            if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0) && getDemuxId() == 2) {
+                FILE *filedump = fopen("/data/local/tmp/demux_inject_demux2.ts", "ab+");
                 if (filedump != NULL) {
                     fwrite(data.data(), 1, data.size(), filedump);
                     fflush(filedump);
@@ -961,6 +1175,18 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
                    ALOGE("Open demux_inject.ts failed!\n");
                 }
             }
+            if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0) && getDemuxId() == 1) {
+                FILE *filedump = fopen("/data/local/tmp/demux_inject_demux1.ts", "ab+");
+                if (filedump != NULL) {
+                    fwrite(data.data(), 1, data.size(), filedump);
+                    fflush(filedump);
+                    fclose(filedump);
+                    filedump = NULL;
+                } else {
+                   ALOGE("Open demux_inject.ts failed!\n");
+                }
+            }
+
         } else {
             ALOGD("[Demux] data[0] = 0x%x", data[0]);
         }
@@ -977,23 +1203,45 @@ void Demux::sendFrontendInputToRecord(vector<uint8_t> data) {
         ALOGD("no record filter id");
         return;
     }
+
     set<uint64_t>::iterator it = mRecordFilterIds.begin();
     if (DEBUG_DEMUX) {
         ALOGW("[Demux] update record filter output data size = %d", data.size());
     }
-    mFilters[*it]->updateRecordOutput(data);
-    /*
+    //mFilters[*it]->updateRecordOutput(data);
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
+        if (mFilters[*it]->getRecordVideoPid() != -1) {
+             break;
+        }
+    }
+
+    if (it != mRecordFilterIds.end()) {
         mFilters[*it]->updateRecordOutput(data);
-    }*/
+    } else {
+        for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
+            if (mFilters[*it]->getRecordAudioPid() != -1) {
+                 //ALOGD("[demuxid = %d]find record audio pid = %d", mDemuxId, mFilters[*it]->getRecordAudioPid());
+                 break;
+            }
+        }
+        if (it != mRecordFilterIds.end()) {
+            mFilters[*it]->updateRecordOutput(data);
+        } else {
+            it = mRecordFilterIds.begin();
+            mFilters[*it]->updateRecordOutput(data);
+        }
+    }
 }
 
-void Demux::sendFrontendInputToRecord(vector<uint8_t> data, uint16_t pid, uint64_t pts) {
+void Demux::sendFrontendInputToRecord(vector<uint8_t> data, uint16_t pid, uint64_t offset, uint64_t pts, int scIndextype,int tsIndexType) {
     sendFrontendInputToRecord(data);
-    set<uint64_t>::iterator it;
+    std::lock_guard<std::mutex> lock(mFilterLock);
+    set<uint64_t>::iterator it =  mRecordFilterIds.begin();
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
         if (mFilters[*it] != nullptr && pid == mFilters[*it]->getTpid()) {
             mFilters[*it]->updatePts(pts);
+            mFilters[*it]->updateIndexType(scIndextype, tsIndexType);
+            mFilters[*it]->updateCurrentOffset(offset);
         }
     }
 }
@@ -1020,15 +1268,36 @@ bool Demux::startRecordFilterDispatcher() {
     }
     set<uint64_t>::iterator it = mRecordFilterIds.begin();
 
-    if (mFilters[*it]->startRecordFilterHandler() != Result::SUCCESS) {
-        return false;
-    }
-    /*
+    //if (mFilters[*it]->startRecordFilterHandler() != Result::SUCCESS) {
+     //   return false;
+   // }
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
+        if (mFilters[*it]->getRecordVideoPid() != -1) {
+            break;
+        }
+    }
+
+    if (it != mRecordFilterIds.end()) {
         if (mFilters[*it]->startRecordFilterHandler() != Result::SUCCESS) {
             return false;
         }
-    }*/
+    } else {
+        for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
+            if (mFilters[*it]->getRecordAudioPid() != -1) {
+                break;
+            }
+        }
+        if (it != mRecordFilterIds.end()) {
+            if (mFilters[*it]->startRecordFilterHandler() != Result::SUCCESS) {
+                return false;
+            }
+        } else {
+            it = mRecordFilterIds.begin();
+            if (mFilters[*it]->startRecordFilterHandler() != Result::SUCCESS) {
+                return false;
+            }
+        }
+    }
 
     return true;
 }
@@ -1326,7 +1595,80 @@ bool Demux::checkSoftDemuxForSubtitle() {
     return bSupportSoftDemuxForSubtitle;
 }
 
+sp<AmTsIndexer> Demux::getAmTsIndexer() {
+    return mAmTsIndexer[mDemuxId];
+}
 
+TS_Indexer_StreamFormat_t Demux::convertVideoFormatToTsIndexFormat(int vf) {
+    switch (vf) {
+        case 1://SC
+            return TS_INDEXER_VIDEO_FORMAT_MPEG2;
+        case 2://SC_HEVC
+            return TS_INDEXER_VIDEO_FORMAT_HEVC;
+        case 3://AVC
+            return TS_INDEXER_VIDEO_FORMAT_H264;
+        default:
+            ALOGD("can't find video format");
+            return TS_INDEXER_VIDEO_FORMAT_NONE;
+    }
+}
+
+void Demux::setCurrentPts(uint64_t pts) {
+    mCurPts = pts;
+}
+
+uint64_t Demux::getCurrentPts() {
+    return mCurPts;
+}
+
+int Demux::getRecordVideoPid() {
+    std::lock_guard<std::mutex> lock(mFilterLock);
+    set<uint64_t>::iterator it;
+    for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
+        if (mFilters[*it]->getRecordVideoPid() != -1) {
+            return mFilters[*it]->getRecordVideoPid();
+        }
+    }
+    return -1;
+}
+
+int Demux::getRecordAudioPid() {
+    std::lock_guard<std::mutex> lock(mFilterLock);
+    set<uint64_t>::iterator it;
+    for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
+        if (mFilters[*it]->getRecordAudioPid() != -1) {
+            return mFilters[*it]->getRecordAudioPid();
+        }
+    }
+    return -1;
+}
+
+int Demux::getScIndexTypeForVideoFormat() {
+    set<uint64_t>::iterator it;
+    for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
+        int type = static_cast<uint32_t>(mFilters[*it]->getScIndexType());
+        if (type != 0) {
+            return type;
+        }
+    }
+    return 0;
+}
+
+void Demux::setTsIndexType(int tsIndexType) {
+    mTsIndexType = tsIndexType;
+}
+
+int Demux::getTsIndexType() {
+    return mTsIndexType;
+}
+
+void Demux::setIFrame(int iFrame) {
+    mIFrame = iFrame;
+}
+
+int Demux::getIFrame() {
+    return mIFrame;
+}
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner

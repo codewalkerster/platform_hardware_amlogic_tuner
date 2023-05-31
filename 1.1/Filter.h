@@ -109,6 +109,12 @@ class Filter : public V1_1::IFilter {
     bool fillDataToDecoder();
     DemuxFilterType getFilterType();
     bool isRawData();
+    void updateIndexType(int scIndType, int tsIndType);
+    bool checkRecordByVideo();
+    DemuxRecordScIndexType getScIndexType();
+    int getRecordVideoPid();
+    int getRecordAudioPid();
+    void updateCurrentOffset(uint64_t offset);
 
   private:
     // Tuner service
@@ -218,6 +224,10 @@ class Filter : public V1_1::IFilter {
     V1_1::DemuxFilterEventExt createMonitorEvent();
     V1_1::DemuxFilterEventExt createRestartEvent();
     bool postFilteredEmmSection(vector<uint8_t> data);
+    uint32_t covertTsIndexerTypeToScIndex(uint32_t type);
+    uint32_t convertTsIndexerTypeToScHevcIndex(uint32_t type);
+    uint32_t convertTsIndexerTypeToTsIndex(uint32_t type);
+
     /**
      * Lock to protect writes to the FMQs
      */
@@ -265,15 +275,24 @@ class Filter : public V1_1::IFilter {
 
     uint64_t tempAudioFilterId = -1;
     uint64_t tempVideoFilterId = -1;
-    uint32_t mTsIndex = 0;
+    uint32_t mTsIndexMask = 0;
     DemuxRecordScIndexType mScIndexType = DemuxRecordScIndexType::NONE;
-    uint32_t mScIndex = 0;
+    uint32_t mScIndexMask = -1;
+    int mRecordByVideo = -1;
     int mEnableDmaBuf;
     int mFilterFd;
     int mFilterToken;
     void * mEsPrivateHeader = NULL;
     uint64_t mMediaEventNum = 0;
     uint32_t mSequenceNumber = 0;
+    int mRecordVideoPid = -1;
+    int mRecordAudioPid = -1;
+    int mTsIndType = -1;
+    int mScIndType = -1;
+    uint64_t mCurrentOffset = -1;
+    uint64_t mLastOffset = -1;
+    int mLastTsIndType = -1;
+    int mLastScIndType = -1;
 };
 
 }  // namespace implementation
