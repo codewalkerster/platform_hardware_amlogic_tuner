@@ -78,7 +78,7 @@ class Descrambler : public IDescrambler {
     bool bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle);
     bool allocNskDscChannels();
     bool clearNskDscChannels();
-    bool getTsnSourceStatus(bool *enableLocalMode);
+    bool getTsnSourceStatus(bool *is_local_mode);
 
   private:
     virtual ~Descrambler();
@@ -90,12 +90,12 @@ class Descrambler : public IDescrambler {
     bool mDemuxSet = false;
     std::mutex mDescrambleLock;
     bool mIsReady = false;
-    uint32_t mCasSessionToken;
-    bool mEnableLocalMode;
+    uint32_t mCasSessionToken = 0;
+    bool mIsLocalMode = false;
 
-    int mDsmFd = -1;
-    uint32_t mDscType = -1;
-    uint32_t mDscAlgo = CA_ALGO_UNKNOWN;
+    int32_t mDsmFd = -1;
+    int32_t mDscType = -1;
+    int32_t mDscAlgo = CA_ALGO_UNKNOWN;
     bool mIsEnc = false;
     struct dsm_keyslot_list mKeyslotList;
     std::map<uint16_t, uint32_t> es_pid_to_dsc_channel;

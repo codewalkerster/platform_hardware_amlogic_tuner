@@ -52,38 +52,30 @@ namespace implementation {
 Descrambler::Descrambler(uint32_t descramblerId, sp<Tuner> tuner) {
     mDescramblerId = descramblerId;
     mTunerService = tuner;
-    mEnableLocalMode = false;
     if (mTunerService != nullptr)
-    mDscType = mTunerService->getDscMode();
+      mDscType = mTunerService->getDscMode();
     mSourceDemuxId = 0;
-    mCasSessionToken = 0;
     FileSystem_create();
-    getTsnSourceStatus(&mEnableLocalMode);
-
+    getTsnSourceStatus(&mIsLocalMode);
 #ifdef SUPPORT_TSD
     if (mDscType == CA_DSC_TSD_TYPE) {
-        mDscType = FileSystem_getPropertyInt(TUNERHAL_DSC_TYPE_PROP, mDscType);
-        TUNER_DSC_DBG(mDescramblerId, "getProperty mDscType:%d", mDscType);
+      mDscType = FileSystem_getPropertyInt(TUNERHAL_DSC_TYPE_PROP, mDscType);
+      TUNER_DSC_DBG(mDescramblerId, "getProperty mDscType:%d", mDscType);
     }
 #endif
-
-    TUNER_DSC_INFO(descramblerId, "mEnableLocalMode:%d mDscType:%d", mEnableLocalMode, mDscType);
-    memset(&mKeyslotList, 0, sizeof(dsm_keyslot_list));
-    if (ca_open(descramblerId) != CA_DSC_OK)
-    TUNER_DSC_ERR(descramblerId, "ca_open ca%d failed!", descramblerId);
-    else
-    TUNER_DSC_DBG(descramblerId, "ca_open ca%d ok", descramblerId);
     mDsmFd = DSM_OpenSession(0);
-    TUNER_DSC_DBG(descramblerId, "DSM_OpenSession mDsmFd:%d", mDsmFd);
-
+    TUNER_DSC_DBG(mDescramblerId, "mIsLocalMode:%d mDscType:%d mDsmFd:%d", \
+        mIsLocalMode, mDscType, mDsmFd);
 }
 
 Descrambler::~Descrambler() {
-    if (mDsmFd >= 0) {
-      DSM_CloseSession(mDsmFd);
-      ca_close(mDescramblerId);
-    }
     TUNER_DSC_TRACE(mDescramblerId);
+
+    if (mDsmFd >= 0)
+      DSM_CloseSession(mDsmFd);
+
+    if (mDemuxSet)
+      ca_close(mSourceDemuxId);
 }
 
 Return<Result> Descrambler::setDemuxSource(uint32_t demuxId) {
@@ -94,16 +86,17 @@ Return<Result> Descrambler::setDemuxSource(uint32_t demuxId) {
       TUNER_DSC_WRAN(mDescramblerId, "Descrambler has already been set with a demux id %d", mSourceDemuxId);
       return Result::INVALID_STATE;
     }
-    if (mTunerService == nullptr) {
-      TUNER_DSC_ERR(mDescramblerId, "mTunerService is null!");
-      return Result::NOT_INITIALIZED;
+    if (ca_open(demuxId) != CA_DSC_OK) {
+      TUNER_DSC_ERR(mDescramblerId, "ca_open ca%d failed!", demuxId);
+      return Result::INVALID_STATE;
     }
 
     mDemuxSet = true;
     mSourceDemuxId = demuxId;
-    mTunerService->attachDescramblerToDemux(mDescramblerId, demuxId);
+    if (mTunerService != nullptr)
+      mTunerService->attachDescramblerToDemux(mDescramblerId, demuxId);
 
-    TUNER_DSC_INFO(mDescramblerId, "mSourceDemuxId:%d", mSourceDemuxId);
+    TUNER_DSC_INFO(mDescramblerId, "mSourceDemuxId:%d mDescramblerId:%d", mSourceDemuxId, mDescramblerId);
 
     return Result::SUCCESS;
 }
@@ -198,20 +191,20 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
             kte_id = ADD_IV_FLAG_PREFIX(kte_id);
           }
 
-          ALOGD(
-              "ALGO TYPE %d, keyslot id %x, algorithm = %d, key_parity_type = %d",
-              algo_type, kte_id, algorithm, key_parity_type);
+        TUNER_DSC_DBG(mDescramblerId,
+            "ALGO TYPE %d, keyslot id %x, algorithm = %d, key_parity_type = %d",
+            algo_type, kte_id, algorithm, key_parity_type);
 
-          if (algo_type == CA_ALGO_TYPE_ESA) {
-            if (ca_esa_index == -1) {
-              ALOGD("Allocate new esa(tsn common) ca channel for pid 0x%04x "
-                    "algorithm %d",
-                    mPid, algorithm);
-              ca_esa_index = ca_alloc_chan(mDescramblerId, mPid, algorithm,
-                                           CA_DSC_COMMON_TYPE);
+        if (algo_type == CA_ALGO_TYPE_ESA) {
+          if (ca_esa_index == -1) {
+            TUNER_DSC_DBG(mDescramblerId,
+                "Allocate new esa(tsn common) ca channel for pid 0x%04x "
+                "algorithm %d", mPid, algorithm);
+            ca_esa_index = ca_alloc_chan(mSourceDemuxId, mPid, algorithm,
+                                         CA_DSC_COMMON_TYPE);
 
               if (ca_esa_index < 0) {
-                ALOGE("FAILED to allocate esa channel for pid %x", mPid);
+              TUNER_DSC_ERR(mDescramblerId, "FAILED to allocate esa channel for pid %x", mPid);
                 return Result::INVALID_STATE;
               } else {
                 es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
@@ -220,7 +213,7 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
             }
             ALOGD("set esa key type %d to index %d kte %x ", key_parity_type,
                   ca_esa_index, kte_id);
-            if (ca_set_key(mDescramblerId, ca_esa_index, key_parity_type,
+            if (ca_set_key(mSourceDemuxId, ca_esa_index, key_parity_type,
                            kte_id)) {
               ALOGE("ca_set_key(%d, %d, %d) failed", ca_esa_index,
                     key_parity_type, kte_id);
@@ -232,34 +225,34 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
                   "Allocate new lde(tsd) ca channel for pid 0x%04x algorithm %d",
                   mPid, algorithm);
               ca_lde_index =
-                  ca_alloc_chan(mDescramblerId, mPid, algorithm, CA_DSC_TSD_TYPE);
+                  ca_alloc_chan(mSourceDemuxId, mPid, algorithm, CA_DSC_TSD_TYPE);
 
               if (ca_lde_index < 0) {
-                ALOGE("FAILED to allocate lde channel for pid %x", mPid);
+              TUNER_DSC_ERR(mDescramblerId, "FAILED to allocate lde channel for pid %x", mPid);
                 return Result::INVALID_STATE;
               } else {
                 es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
                     CA_DSC_TSD_TYPE, mPid)] = ca_lde_index;
               }
             }
-            ALOGD("set lde key type %d to index %d kte %x ", key_parity_type,
-                  ca_lde_index, kte_id);
-            if (ca_set_key(mDescramblerId, ca_lde_index, key_parity_type,
+          TUNER_DSC_DBG(mDescramblerId, "set lde key type %d to index %d kte %x ",
+              key_parity_type, ca_lde_index, kte_id);
+            if (ca_set_key(mSourceDemuxId, ca_lde_index, key_parity_type,
                            kte_id)) {
-              ALOGE("ca_set_key(%d, %d, %d) failed", ca_lde_index,
-                    key_parity_type, kte_id);
+            TUNER_DSC_ERR(mDescramblerId,
+                "ca_set_key(%d, %d, %d) failed", ca_lde_index, key_parity_type, kte_id);
               return Result::INVALID_STATE;
             }
           } else if (algo_type == CA_ALGO_TYPE_LEN) {
             if (ca_len_index == -1) {
-              ALOGD(
+            TUNER_DSC_DBG(mDescramblerId,
                   "Allocate new len(tse) ca channel for pid 0x%04x algorithm %d",
                   mPid, algorithm);
               ca_len_index =
-                  ca_alloc_chan(mDescramblerId, mPid, algorithm, CA_DSC_TSE_TYPE);
+                  ca_alloc_chan(mSourceDemuxId, mPid, algorithm, CA_DSC_TSE_TYPE);
 
               if (ca_len_index < 0) {
-                ALOGE("FAILED to allocate lde channel for pid %x", mPid);
+              TUNER_DSC_ERR(mDescramblerId, "FAILED to allocate lde channel for pid %x", mPid);
                 return Result::INVALID_STATE;
               } else {
                 es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
@@ -267,17 +260,17 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
               }
             }
 
-            ALOGD("set len key type %d to index %d kte %x ", key_parity_type,
-                  ca_len_index, kte_id);
-            if (ca_set_key(mDescramblerId, ca_len_index, key_parity_type,
+          TUNER_DSC_DBG(mDescramblerId, "set len key type %d to index %d kte %x ",
+              key_parity_type, ca_len_index, kte_id);
+            if (ca_set_key(mSourceDemuxId, ca_len_index, key_parity_type,
                            kte_id)) {
-              ALOGE("ca_set_key(%d, %d, %d) failed", ca_len_index,
-                    key_parity_type, kte_id);
+            TUNER_DSC_ERR(mDescramblerId, "ca_set_key(%d, %d, %d) failed",
+                ca_len_index, key_parity_type, kte_id);
               return Result::INVALID_STATE;
             }
           } else {
-            ALOGE("Invalid CA algorithm type to set: %d\n", algo_type);
-            ca_close(mDescramblerId);
+          TUNER_DSC_ERR(mDescramblerId, "Invalid CA algorithm type to set: %d\n", algo_type);
+            ca_close(mSourceDemuxId);
             return Result::INVALID_STATE;
           }
         }
@@ -285,7 +278,7 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
     } else {
       if (es_pid_to_dsc_channel.find(mPid) == es_pid_to_dsc_channel.end() &&
           mIsReady) {
-        int handle = ca_alloc_chan(mDescramblerId, mPid, mDscAlgo, mDscType);
+        int handle = ca_alloc_chan(mSourceDemuxId, mPid, mDscAlgo, mDscType);
         if (handle < 0) {
           TUNER_DSC_ERR(mDescramblerId, "ca_alloc_chan failed!");
           return Result::INVALID_STATE;
@@ -315,7 +308,7 @@ Return<Result> Descrambler::removePid(const DemuxPid& pid,
    if (mIsNskDsc) {
      if (es_pid_to_dsc_channel.find(ADD_DSC_TYPE_FLAG_WITH_PID(
              CA_DSC_COMMON_TYPE, mPid)) != es_pid_to_dsc_channel.end()) {
-       ca_free_chan(mDescramblerId,
+       ca_free_chan(mSourceDemuxId,
                     es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
                         CA_DSC_COMMON_TYPE, mPid)]);
        es_pid_to_dsc_channel.erase(
@@ -323,7 +316,7 @@ Return<Result> Descrambler::removePid(const DemuxPid& pid,
      }
      if (es_pid_to_dsc_channel.find(ADD_DSC_TYPE_FLAG_WITH_PID(
              CA_DSC_TSD_TYPE, mPid)) != es_pid_to_dsc_channel.end()) {
-       ca_free_chan(mDescramblerId,
+       ca_free_chan(mSourceDemuxId,
                     es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
                         CA_DSC_TSD_TYPE, mPid)]);
        es_pid_to_dsc_channel.erase(
@@ -331,7 +324,7 @@ Return<Result> Descrambler::removePid(const DemuxPid& pid,
      }
      if (es_pid_to_dsc_channel.find(ADD_DSC_TYPE_FLAG_WITH_PID(
              CA_DSC_TSE_TYPE, mPid)) != es_pid_to_dsc_channel.end()) {
-       ca_free_chan(mDescramblerId,
+       ca_free_chan(mSourceDemuxId,
                     es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
                         CA_DSC_TSE_TYPE, mPid)]);
        es_pid_to_dsc_channel.erase(
@@ -339,7 +332,7 @@ Return<Result> Descrambler::removePid(const DemuxPid& pid,
      }
    } else {
      if (es_pid_to_dsc_channel.find(mPid) != es_pid_to_dsc_channel.end()) {
-       ca_free_chan(mDescramblerId, es_pid_to_dsc_channel[mPid]);
+       ca_free_chan(mSourceDemuxId, es_pid_to_dsc_channel[mPid]);
        es_pid_to_dsc_channel.erase(mPid);
      }
    }
@@ -353,29 +346,32 @@ Return<Result> Descrambler::removePid(const DemuxPid& pid,
 Return<Result> Descrambler::close() {
     TUNER_DSC_TRACE(mDescramblerId);
 
-    if (mTunerService != nullptr)
+    if (mTunerService != nullptr) {
         mTunerService->detachDescramblerFromDemux(mDescramblerId, mSourceDemuxId);
+        mTunerService->removeDescrambler(mDescramblerId);
+    }
 
     {
-        std::lock_guard<std::mutex> lock(mDescrambleLock);
+      std::lock_guard<std::mutex> lock(mDescrambleLock);
+      if (mIsNskDsc) {
+        clearNskDscChannels();
+        mIsNskDsc = 0;
+      } else {
+        clearDscChannels();
+      }
+
+      if (mDsmFd >= 0) {
+        DSM_CloseSession(mDsmFd);
+        mDsmFd = -1;
+      }
+
+      if (mDemuxSet) {
+        ca_close(mSourceDemuxId);
         mDemuxSet = false;
-
-        if (mIsNskDsc) {
-          clearNskDscChannels();
-          mIsNskDsc = 0;
-        } else {
-          clearDscChannels();
-        }
-
-        if (mDsmFd >= 0) {
-          DSM_CloseSession(mDsmFd);
-          ca_close(mDescramblerId);
-          mDsmFd = -1;
-        }
+      }
     }
 
     return Result::SUCCESS;
-
 }
 
 bool Descrambler::isPidSupported(uint16_t pid) {
@@ -419,7 +415,7 @@ bool Descrambler::clearDscChannels() {
     uint32_t dsc_chan;
     if (es_pid_to_dsc_channel.find(mPid) != es_pid_to_dsc_channel.end()) {
       dsc_chan = es_pid_to_dsc_channel[mPid];
-      ca_free_chan(mDescramblerId, dsc_chan);
+      ca_free_chan(mSourceDemuxId, dsc_chan);
       es_pid_to_dsc_channel.erase(mPid);
     } else {
       continue;
@@ -436,12 +432,12 @@ bool Descrambler::allocDscChannels() {
   set<uint16_t>::iterator it;
   for (it = added_pid.begin(); it != added_pid.end(); it++) {
     uint16_t mPid = *it;
-    int handle = ca_alloc_chan(mDescramblerId, mPid, mDscAlgo, mDscType);
+    int handle = ca_alloc_chan(mSourceDemuxId, mPid, mDscAlgo, mDscType);
     if (handle < 0) {
       TUNER_DSC_ERR(mDescramblerId, "ca_alloc_chan failed!");
       return false;
     } else {
-      if (!bindDscChannelToKeyTable(mDescramblerId, handle)) {
+      if (!bindDscChannelToKeyTable(mSourceDemuxId, handle)) {
         return false;
       } else {
         es_pid_to_dsc_channel[mPid] = handle;
@@ -466,7 +462,7 @@ bool Descrambler::clearNskDscChannels() {
             CA_DSC_COMMON_TYPE, mPid)) != es_pid_to_dsc_channel.end()) {
       dsc_chan = es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
           CA_DSC_COMMON_TYPE, mPid)];
-      ca_free_chan(mDescramblerId, dsc_chan);
+      ca_free_chan(mSourceDemuxId, dsc_chan);
       es_pid_to_dsc_channel.erase(
           ADD_DSC_TYPE_FLAG_WITH_PID(CA_DSC_COMMON_TYPE, mPid));
 
@@ -477,7 +473,7 @@ bool Descrambler::clearNskDscChannels() {
             CA_DSC_TSD_TYPE, mPid)) != es_pid_to_dsc_channel.end()) {
       dsc_chan = es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
           CA_DSC_TSD_TYPE, mPid)];
-      ca_free_chan(mDescramblerId, dsc_chan);
+      ca_free_chan(mSourceDemuxId, dsc_chan);
       es_pid_to_dsc_channel.erase(
           ADD_DSC_TYPE_FLAG_WITH_PID(CA_DSC_TSD_TYPE, mPid));
 
@@ -488,7 +484,7 @@ bool Descrambler::clearNskDscChannels() {
             CA_DSC_TSE_TYPE, mPid)) != es_pid_to_dsc_channel.end()) {
       dsc_chan = es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
           CA_DSC_TSE_TYPE, mPid)];
-      ca_free_chan(mDescramblerId, dsc_chan);
+      ca_free_chan(mSourceDemuxId, dsc_chan);
       es_pid_to_dsc_channel.erase(
           ADD_DSC_TYPE_FLAG_WITH_PID(CA_DSC_TSE_TYPE, mPid));
 
@@ -533,63 +529,69 @@ bool Descrambler::allocNskDscChannels() {
         kte_id = ADD_IV_FLAG_PREFIX(kte_id);
       }
 
-      ALOGD("ALGO TYPE %d, keyslot id %x, algorithm = %d, key_parity_type = %d",
-            algo_type, kte_id, algorithm, key_parity_type);
+      TUNER_DSC_DBG(mDescramblerId,
+          "ALGO TYPE %d, keyslot id %x, algorithm = %d, key_parity_type = %d",
+           algo_type, kte_id, algorithm, key_parity_type);
 
       if (algo_type == CA_ALGO_TYPE_ESA) {
         if (ca_esa_index == -1) {
-          ALOGD("Allocate new esa(tsn common) ca channel for pid 0x%04x "
-                "algorithm %d",
-                mPid, algorithm);
-          ca_esa_index = ca_alloc_chan(mDescramblerId, mPid, algorithm,
+          TUNER_DSC_DBG(mDescramblerId,
+              "Allocate new esa(tsn common) ca channel for pid 0x%04x "
+              "algorithm %d", mPid, algorithm);
+          ca_esa_index = ca_alloc_chan(mSourceDemuxId, mPid, algorithm,
                                        CA_DSC_COMMON_TYPE);
 
           if (ca_esa_index < 0) {
-            ALOGE("FAILED to allocate esa channel for pid %x", mPid);
+            TUNER_DSC_ERR(mDescramblerId,
+                "FAILED to allocate esa channel for pid %x", mPid);
             return false;
           } else {
             es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
                 CA_DSC_COMMON_TYPE, mPid)] = ca_esa_index;
           }
         }
-        ALOGD("set esa key type %d to index %d kte %x ", key_parity_type,
-              ca_esa_index, kte_id);
-        if (ca_set_key(mDescramblerId, ca_esa_index, key_parity_type, kte_id)) {
-          ALOGE("ca_set_key(%d, %d, %d) failed", ca_esa_index, key_parity_type,
-                kte_id);
+        TUNER_DSC_DBG(mDescramblerId, "set esa key type %d to index %d kte %x ",
+            key_parity_type, ca_esa_index, kte_id);
+        if (ca_set_key(mSourceDemuxId, ca_esa_index, key_parity_type, kte_id)) {
+          TUNER_DSC_ERR(mDescramblerId, "ca_set_key(%d, %d, %d) failed",
+              ca_esa_index, key_parity_type, kte_id);
           return false;
         }
       } else if (algo_type == CA_ALGO_TYPE_LDE) {
         if (ca_lde_index == -1) {
-          ALOGD("Allocate new lde(tsd) ca channel for pid 0x%04x algorithm %d",
-                mPid, algorithm);
+          TUNER_DSC_DBG(mDescramblerId,
+              "Allocate new lde(tsd) ca channel for pid 0x%04x algorithm %d",
+              mPid, algorithm);
           ca_lde_index =
-              ca_alloc_chan(mDescramblerId, mPid, algorithm, CA_DSC_TSD_TYPE);
+              ca_alloc_chan(mSourceDemuxId, mPid, algorithm, CA_DSC_TSD_TYPE);
 
           if (ca_lde_index < 0) {
-            ALOGE("FAILED to allocate lde channel for pid %x", mPid);
+            TUNER_DSC_ERR(mDescramblerId,
+                "FAILED to allocate lde channel for pid %x", mPid);
             return false;
           } else {
             es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
                 CA_DSC_TSD_TYPE, mPid)] = ca_lde_index;
           }
         }
-        ALOGD("set lde key type %d to index %d kte %x ", key_parity_type,
-              ca_lde_index, kte_id);
-        if (ca_set_key(mDescramblerId, ca_lde_index, key_parity_type, kte_id)) {
-          ALOGE("ca_set_key(%d, %d, %d) failed", ca_lde_index, key_parity_type,
-                kte_id);
+        TUNER_DSC_DBG(mDescramblerId, "set lde key type %d to index %d kte %x ",
+            key_parity_type, ca_lde_index, kte_id);
+        if (ca_set_key(mSourceDemuxId, ca_lde_index, key_parity_type, kte_id)) {
+          TUNER_DSC_ERR(mDescramblerId,
+              "ca_set_key(%d, %d, %d) failed", ca_lde_index, key_parity_type, kte_id);
           return false;
         }
       } else if (algo_type == CA_ALGO_TYPE_LEN) {
         if (ca_len_index == -1) {
-          ALOGD("Allocate new len(tse) ca channel for pid 0x%04x algorithm %d",
-                mPid, algorithm);
+          TUNER_DSC_DBG(mDescramblerId,
+              "Allocate new len(tse) ca channel for pid 0x%04x algorithm %d",
+              mPid, algorithm);
           ca_len_index =
-              ca_alloc_chan(mDescramblerId, mPid, algorithm, CA_DSC_TSE_TYPE);
+              ca_alloc_chan(mSourceDemuxId, mPid, algorithm, CA_DSC_TSE_TYPE);
 
           if (ca_len_index < 0) {
-            ALOGE("FAILED to allocate lde channel for pid %x", mPid);
+            TUNER_DSC_ERR(mDescramblerId,
+                "FAILED to allocate lde channel for pid %x", mPid);
             return false;
           } else {
             es_pid_to_dsc_channel[ADD_DSC_TYPE_FLAG_WITH_PID(
@@ -597,21 +599,23 @@ bool Descrambler::allocNskDscChannels() {
           }
         }
 
-        ALOGD("set len key type %d to index %d kte %x ", key_parity_type,
-              ca_len_index, kte_id);
-        if (ca_set_key(mDescramblerId, ca_len_index, key_parity_type, kte_id)) {
-          ALOGE("ca_set_key(%d, %d, %d) failed", ca_len_index, key_parity_type,
-                kte_id);
+        TUNER_DSC_DBG(mDescramblerId,
+            "set len key type %d to index %d kte %x ",
+            key_parity_type, ca_len_index, kte_id);
+        if (ca_set_key(mSourceDemuxId, ca_len_index, key_parity_type, kte_id)) {
+          TUNER_DSC_ERR(mDescramblerId,
+              "ca_set_key(%d, %d, %d) failed", ca_len_index, key_parity_type, kte_id);
           return false;
         }
       } else {
-        ALOGE("Invalid CA algorithm type to set: %d\n", algo_type);
-        ca_close(mDescramblerId);
+        TUNER_DSC_ERR(mDescramblerId,
+            "Invalid CA algorithm type to set: %d\n", algo_type);
+        ca_close(mSourceDemuxId);
         return false;
       }
     }
   }
-  ALOGD("keytable allocation has been finished successfully");
+  TUNER_DSC_DBG(mDescramblerId, "keytable allocation has been finished successfully");
   return true;
 }
 
@@ -635,7 +639,7 @@ bool Descrambler::isDescramblerReady() {
     if (DSM_GetProperty(mDsmFd, DSM_PROP_IS_NSK_CM_KEYSLOT, &mIsNskDsc) == 0) {
       TUNER_DSC_DBG(mDescramblerId, "DSM_PROP_IS_NSK_CM_KEYSLOT is set value = %d", mIsNskDsc);
     }
-
+    memset(&mKeyslotList, 0, sizeof(dsm_keyslot_list));
     if (DSM_GetKeySlots(mDsmFd, &mKeyslotList)) {
       TUNER_DSC_ERR(mDescramblerId, "DSM_GetKeySlots failed! %s", strerror(errno));
       return mIsReady;
@@ -681,20 +685,20 @@ bool Descrambler::isDescramblerReady() {
   return mIsReady;
 }
 
-bool Descrambler::getTsnSourceStatus(bool *enableLocalMode) {
+bool Descrambler::getTsnSourceStatus(bool *is_local_mode) {
   TUNER_DSC_TRACE(mDescramblerId);
   char tsn_source[32] = {0};
   if (!FileSystem_readFile(TSN_SOURCE, tsn_source, sizeof(tsn_source))) {
     if (strstr(tsn_source, TSN_LOCAL)) {
-      *enableLocalMode = true;
+      *is_local_mode = true;
     } else if (strstr(tsn_source, TSN_DEMOD)) {
-      *enableLocalMode = false;
+      *is_local_mode = false;
     } else {
-      ALOGW("unknown tsn_source %s!", tsn_source);
+          TUNER_DSC_WRAN(mDescramblerId, "unknown tsn source %s!", tsn_source);
       return false;
     }
   } else {
-    ALOGW("read tsn_source failed!");
+      TUNER_DSC_WRAN(mDescramblerId, "read tsn source failed!");
     return false;
   }
 

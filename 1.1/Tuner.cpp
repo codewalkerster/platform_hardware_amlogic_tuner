@@ -482,15 +482,34 @@ Return<void> Tuner::getDemuxCaps(getDemuxCaps_cb _hidl_cb) {
 
 Return<void> Tuner::openDescrambler(openDescrambler_cb _hidl_cb) {
     ALOGV("%s", __FUNCTION__);
+    std::lock_guard<std::mutex> lock(mLock);
 
-    if (mLastUsedId < 0) {
-        ALOGE("%s/%d Invalid mLastUsedId:%d!", __FUNCTION__, __LINE__, mLastUsedId);
+    uint32_t nextDescramblerId = mLastUsedDescramblerId + 1;
+    uint32_t descramblerId = nextDescramblerId;
+    if (descramblerId == NUMDSC)
+        descramblerId = 0;
+
+    std::map<uint32_t, sp<Descrambler>>::iterator it;
+    it = mDescramblers.find(descramblerId);
+    while (it != mDescramblers.end()) {
+        descramblerId++;
+        if (descramblerId == nextDescramblerId) {
+            if (descramblerId != 0) {
+                ALOGW("%s/%d reset descrambler 0!", __FUNCTION__, __LINE__);
+                descramblerId = 0;
+            }
+            break;
+        }
+        if (descramblerId == NUMDSC)
+            descramblerId = 0;
+        it = mDescramblers.find(descramblerId);
     }
 
-    uint32_t descramblerId = mLastUsedId;
 
     sp<Descrambler> descrambler = new Descrambler(descramblerId, this);
     mDescramblers[descramblerId] = descrambler;
+    mLastUsedDescramblerId = descramblerId;
+    ALOGD("%s descrambler id: %d", __FUNCTION__, descramblerId);
 
     _hidl_cb(Result::SUCCESS, descrambler);
     return Void();
@@ -603,6 +622,15 @@ void Tuner::removeFrontend(uint32_t frontendId) {
     mFrontendToDemux.erase(frontendId);
 }
 
+void Tuner::removeDescrambler(uint32_t descramblerId) {
+    std::lock_guard<std::mutex> lock(mLock);
+
+    mDescramblers.erase(descramblerId);
+    if (mDescramblers.size() == 0)
+      mLastUsedDescramblerId = -1;
+    ALOGD("%s/%d descrambler id: %d", __FUNCTION__, __LINE__, descramblerId);
+}
+
 void Tuner::frontendStopTune(uint32_t frontendId) {
     map<uint32_t, uint32_t>::iterator it = mFrontendToDemux.find(frontendId);
     uint32_t demuxId;
@@ -621,19 +649,16 @@ void Tuner::frontendStartTune(uint32_t frontendId) {
     }
 }
 
-void Tuner::attachDescramblerToDemux(uint32_t descramblerId,
-                                     uint32_t demuxId) const {
+void Tuner::attachDescramblerToDemux(uint32_t descramblerId, uint32_t demuxId) const {
   ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
   if (mDescramblers.find(descramblerId) != mDescramblers.end()
       && mDemuxes.find(demuxId) != mDemuxes.end()) {
-    mDemuxes.at(demuxId)->attachDescrambler(descramblerId,
-                                            mDescramblers.at(descramblerId));
+    mDemuxes.at(demuxId)->attachDescrambler(descramblerId, mDescramblers.at(descramblerId));
   }
 }
 
-void Tuner::detachDescramblerFromDemux(uint32_t descramblerId,
-                                       uint32_t demuxId) const {
+void Tuner::detachDescramblerFromDemux(uint32_t descramblerId, uint32_t demuxId) const {
   ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
   if (mDescramblers.find(descramblerId) != mDescramblers.end()

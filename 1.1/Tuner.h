@@ -42,6 +42,7 @@ class Descrambler;
 class HwFeState;
 
 #define NUMDEMX 4
+#define NUMDSC 16
 #define NUMRECORD 4
 #define NUMPLAYBACK 4
 #define NUMTSFILTER 32
@@ -87,6 +88,7 @@ class Tuner : public ITuner {
     void frontendStopTune(uint32_t frontendId);
     void removeDemux(uint32_t demuxId);
     void removeFrontend(uint32_t frontendId);
+    void removeDescrambler(uint32_t descramblerId);
     void attachDescramblerToDemux(uint32_t descramblerId, uint32_t demuxId) const;
     void detachDescramblerFromDemux(uint32_t descramblerId, uint32_t demuxId) const;
 
@@ -121,12 +123,13 @@ class Tuner : public ITuner {
     V1_1::FrontendDtmbCapabilities mDtmbCaps;
     map<uint32_t, uint32_t> mFrontendToDemux;
     map<uint32_t, sp<Demux>> mDemuxes;
-    std::map<uint32_t, sp<Descrambler>> mDescramblers;
+    map<uint32_t, sp<Descrambler>> mDescramblers;
     // To maintain how many Frontends we have
     int mFrontendSize;
     // The last used demux id. Initial value is -1.
     // First used id will be 0.
     uint32_t mLastUsedId = -1;
+    uint32_t mLastUsedDescramblerId = -1;
     vector<sp<Lnb>> mLnbs;
     vector<sp<HwFeState>> mHwFes;
     uint32_t mTsInput = -1;
