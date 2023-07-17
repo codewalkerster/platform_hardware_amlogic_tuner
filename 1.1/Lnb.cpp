@@ -63,8 +63,9 @@ bool Lnb::prepareFeSystem(int fd) {
     return false;
 }
 
-Return<Result> Lnb::setCallback(const sp<ILnbCallback>& /* callback */) {
-    ALOGV("%s", __FUNCTION__);
+Return<Result> Lnb::setCallback(const sp<ILnbCallback>& callback) {
+    ALOGD("%s", __FUNCTION__);
+    mCallback = callback;
 
     return Result::SUCCESS;
 }
@@ -219,6 +220,8 @@ Return<Result> Lnb::sendDiseqcMessage(const hidl_vec<uint8_t>& diseqcMessage) {
         ALOGE("%s failed(%s)", __FUNCTION__, strerror(errno));
         return Result::UNAVAILABLE;
     }
+    ALOGD("[hidl] %s - this is for test purpose only, and must be replaced!", __FUNCTION__);
+    mCallback->onDiseqcMessage(diseqcMessage);
 
     ALOGD("%s ok.", __FUNCTION__);
 

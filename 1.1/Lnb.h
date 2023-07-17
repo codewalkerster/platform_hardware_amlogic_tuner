@@ -57,6 +57,7 @@ class Lnb : public ILnb {
     int acquireLnbDevice(void);
 
     bool prepareFeSystem(int fd);
+    sp<ILnbCallback> mCallback;
 
 };
 

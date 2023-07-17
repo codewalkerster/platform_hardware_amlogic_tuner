@@ -39,7 +39,11 @@ FrontendDvbcDevice::~FrontendDvbcDevice() {
 
 FrontendModulationStatus FrontendDvbcDevice::getFeModulationStatus() {
     FrontendModulationStatus modulationStatus;
-    modulationStatus.dvbc(getFeDevice()->feSettings->dvbc().modulation);
+    if (getFeDevice()->feSettings->getDiscriminator() != FrontendSettings::hidl_discriminator::dvbc) {
+        modulationStatus.dvbc(FrontendDvbcModulation::MOD_16QAM);
+    } else {
+        modulationStatus.dvbc(getFeDevice()->feSettings->dvbc().modulation);
+    }
     return modulationStatus;
 }
 

@@ -310,38 +310,14 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::MODULATION: {
+                ALOGD("MODULATION type = %d", mType);
                 FrontendModulationStatus modulationStatus;
-                switch (mType) {
-                    case FrontendType::ISDBS: {
-                        modulationStatus.isdbs(
-                                FrontendIsdbsModulation::MOD_BPSK);  // value = 1 << 1
-                        status.modulation(modulationStatus);
-                        break;
-                    }
-                    case FrontendType::DVBC: {
-                        modulationStatus.dvbc(FrontendDvbcModulation::MOD_16QAM);  // value = 1 << 1
-                        status.modulation(modulationStatus);
-                        break;
-                    }
-                    case FrontendType::DVBS: {
-                        modulationStatus.dvbs(FrontendDvbsModulation::MOD_QPSK);  // value = 1 << 1
-                        status.modulation(modulationStatus);
-                        break;
-                    }
-                    case FrontendType::ISDBS3: {
-                        modulationStatus.isdbs3(
-                                FrontendIsdbs3Modulation::MOD_BPSK);  // value = 1 << 1
-                        status.modulation(modulationStatus);
-                        break;
-                    }
-                    case FrontendType::ISDBT: {
-                        modulationStatus.isdbt(
-                                FrontendIsdbtModulation::MOD_DQPSK);  // value = 1 << 1
-                        status.modulation(modulationStatus);
-                        break;
-                    }
-                    default:
-                        break;
+                if (mFeDev != NULL) {
+                    modulationStatus = mFeDev->getFeModulationStatus();
+                    status.modulation(modulationStatus);
+                } else {
+                    modulationStatus.dvbc(FrontendDvbcModulation::MOD_16QAM);  // value = 1 << 1
+                    status.modulation(modulationStatus);
                 }
                 break;
             }

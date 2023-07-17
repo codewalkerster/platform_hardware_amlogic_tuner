@@ -39,7 +39,11 @@ FrontendDvbsDevice::~FrontendDvbsDevice() {
 
 FrontendModulationStatus FrontendDvbsDevice::getFeModulationStatus() {
     FrontendModulationStatus modulationStatus;
-    modulationStatus.dvbs(getFeDevice()->feSettings->dvbs().modulation);
+    if (getFeDevice()->feSettings->getDiscriminator() != FrontendSettings::hidl_discriminator::dvbs) {
+        modulationStatus.dvbs(FrontendDvbsModulation::MOD_QPSK);  // value = 1 << 1
+    } else {
+        modulationStatus.dvbs(getFeDevice()->feSettings->dvbs().modulation);
+    }
     return modulationStatus;
 }
 
