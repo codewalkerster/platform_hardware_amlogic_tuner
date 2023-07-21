@@ -91,6 +91,7 @@ class Dvr : public IDvr {
     bool startFilterDispatcher(bool isVirtualFrontend, bool isRecording);
     EventFlag* getDvrEventFlag();
     DvrSettings getSettings() { return mDvrSettings; }
+    bool stopInjectTs() { return mFlushing | !mStartDvrThread; }
 
   private:
     // Demux service
@@ -156,6 +157,8 @@ class Dvr : public IDvr {
     // Recording is ready when both of the following are set to true.
     bool mIsRecordStarted = false;
     bool mStartDvrThread = false;
+    std::mutex mReadLock;
+    bool mFlushing = false;
 };
 
 }  // namespace implementation

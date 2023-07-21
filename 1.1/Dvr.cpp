@@ -170,14 +170,31 @@ Return<Result> Dvr::stop() {
 }
 
 Return<Result> Dvr::flush() {
-    ALOGD("%s/%d", __FUNCTION__, __LINE__);
-    int size = mDvrMQ->availableToRead();
-    char* buffer = new char[size];
-    mDvrMQ->read((unsigned char*)&buffer[0], size);
-    delete[] buffer;
-
+    int flushSize = mDvrSettings.playback().packetSize * 100;//188 bytes
+    int left      = 0;
+    char *buffer  = NULL;
+    mFlushing = true;
+    std::lock_guard<std::mutex> lock(mReadLock);
+    if (mDvrMQ.get() != NULL) {
+      left = mDvrMQ->availableToRead();
+      ALOGD("%s/%d mType=%hhu size=%d", __FUNCTION__, __LINE__, mType, left);
+      if (left > 0) {
+        buffer = new char[flushSize];
+        for (int i = 0;  left > 0; i++) {
+            if (left > flushSize) {
+                mDvrMQ->read((unsigned char *)&buffer[0], flushSize);
+                left -= flushSize;
+            } else {
+                mDvrMQ->read((unsigned char *)&buffer[0], left);
+                left = 0;
+            }
+            ALOGD("%s/%d flush left=%d", __FUNCTION__, __LINE__, left);
+        }
+        delete[] buffer;
+      }
+    }
     mRecordStatus = RecordStatus::DATA_READY;
-
+    mFlushing = false;
     return Result::SUCCESS;
 }
 
@@ -314,13 +331,15 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
         ALOGD("DvrMQ is null");
         return false;
     }
+
+    std::lock_guard<std::mutex> lock(mReadLock);
     // Read playback data from the input FMQ
     int size = mDvrMQ->availableToRead();
     int playbackPacketSize = mDvrSettings.playback().packetSize * 100;//188 bytes
     vector<uint8_t> dataOutputBuffer;
     dataOutputBuffer.resize(playbackPacketSize);
     // Dispatch the packet to the PID matching filter output buffer
-    for (int i = 0;  mDvrThreadRunning && i < size / playbackPacketSize; i++) {
+    for (int i = 0;  !mFlushing && mDvrThreadRunning && i < size / playbackPacketSize; i++) {
         if (!mDvrMQ->read(dataOutputBuffer.data(), playbackPacketSize)) {
             ALOGE("%s read ts from mDvrMQ failed!", __FUNCTION__);
             return false;

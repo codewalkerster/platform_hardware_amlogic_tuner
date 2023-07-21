@@ -859,6 +859,10 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
         }
         if (isValidTsPacket(data)) {
             while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
+                if (mDvrPlayback && mDvrPlayback->stopInjectTs()) {
+                    ALOGD("[demux] stop Inject TS, break!");
+                    break;
+                }
                 ALOGD("[Demux] wait for 100ms to write dvr device");
                 usleep(100 * 1000);
             }
