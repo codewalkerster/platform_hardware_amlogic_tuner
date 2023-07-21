@@ -211,11 +211,11 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
                     CA_DSC_COMMON_TYPE, mPid)] = ca_esa_index;
               }
             }
-            ALOGD("set esa key type %d to index %d kte %x ", key_parity_type,
+            TUNER_DSC_DBG(mDescramblerId, "set esa key type %d to index %d kte %x ", key_parity_type,
                   ca_esa_index, kte_id);
             if (ca_set_key(mSourceDemuxId, ca_esa_index, key_parity_type,
                            kte_id)) {
-              ALOGE("ca_set_key(%d, %d, %d) failed", ca_esa_index,
+              TUNER_DSC_ERR(mDescramblerId, "ca_set_key(%d, %d, %d) failed", ca_esa_index,
                     key_parity_type, kte_id);
               return Result::INVALID_STATE;
             }
@@ -283,7 +283,7 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
           TUNER_DSC_ERR(mDescramblerId, "ca_alloc_chan failed!");
           return Result::INVALID_STATE;
         } else {
-          if (!bindDscChannelToKeyTable(mDescramblerId, handle)) {
+          if (!bindDscChannelToKeyTable(mSourceDemuxId, handle)) {
             return Result::INVALID_STATE;
           } else {
             es_pid_to_dsc_channel[mPid] = handle;
