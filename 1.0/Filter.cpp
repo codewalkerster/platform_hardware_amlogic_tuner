@@ -694,25 +694,35 @@ void Filter::filterThreadLoop() {
     ALOGD("[Filter] Filter %d thread ended.", mFilterId);
 }
 
-void Filter::fillDataToDecoder() {
+bool Filter::fillDataToDecoder() {
     ALOGV("%s/%d mFilterId:%d", __FUNCTION__, __LINE__, mFilterId);
 
     // For the first time of filter output, implementation needs to send the filter
     // Event Callback without waiting for the DATA_CONSUMED to init the process.
     if (mFilterEvent.events.size() == 0) {
         ALOGV("[Filter %d] wait for new mFilterEvent", mFilterId);
-        return;
+        return false;
     }
     if (mCallback == nullptr) {
         ALOGW("[Filter] mFilterId:%d does not hava callback.", mFilterId);
-        return;
+        return false;
     }
     // After successfully write, send a callback and wait for the read to be done
-    mCallback->onFilterEvent(mFilterEvent);
+    auto ret = mCallback->onFilterEvent(mFilterEvent);
+    if (!ret.isOk()) {
+        ALOGD("[Filter] return mCallback onFilterEvent fail");
+        return false;
+    }
+
     freeAvHandle();
     mFilterEvent.events.resize(0);
     mFilterStatus = DemuxFilterStatus::DATA_READY;
-    mCallback->onFilterStatus(mFilterStatus);
+    ret = mCallback->onFilterStatus(mFilterStatus);
+    if (!ret.isOk()) {
+        ALOGD("[Filter] return mCallback onFilterStatus fail");
+        return false;
+    }
+    return true;
 }
 
 void Filter::freeAvHandle() {

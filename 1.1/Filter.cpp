@@ -942,24 +942,19 @@ bool Filter::fillDataToDecoder() {
     freeAvHandle();
     mFilterEvent.events.resize(0);
     mFilterEventExt.events.resize(0);
-    if (mIsFirstFilterEvent) {
-        mFilterStatus = DemuxFilterStatus::DATA_READY;
-        if (mCallback != nullptr) {
-            auto ret = mCallback->onFilterStatus(mFilterStatus);
-            if (!ret.isOk()) {
-                ALOGD("[Filter] return mCallback onFilterStatus fail");
-                return false;
-            }
-        } else if (mCallback_1_1 != nullptr) {
-            auto ret = mCallback_1_1->onFilterStatus(mFilterStatus);
-            if (!ret.isOk()) {
-                ALOGD("[Filter] return mCallback_1_1  onFilterStatus fail");
-                return false;
-            }
+    mFilterStatus = DemuxFilterStatus::DATA_READY;
+    if (mCallback != nullptr) {
+        auto ret = mCallback->onFilterStatus(mFilterStatus);
+        if (!ret.isOk()) {
+            ALOGD("[Filter] return mCallback onFilterStatus fail");
+            return false;
         }
-        mIsFirstFilterEvent = false;
-    } else {
-        maySendFilterStatusCallback();
+    } else if (mCallback_1_1 != nullptr) {
+        auto ret = mCallback_1_1->onFilterStatus(mFilterStatus);
+        if (!ret.isOk()) {
+            ALOGD("[Filter] return mCallback_1_1  onFilterStatus fail");
+            return false;
+        }
     }
     return true;
 }

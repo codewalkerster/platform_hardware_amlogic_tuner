@@ -94,7 +94,7 @@ class Filter : public IFilter {
     bool isPcrFilter() { return mIsPcrFilter; };
     bool isRecordFilter() { return mIsRecordFilter; };
     bool isPesFilter() { return mIsPesFilter; }
-    void fillDataToDecoder();
+    bool fillDataToDecoder();
     DemuxFilterType getFilterType();
     int updatePCRFilterId(int avSyncId);
     bool isRawData();
