@@ -105,16 +105,35 @@ Return<Result> Descrambler::setKeyToken(const hidl_vec<uint8_t>& keyToken) {
     std::lock_guard<std::mutex> lock(mDescrambleLock);
     TUNER_DSC_TRACE(mDescramblerId);
 
+    uint32_t token = 0;
     uint32_t token_size = keyToken.size();
     if (token_size == 0) {
         TUNER_DSC_ERR(mDescramblerId, "Invalid keyToken!");
         return Result::INVALID_ARGUMENT;
     }
 
-    for (int token_idx = sizeof(mCasSessionToken) - 1; token_idx >= 0; --token_idx) {
-        mCasSessionToken = (mCasSessionToken << 8) | keyToken[token_idx];
+    for (int token_idx = sizeof(token) - 1; token_idx >= 0; --token_idx) {
+        token = (token << 8) | keyToken[token_idx];
     }
-    TUNER_DSC_DBG(mDescramblerId, "keyToken:0x%x", mCasSessionToken);
+    if (token == mCasSessionToken) {
+        TUNER_DSC_DBG(mDescramblerId, "The same keyToken:0x%x", token);
+        return Result::SUCCESS;
+    } else {
+        mCasSessionToken = token;
+        if (mIsReady && mDsmFd >= 0) {
+            TUNER_DSC_DBG(mDescramblerId, "Reset keyToken");
+            DSM_CloseSession(mDsmFd);
+            if (mIsNskDsc) {
+                clearNskDscChannels();
+            } else {
+                clearDscChannels();
+            }
+            mIsReady = false;
+            mDsmFd = DSM_OpenSession(0);
+        }
+    }
+
+    TUNER_DSC_DBG(mDescramblerId, "keyToken:0x%x mDsmFd:%d", mCasSessionToken, mDsmFd);
 
     int ret = DSM_BindToken(mDsmFd, mCasSessionToken);
     if (ret)
@@ -221,7 +240,7 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
             }
           } else if (algo_type == CA_ALGO_TYPE_LDE) {
             if (ca_lde_index == -1) {
-              ALOGD(
+              TUNER_DSC_DBG(mDescramblerId,
                   "Allocate new lde(tsd) ca channel for pid 0x%04x algorithm %d",
                   mPid, algorithm);
               ca_lde_index =
@@ -276,8 +295,7 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
         }
       }
     } else {
-      if (es_pid_to_dsc_channel.find(mPid) == es_pid_to_dsc_channel.end() &&
-          mIsReady) {
+      if (es_pid_to_dsc_channel.find(mPid) == es_pid_to_dsc_channel.end() && mIsReady) {
         int handle = ca_alloc_chan(mSourceDemuxId, mPid, mDscAlgo, mDscType);
         if (handle < 0) {
           TUNER_DSC_ERR(mDescramblerId, "ca_alloc_chan failed!");
@@ -289,8 +307,7 @@ Return<Result> Descrambler::addPid(const DemuxPid& pid,
             es_pid_to_dsc_channel[mPid] = handle;
           }
         }
-        TUNER_DSC_DBG(mDescramblerId, "ca_alloc_chan(0x%x 0x%x) ok.", mPid,
-                      es_pid_to_dsc_channel[mPid]);
+        TUNER_DSC_DBG(mDescramblerId, "ca_alloc_chan(0x%x 0x%x) ok.", mPid, es_pid_to_dsc_channel[mPid]);
       }
     }
     return Result::SUCCESS;
