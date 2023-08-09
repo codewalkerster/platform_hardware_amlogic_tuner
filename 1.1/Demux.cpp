@@ -289,8 +289,11 @@ void Demux::getSectionData(uint64_t filterId) {
         ALOGV("fid =%llu section data size:%d", filterId, sectionSize);
         sectionData.resize(sectionSize);
         gettimeofday(&mTable_end, NULL);
-        timeval table_start = mFilters[filterId]->getTableStartTime();
-        timersub(&mTable_end, &table_start, &mTable_elapsed);
+        timeval table_start;
+        if (mFilters[filterId] != nullptr) {
+            table_start = mFilters[filterId]->getTableStartTime();
+            timersub(&mTable_end, &table_start, &mTable_elapsed);
+        }
         uint16_t tableId = sectionData[0];
         if (tableId == 0x0) {
             //ALOGD("received PAT table tableId = %d, fid = %llu, dmxid = %d", tableId, filterId, mDemuxId);
