@@ -718,8 +718,16 @@ bool Frontend::isLocked() {
 
 void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
     ALOGD("%s", __FUNCTION__);
-    mIsLocked = isLocked;
     FrontendScanMessage msg;
+    if (freq&0x80000000)
+    {
+        uint32_t percent = freq&0x7FFFFFFF;
+        msg.progressPercent(percent);
+        mCallback->onScanMessage(FrontendScanMessageType::PROGRESS_PERCENT, msg);
+        ALOGD("%s %d,PROGRESS_PERCENT ccc:%d", __FUNCTION__,__LINE__,percent);
+        return;
+    }
+    mIsLocked = isLocked;
     msg.isLocked(isLocked);
     mCallback->onScanMessage(FrontendScanMessageType::LOCKED, msg);
     msg.frequencies({freq});

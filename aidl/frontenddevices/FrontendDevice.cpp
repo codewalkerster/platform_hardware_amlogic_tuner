@@ -724,10 +724,9 @@ bool FrontendDevice::threadLoop() {
 }
 
 uint32_t FrontendDevice::getClockMilliSeconds(void) {
-    struct timeval t;
-    t.tv_sec = t.tv_usec = 0;
-    gettimeofday(&t, NULL);
-    return t.tv_sec*1000 + t.tv_usec/1000;
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec * 1000 + t.tv_nsec/1000000;
 }
 
 int FrontendDevice::getThreadState(void) {

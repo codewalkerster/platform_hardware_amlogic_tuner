@@ -20,9 +20,9 @@
 #include <android/hardware/tv/tuner/1.0/ITuner.h>
 
 #define CONFIG_AMLOGIC_DVB_COMPAT
-#include "linux/dvb/frontend.h"
 #include <semaphore.h>
 #include <utils/Thread.h>
+#include "utils/frontend.h"
 #include "utils/stbtrace.h"
 
 using namespace std;
@@ -130,6 +130,10 @@ private:
     int internalTune(const FrontendSettings & settings);
     int blindTune(const FrontendSettings& settings);
     timeval tuneStartTime();
+    int dvb_wait_event (dvb_frontend_event *evt, int timeout);
+    int dvbsx_blindscan_getscanevent(dvbsx_blindscanevent *pbsevent);
+    int setDvbsBlindScanParams(bool start);
+
 };
 
 

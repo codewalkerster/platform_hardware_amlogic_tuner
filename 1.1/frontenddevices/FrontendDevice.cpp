@@ -33,6 +33,11 @@
 #define FE_STATE_TIMEOUT_MS 3000
 #define FE_SIGNAL_CHECK_INTERVAL_MS 10
 #define MAX_PLP_NUMBER 256
+#define FEND_WAIT_TIMEOUT           (500)
+#define M_BS_START_FREQ             (950)               /*The start RF frequency, 950MHz*/
+#define M_BS_STOP_FREQ              (2150)              /*The stop RF frequency, 2150MHz*/
+#define M_BS_MAX_SYMB               (45)
+#define M_BS_MIN_SYMB               (2)
 
 namespace android {
 namespace hardware {
@@ -118,6 +123,7 @@ void FrontendDevice::release() {
 
 void FrontendDevice::stop() {
     requestTuneStop();
+    mScanType = FrontendScanType::SCAN_UNDEFINED;
     mDev.tuneFreq  = 0;
     clearTuner();
     if (mDev.mHw != nullptr)
@@ -222,12 +228,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    if (mScanType == FrontendScanType::SCAN_BLIND) {
-        mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);
-    } else {
-        mDev.tuneFreq = fe_params.frequency;
-    }
-
+    mDev.tuneFreq = fe_params.frequency;
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);
@@ -413,9 +414,9 @@ int FrontendDevice::setFeSystem() {
 }
 
 int FrontendDevice::blindTune(const FrontendSettings & settings) {
+    ALOGD("%s, id(%d)", __FUNCTION__, mDev.id);
     struct dvb_frontend_info fe_info;
 
-    if (!checkOpen(true)) return UNAVAILABLE;
 
     if (mDev.blindFreq == 0) {
         if (ioctl(mDev.devFd, FE_GET_INFO, &fe_info) < 0 ) {
@@ -423,9 +424,37 @@ int FrontendDevice::blindTune(const FrontendSettings & settings) {
         }
         mDev.blindFreq = fe_info.frequency_min;
     }
+
     requestTuneStop();
     updateThreadState(FrontendDevice::STATE_SCAN_START);
-    return internalTune(settings);
+
+    dvb_frontend_parameters fe_params;
+
+    FrontendSettings tuneSettings = settings;
+    tuneSettings.dvbs().frequency = adjustFrequencyOffSet(tuneSettings.dvbs().frequency);
+    mDev.feSettings = &tuneSettings;
+    if (getFrontendSettings(&tuneSettings, &fe_params) <0) {
+        ALOGE("[id:%d] Wrong delivery system in FrontendSettings, or not support it.", mDev.id);
+        sem_post(&threadSemaphore);
+        return INVALID_ARGUMENT;
+    }
+
+    mDev.tuneFreq = fe_params.frequency;
+    if (!checkOpen(true)) {
+        ALOGE("Open fe failed.");
+        sem_post(&threadSemaphore);
+        return UNAVAILABLE;
+    }
+    /*
+    if (ioctl(mDev.devFd, FE_SET_FRONTEND, &fe_params) < 0) {
+    ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
+    return UNAVAILABLE;
+    }*/
+    setDvbsBlindScanParams(true);
+
+    sem_post(&threadSemaphore);
+    return 0;
+
 }
 
 int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType type) {
@@ -634,7 +663,8 @@ void FrontendDevice::onFirstRef(void) {
 bool FrontendDevice::threadLoop() {
     int state = getThreadState();
     bool stop;
-    uint32_t start_time;
+    uint32_t start_time, fe_timeout;
+    uint32_t locked_freq = mDev.tuneFreq;
     struct pollfd pfd;
     struct dvb_frontend_event fe_event;
     memset(&mStbTrace_info, 0, sizeof(stbtrace_info));
@@ -647,29 +677,80 @@ bool FrontendDevice::threadLoop() {
         if (mRequestTuningStop || newState == FrontendDevice::STATE_STOP) {
             stop = true;
         }
-        if (state == FrontendDevice::STATE_TUNE_START
-            || state == FrontendDevice::STATE_SCAN_START) {
-            mDev.islocked = false;
-        }
-        {
-            std::lock_guard<std::mutex> lock(mHwDevLock);
-            pfd.fd = mDev.devFd;
-        }
-        pfd.events = POLLIN;
-        pfd.revents = 0;
-        for (start_time = getClockMilliSeconds();
-             !stop && ((getClockMilliSeconds() - start_time) < FE_STATE_TIMEOUT_MS);) {
-            if (poll(&pfd, 1, FE_POLL_TIMEOUT_MS) == 1) {
-                if (ioctl(mDev.devFd, FE_GET_EVENT, &fe_event) >= 0) {
-                    if ((fe_event.status & FE_HAS_LOCK) !=0
-                        || (fe_event.status & FE_TIMEDOUT) != 0) {
-                        break;
+        if (mScanType == FrontendScanType::SCAN_BLIND) {
+            fe_timeout = 30*3000;
+            bool inBlindScan = true;
+            for (start_time = getClockMilliSeconds();
+               !stop && ((getClockMilliSeconds() - start_time) < fe_timeout);)
+            {
+                struct dvbsx_blindscanevent cur_bsevent;
+
+                if (mRequestTuningStop) {
+                    stop = true;
+                }
+
+                memset(&cur_bsevent, 0, sizeof(dvbsx_blindscanevent));
+                dvbsx_blindscan_getscanevent(&cur_bsevent);
+
+                if (cur_bsevent.status == BLINDSCAN_UPDATEPROCESS)
+                {
+                    locked_freq = cur_bsevent.u.m_uiprogress;
+                    locked_freq |= 0x80000000;
+
+                    if (cur_bsevent.u.m_uiprogress >= 100)
+                    {
+                        mContext->sendScanCallBack(locked_freq, false, true);
+                        setDvbsBlindScanParams(false);
+                        inBlindScan = false;
+                        stop = true;
+                    }
+                    else
+                    {
+                        mContext->sendScanCallBack(locked_freq, false, false);
                     }
                 }
-            } else {
-                if (state == FrontendDevice::STATE_TUNE_IDLE || mRequestTuningStop) {
-                    //scan and tune need check several seconds for signal
-                    //will not stable. and in ilde state, we just poll once
+                else if(cur_bsevent.status == BLINDSCAN_UPDATERESULTFREQ)
+                {
+                    locked_freq = cur_bsevent.u.parameters.frequency;
+                    mContext->sendScanCallBack(locked_freq, true, false);
+                    //updateThreadState(FrontendDevice::STATE_STOP);
+                }
+            }
+            if (inBlindScan) {
+                mContext->sendScanCallBack(0x80000064, false, true);
+                setDvbsBlindScanParams(false);
+                inBlindScan = false;
+            }
+            updateThreadState(FrontendDevice::STATE_STOP);
+        } else {
+            if (state == FrontendDevice::STATE_TUNE_START
+                || state == FrontendDevice::STATE_SCAN_START) {
+                mDev.islocked = false;
+            }
+            {
+                std::lock_guard<std::mutex> lock(mHwDevLock);
+                pfd.fd = mDev.devFd;
+            }
+            pfd.events = POLLIN;
+            pfd.revents = 0;
+            for (start_time = getClockMilliSeconds();
+                 !stop && ((getClockMilliSeconds() - start_time) < FE_STATE_TIMEOUT_MS);) {
+                if (poll(&pfd, 1, FE_POLL_TIMEOUT_MS) == 1) {
+                    if (ioctl(mDev.devFd, FE_GET_EVENT, &fe_event) >= 0) {
+                        if ((fe_event.status & FE_HAS_LOCK) !=0
+                            || (fe_event.status & FE_TIMEDOUT) != 0) {
+                            break;
+                        }
+                    }
+                } else {
+                    if (state == FrontendDevice::STATE_TUNE_IDLE || mRequestTuningStop) {
+                        //scan and tune need check several seconds for signal
+                        //will not stable. and in ilde state, we just poll once
+                        stop = true;
+                    }
+                }
+                newState = getThreadState();
+                if (mRequestTuningStop || newState == FrontendDevice::STATE_STOP) {
                     stop = true;
                 }
             }
@@ -677,51 +758,47 @@ bool FrontendDevice::threadLoop() {
             if (mRequestTuningStop || newState == FrontendDevice::STATE_STOP) {
                 stop = true;
             }
-        }
-        newState = getThreadState();
-        if (mRequestTuningStop || newState == FrontendDevice::STATE_STOP) {
-            stop = true;
-        }
-        if (fe_event.status != 0 && !stop) {
-            bool locked = ((fe_event.status & FE_HAS_LOCK) !=0);
-            ALOGI("%s-(id:%d): get fe event: 0x%02x, locked=%d, dev_locked=%d", __FUNCTION__, mDev.id, fe_event.status, locked, mDev.islocked);
-            if (state == STATE_SCAN_START) {
-                ALOGD("%s-(id:%d): send scan event.", __FUNCTION__, mDev.id);
-                mDev.islocked = locked;
-                mContext->sendScanCallBack(mDev.tuneFreq, locked, false);
-                updateThreadState(FrontendDevice::STATE_STOP);
-            } else if (state == STATE_TUNE_START) {
-                ALOGI("%s-(id:%d): send tune event.", __FUNCTION__, mDev.id);
-                mDev.islocked = locked;
-                gettimeofday(&tune_end_time, NULL);
-                timeval mTune_start_time = tuneStartTime();
-                timersub(&tune_end_time, &mTune_start_time, &tune_elapsed_time);
-                //ALOGD("%s locked elapsed time: mTune_elapsed = %ld ms", __FUNCTION__, tune_elapsed_time.tv_sec * 1000 + tune_elapsed_time.tv_usec / 1000);
-                snprintf(mStbTrace_info.module_name, sizeof(mStbTrace_info.module_name), "droidlogic_frontend");
-                tune_time_trace_log(&mStbTrace_info, "locked elapsed time",  tune_elapsed_time);
-                updateThreadState(FrontendDevice::STATE_TUNE_IDLE);
-                if (locked) {
-                  mContext->sendEventCallBack(FrontendEventType::LOCKED);
-                } else {
-                  mContext->sendEventCallBack(FrontendEventType::NO_SIGNAL);
-                }
-            } else {
-                if (locked != mDev.islocked) {
-                    ALOGI("%s-(id:%d): send evt changed.", __FUNCTION__, mDev.id);
+            if (fe_event.status != 0 && !stop) {
+                bool locked = ((fe_event.status & FE_HAS_LOCK) !=0);
+                ALOGI("%s-(id:%d): get fe event: 0x%02x, locked=%d, dev_locked=%d", __FUNCTION__, mDev.id, fe_event.status, locked, mDev.islocked);
+                if (state == STATE_SCAN_START) {
+                    ALOGD("%s-(id:%d): send scan event.", __FUNCTION__, mDev.id);
                     mDev.islocked = locked;
+                    mContext->sendScanCallBack(mDev.tuneFreq, locked, false);
+                    updateThreadState(FrontendDevice::STATE_STOP);
+                } else if (state == STATE_TUNE_START) {
+                    ALOGI("%s-(id:%d): send tune event.", __FUNCTION__, mDev.id);
+                    mDev.islocked = locked;
+                    gettimeofday(&tune_end_time, NULL);
+                    timeval mTune_start_time = tuneStartTime();
+                    timersub(&tune_end_time, &mTune_start_time, &tune_elapsed_time);
+                    //ALOGD("%s locked elapsed time: mTune_elapsed = %ld ms", __FUNCTION__, tune_elapsed_time.tv_sec * 1000 + tune_elapsed_time.tv_usec / 1000);
+                    snprintf(mStbTrace_info.module_name, sizeof(mStbTrace_info.module_name), "droidlogic_frontend");
+                    tune_time_trace_log(&mStbTrace_info, "locked elapsed time",  tune_elapsed_time);
+                    updateThreadState(FrontendDevice::STATE_TUNE_IDLE);
                     if (locked) {
-                        mContext->sendEventCallBack(FrontendEventType::LOCKED);
+                      mContext->sendEventCallBack(FrontendEventType::LOCKED);
                     } else {
-                        mContext->sendEventCallBack(FrontendEventType::LOST_LOCK);
+                      mContext->sendEventCallBack(FrontendEventType::NO_SIGNAL);
+                    }
+                } else {
+                    if (locked != mDev.islocked) {
+                        ALOGI("%s-(id:%d): send evt changed.", __FUNCTION__, mDev.id);
+                        mDev.islocked = locked;
+                        if (locked) {
+                            mContext->sendEventCallBack(FrontendEventType::LOCKED);
+                        } else {
+                            mContext->sendEventCallBack(FrontendEventType::LOST_LOCK);
+                        }
                     }
                 }
             }
-        }
-        if (mRequestTuningStop) {
-            updateThreadState(FrontendDevice::STATE_STOP);
-        }
-        if (getThreadState() == FrontendDevice::STATE_TUNE_IDLE) {
-            usleep(1000*FE_SIGNAL_CHECK_INTERVAL_MS);
+            if (mRequestTuningStop) {
+                updateThreadState(FrontendDevice::STATE_STOP);
+            }
+            if (getThreadState() == FrontendDevice::STATE_TUNE_IDLE) {
+                usleep(1000*FE_SIGNAL_CHECK_INTERVAL_MS);
+            }
         }
     } else if (state == FrontendDevice::STATE_STOP
        || state == FrontendDevice::STATE_INITIAL_IDLE) {
@@ -734,10 +811,9 @@ bool FrontendDevice::threadLoop() {
 }
 
 uint32_t FrontendDevice::getClockMilliSeconds(void) {
-    struct timeval t;
-    t.tv_sec = t.tv_usec = 0;
-    gettimeofday(&t, NULL);
-    return t.tv_sec*1000 + t.tv_usec/1000;
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec * 1000 + t.tv_nsec/1000000;
 }
 
 int FrontendDevice::getThreadState(void) {
@@ -770,6 +846,174 @@ FrontendSettings* FrontendDevice::getFeSetting() {
 
 timeval FrontendDevice::tuneStartTime() {
     return tune_start_time;
+}
+
+//once kernel space add event, poll event and get event
+int FrontendDevice::dvb_wait_event (struct dvb_frontend_event *evt, int timeout)
+{
+    int ret;
+    struct pollfd pfd;
+    struct dvb_frontend_event event;
+    int fd = mDev.devFd;
+
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+
+    ret = poll(&pfd, 1, timeout);
+
+    if (ret != 1)
+    {
+        return 1;
+    }
+
+    if (ioctl(fd, FE_GET_EVENT, &event) == -1)
+    {
+        ALOGE("ioctl FE_GET_EVENT failed, error:%s", strerror(errno));
+        return 1;
+    }
+
+    evt->status = event.status;
+    evt->parameters.frequency = event.parameters.frequency;
+    evt->parameters.inversion = event.parameters.inversion;
+    evt->parameters.u.qpsk = event.parameters.u.qpsk;
+    evt->parameters.u.qam = event.parameters.u.qam;
+    evt->parameters.u.ofdm = event.parameters.u.ofdm;
+    evt->parameters.u.vsb = event.parameters.u.vsb;
+
+    return 0;
+}
+
+//get event and process events.
+//this function should be called in a loop while the blind scan thread is running.
+int FrontendDevice::dvbsx_blindscan_getscanevent(struct dvbsx_blindscanevent *pbsevent)
+{
+    int ret = 0;
+    //int i,isize;
+    //char* pev;
+    struct dvb_frontend_event event;
+    //int frontend_fd = mDev.devFd;
+
+    ret = dvb_wait_event(&event, 200);
+    //isize = sizeof(dvb_frontend_event);
+    //ALOGD("[%s]: %d  ret = %d    size = %d\n", __FUNCTION__, __LINE__, ret, isize);
+    //pev = (char*)&event;
+#if 0
+    for (i=0;i<sizeof(event);i++)
+    {
+        ALOGD("%s,0x%x,",__FUNCTION__,pev[i]);
+    }
+#endif
+    if (0 == ret)
+    {
+        //ALOGD("[%s]: %d  event.status = 0x%x, frequency = %d\n", __FUNCTION__, __LINE__, event.status, event.parameters.frequency);
+        if (event.status&BLINDSCAN_UPDATESTARTFREQ)
+        {
+            pbsevent->status = BLINDSCAN_UPDATESTARTFREQ;
+            pbsevent->u.m_uistartfreq_khz = event.parameters.frequency;
+            ALOGD("[%s]: %d  BLINDSCAN_UPDATESTARTFREQ event.status = 0x%x, frequency = %d\n", __FUNCTION__, __LINE__, event.status, event.parameters.frequency);
+        }
+        else if (event.status&BLINDSCAN_UPDATEPROCESS)
+        {
+            pbsevent->status = BLINDSCAN_UPDATEPROCESS;
+            pbsevent->u.m_uiprogress = event.parameters.frequency;
+            ALOGD("[%s]: %d  BLINDSCAN_UPDATEPROCESS event.status = 0x%x, frequency = %d\n", __FUNCTION__, __LINE__, event.status, event.parameters.frequency);
+        }
+        else if (event.status&BLINDSCAN_UPDATERESULTFREQ)
+        {
+            pbsevent->status = BLINDSCAN_UPDATERESULTFREQ;
+            memcpy(&(pbsevent->u.parameters),
+                   &(event.parameters), sizeof(struct dvb_frontend_parameters));
+            ALOGD("[%s]: %d  BLINDSCAN_UPDATERESULTFREQ event.status = 0x%x, frequency = %d\n", __FUNCTION__, __LINE__, event.status, event.parameters.frequency);
+        }
+        else
+        {
+            ALOGE("[%s]: %d  event.status = 0x%x, frequency = %d\n", __FUNCTION__, __LINE__, event.status, event.parameters.frequency);
+            //pbsevent->status = BLINDSCAN_UPDATERESULT_OTHERS;
+        }
+    }
+
+    return ret;
+}
+
+int FrontendDevice::setDvbsBlindScanParams(bool start) {
+    if (!start) {
+        struct dtv_properties props;
+        struct dtv_property property;
+
+        props.num = 1;
+        props.props = &property;
+        property.cmd = DTV_CANCEL_BLIND_SCAN;
+        property.u.data = 0;
+
+        if (ioctl(mDev.devFd, FE_SET_PROPERTY, &props) == -1) {
+            ALOGE("Cancel blind failed, (%s)", strerror(errno));
+            return UNAVAILABLE;
+        }
+    } else {
+        struct dtv_properties props;
+        struct dtv_property cmds[16];
+        struct dtv_property *cmd = cmds;
+        int ncmd = 0;
+
+        /*set min fre*/
+        cmd->cmd = DTV_BLIND_SCAN_MIN_FRE;
+        cmd->u.data = 950000;
+        cmd ++;
+        ncmd ++;
+
+        /*set max fre*/
+        cmd->cmd = DTV_BLIND_SCAN_MAX_FRE;
+        cmd->u.data = 2150000;//settingsExt1_1.endFrequency
+        cmd ++;
+        ncmd ++;
+
+        /*set min rate*/
+        cmd->cmd = DTV_BLIND_SCAN_MIN_SRATE;
+        cmd->u.data = M_BS_MIN_SYMB * 1000 * 1000;
+        cmd ++;
+        ncmd ++;
+
+        /*set max rate*/
+        cmd->cmd = DTV_BLIND_SCAN_MAX_SRATE;
+        cmd->u.data = M_BS_MAX_SYMB * 1000 * 1000;
+        cmd ++;
+        ncmd ++;
+
+        /*set fre range*/
+        cmd->cmd = DTV_BLIND_SCAN_FRE_RANGE;
+        cmd->u.data = 100;
+        cmd ++;
+        ncmd ++;
+
+        /*set fre step*/
+        cmd->cmd = DTV_BLIND_SCAN_FRE_STEP;
+        cmd->u.data = 1000;
+        cmd ++;
+        ncmd ++;
+
+        /*set time out*/
+        cmd->cmd = DTV_BLIND_SCAN_TIMEOUT;
+        cmd->u.data = FEND_WAIT_TIMEOUT;
+        cmd ++;
+        ncmd ++;
+
+        /*set start blind scan*/
+        cmd->cmd = DTV_START_BLIND_SCAN;
+        cmd->u.data = 0;
+        cmd ++;
+        ncmd ++;
+
+        props.num = ncmd;
+        props.props = cmds;
+
+        if (ioctl(mDev.devFd, FE_SET_PROPERTY, &props) == -1) {
+            ALOGE("tune failed, (%s)", strerror(errno));
+            sem_post(&threadSemaphore);
+            return UNAVAILABLE;
+        }
+    }
+
+    return SUCCESS;
 }
 
 }  // namespace implementation
