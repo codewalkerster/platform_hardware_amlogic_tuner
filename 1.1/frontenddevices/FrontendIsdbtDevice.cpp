@@ -42,7 +42,7 @@ FrontendModulationStatus FrontendIsdbtDevice::getFeModulationStatus() {
     if (getFeDevice()->feSettings->getDiscriminator() != FrontendSettings::hidl_discriminator::isdbt) {
         modulationStatus.isdbt(FrontendIsdbtModulation::MOD_DQPSK);  // value = 1 << 1
     } else {
-        modulationStatus.isdbt(getFeDevice()->feSettings->isdbt().modulation);
+        modulationStatus.isdbt(FrontendIsdbtModulation::AUTO);
     }
     return modulationStatus;
 }
