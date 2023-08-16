@@ -96,6 +96,8 @@ static dmabuf_wrapper_t dmabuf_wrapper_init(void) {
     gDmabufWrapperInit = true;
     return gDmabufWrapper;
 ERROR:
+    if (gDmabufWrapper->handle)
+       dlclose(gDmabufWrapper->handle);
     free(gDmabufWrapper);
     gDmabufWrapper = NULL;
     gDmabufWrapperInit = true;
