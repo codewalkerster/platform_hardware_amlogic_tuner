@@ -61,7 +61,7 @@ AM_ErrorCode_t AM_DMX_Device::dmx_dvr_open(dmx_input_source_t inputSource) {
 }
 
 AM_ErrorCode_t AM_DMX_Device::dmx_get_used_filter(int filter_id, AM_DMX_Filter **pf) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
 
     if ((filter_id < 0) || (filter_id >= DMX_FILTER_COUNT)) {
         ALOGE("invalid filter id, must in %d~%d", 0, DMX_FILTER_COUNT-1);
@@ -366,7 +366,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Close(void) {
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_Read(int fhandle, uint8_t* buff, int *size) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     //ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
@@ -424,7 +424,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_AllocateFilter(int *fhandle) {
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSecFilter(int fhandle, const struct dmx_sct_filter_params *params) {
     //AM_DMX_Device_t *dev;
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
@@ -460,7 +460,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSecFilter(int fhandle, const struct dmx_
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetPesFilter(int fhandle, const struct dmx_pes_filter_params *params) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
@@ -488,7 +488,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetPesFilter(int fhandle, const struct dmx_
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetSTC(int fhandle) {
 
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
@@ -510,7 +510,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetSTC(int fhandle) {
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_FreeFilter(int fhandle) {
     ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, dev_no);
 
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     pthread_mutex_lock(&lock);
     ret = dmx_get_used_filter(fhandle, &filter);
@@ -574,7 +574,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_StopFilter(int fhandle) {
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetBufferSize(int fhandle, int size) {
 
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d fhandle:%d", __FUNCTION__, __LINE__, fhandle);
 
@@ -592,7 +592,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetBufferSize(int fhandle, int size) {
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetCallback(int fhandle, AM_DMX_DataCb *cb, void **data) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d fhandle:%d", __FUNCTION__, __LINE__, fhandle);
 
@@ -615,7 +615,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetCallback(int fhandle, AM_DMX_DataCb *cb,
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetCallback(int fhandle, AM_DMX_DataCb cb, void *data) {
 
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d fhandle:%d", __FUNCTION__, __LINE__, fhandle);
 
@@ -634,7 +634,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetCallback(int fhandle, AM_DMX_DataCb cb, 
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetMenInfo(int fhandle, dmx_mem_info* mDmxMenInfo) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
 
     pthread_mutex_lock(&lock);
@@ -681,7 +681,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_WriteTs(uint8_t* data,int32_t size,uint64_t
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetDecodeInfo(int fhandle, int rp) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
 
     pthread_mutex_lock(&lock);
@@ -696,7 +696,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetDecodeInfo(int fhandle, int rp) {
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetFilterFd(int fhandle, int *fd) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_FAILURE;
 
     pthread_mutex_lock(&lock);
