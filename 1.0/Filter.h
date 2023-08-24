@@ -220,6 +220,7 @@ class Filter : public IFilter {
     int mFilterToken;
     void * mEsPrivateHeader;
     uint64_t mMediaEventNum;
+    uint32_t mSequenceNumber = 0;
 };
 
 }  // namespace implementation

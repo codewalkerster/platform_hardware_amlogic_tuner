@@ -1365,27 +1365,65 @@ Result Filter::startPesFilterHandler() {
         mPesOutput.clear();
     }
     #endif
-            // size match then create event
-    if (!writeDataToFilterMQ(mFilterOutput)) {
-        ALOGD("[Filter] pes data write failed");
-        mFilterOutput.clear();
-        return Result::INVALID_STATE;
+    int left =  mFilterOutput.size();
+    if ( mSequenceNumber == UINT32_MAX) {
+        mSequenceNumber = 0;
+    } else {
+        ++mSequenceNumber;
     }
-    maySendFilterStatusCallback();
-    DemuxFilterPesEvent pesEvent;
-    pesEvent = {
-            // temp dump meta data
-            .streamId = mFilterOutput[3],
-            .dataLength = static_cast<uint16_t>(mFilterOutput.size()),
-    };
-    if (DEBUG_FILTER) {
-        ALOGD("[Filter] assembled pes data length %d", pesEvent.dataLength);
+    for (int i = 0; i < left; i++) {
+        if (left > UINT16_MAX) {
+            mPesOutput.insert(mPesOutput.end(), mFilterOutput.begin() + i * UINT16_MAX, mFilterOutput.begin() + (i + 1) * UINT16_MAX);
+            left -= UINT16_MAX;
+            if (!writeDataToFilterMQ(mPesOutput)) {
+                ALOGD("[Filter] pes data write failed");
+                mPesOutput.clear();
+                mFilterOutput.clear();
+                return Result::INVALID_STATE;
+            }
+            maySendFilterStatusCallback();
+            DemuxFilterPesEvent pesEvent;
+            pesEvent = {
+                    // temp dump meta data
+                    .streamId = mFilterOutput[3],
+                    .dataLength = static_cast<uint16_t>(mPesOutput.size()),
+                    .mpuSequenceNumber = mSequenceNumber,
+            };
+            if (DEBUG_FILTER) {
+                ALOGD("[Filter] assembled pes data length %d", pesEvent.dataLength);
+            }
+            int size = mFilterEvent.events.size();
+            mFilterEvent.events.resize(size + 1);
+            mFilterEvent.events[size].pes(pesEvent);
+            fillDataToDecoder();
+            mPesOutput.clear();
+        } else {
+            mPesOutput.insert(mPesOutput.end(), mFilterOutput.begin() + i * UINT16_MAX, mFilterOutput.end());
+            if (!writeDataToFilterMQ(mPesOutput)) {
+                ALOGD("[Filter] pes data write failed");
+                mPesOutput.clear();
+                mFilterOutput.clear();
+                return Result::INVALID_STATE;
+            }
+            maySendFilterStatusCallback();
+            DemuxFilterPesEvent pesEvent;
+            pesEvent = {
+                    // temp dump meta data
+                    .streamId = mFilterOutput[3],
+                    .dataLength = static_cast<uint16_t>(mPesOutput.size()),
+                    .mpuSequenceNumber = mSequenceNumber,
+            };
+            if (DEBUG_FILTER) {
+                ALOGD("[Filter] assembled pes data length %d", pesEvent.dataLength);
+            }
+            int size = mFilterEvent.events.size();
+            mFilterEvent.events.resize(size + 1);
+            mFilterEvent.events[size].pes(pesEvent);
+            fillDataToDecoder();
+            mPesOutput.clear();
+            left = 0;
+        }
     }
-
-    int size = mFilterEvent.events.size();
-    mFilterEvent.events.resize(size + 1);
-    mFilterEvent.events[size].pes(pesEvent);
-    fillDataToDecoder();
     mFilterOutput.clear();
 
     return Result::SUCCESS;
