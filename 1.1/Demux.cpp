@@ -46,6 +46,7 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define VIDEO_BUFFER_SIZE  "/sys/module/amlogic_dvb_demux/parameters/video_buf_size"
 #define AUDIO_BUFFER_SIZE  "/sys/module/amlogic_dvb_demux/parameters/audio_buf_size"
 #define TUNERHAL_DUMP_TS_DATA "vendor.tf.dump.ts"
+#define TSO_SOURCE    "/sys/class/stb/tso_source"
 
 enum {
     INDEX_PUSI      = 0x01,
@@ -1015,16 +1016,26 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
 }
 
 Return<Result> Demux::connectCiCam(uint32_t ciCamId) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGD("%s TS change to passthough", __FUNCTION__);
 
     mCiCamId = ciCamId;
+    FileSystem_create();
 
+    if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
+        ALOGE("set tso_source erro %p\n",this);
+    }
+
+    if (AmDmxDevice[mDemuxId] != NULL) {
+        AmDmxDevice[mDemuxId]->AM_DMX_SetSource(0, INPUT_DEMOD, FRONTEND_TS1);
+    }
     return Result::SUCCESS;
 }
 
 Return<Result> Demux::disconnectCiCam() {
-    ALOGV("%s", __FUNCTION__);
-
+    ALOGD("%s TS change to bypass", __FUNCTION__);
+    if (AmDmxDevice[mDemuxId] != NULL) {
+        AmDmxDevice[mDemuxId]->AM_DMX_SetSource(0, INPUT_DEMOD, FRONTEND_TS2);
+    }
     return Result::SUCCESS;
 }
 

@@ -117,7 +117,7 @@ public:
     AM_ErrorCode_t AM_DMX_SetCallback(int fhandle, AM_DMX_DataCb cb, void *data);
     AM_ErrorCode_t AM_DMX_GetMenInfo(int fhandle, dmx_mem_info* mDmxMenInfo);
     AM_ErrorCode_t AM_DMX_GetFilterMenInfo(dmx_filter_mem_info* mDmxFilterMemInfo);
-    //AM_ErrorCode_t AM_DMX_SetSource(AM_DMX_Source_t src);
+    AM_ErrorCode_t AM_DMX_SetSource(int id, int input, int source);
     AM_ErrorCode_t AM_DMX_Sync();
     //AM_ErrorCode_t AM_DMX_GetScrambleStatus(AM_Bool_t dev_status[2]);
 

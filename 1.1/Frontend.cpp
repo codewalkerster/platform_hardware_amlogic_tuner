@@ -26,6 +26,7 @@
 #include "FrontendDvbsDevice.h"
 #include "FrontendIsdbtDevice.h"
 #include "FrontendDtmbDevice.h"
+#include "FileSystemIo.h"
 
 namespace android {
 namespace hardware {
@@ -33,6 +34,8 @@ namespace tv {
 namespace tuner {
 namespace V1_0 {
 namespace implementation {
+
+#define TSO_SOURCE    "/sys/class/stb/tso_source"
 
 Frontend::Frontend(FrontendType type, FrontendId id, sp<Tuner> tuner, const sp<HwFeState>& hwFe) {
     mType = type;
@@ -703,6 +706,12 @@ Return<void> Frontend::linkCiCam(uint32_t ciCamId, linkCiCam_cb _hidl_cb) {
     ALOGV("%s", __FUNCTION__);
 
     mCiCamId = ciCamId;
+    FileSystem_create();
+
+    if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
+        ALOGE("set tso_source erro %p\n",this);
+    }
+
     _hidl_cb(Result::SUCCESS, 0 /*ltsId*/);
 
     return Void();
@@ -712,6 +721,11 @@ Return<Result> Frontend::unlinkCiCam(uint32_t /*ciCamId*/) {
     ALOGV("%s", __FUNCTION__);
 
     mCiCamId = -1;
+    FileSystem_create();
+
+    if (FileSystem_writeFile(TSO_SOURCE, "close") != 0) {
+        ALOGE("set tso_source erro %p\n",this);
+    }
 
     return Result::SUCCESS;
 }

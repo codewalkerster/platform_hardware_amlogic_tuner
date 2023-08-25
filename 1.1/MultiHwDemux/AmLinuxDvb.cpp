@@ -475,43 +475,37 @@ AM_ErrorCode_t AmLinuxDvb::dvr_close(void) {
     return AM_SUCCESS;
 }
 
-#if 0
-AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, AM_DMX_Source_t src) {
-    char buf[32];
-    char *cmd;
+AM_ErrorCode_t AmLinuxDvb::dvb_set_source(int id, int input, int source) {
+    char node[32] = {0};
+    int r = -1;
+    snprintf(node, sizeof(node), "/dev/dvb0.demux%d", id);
+    int fd = open(node, O_WRONLY);
+    if (fd != -1) {
+        if (ioctl(fd, DMX_SET_INPUT, input) == -1)
+        {
+            ALOGD("dvb_set_source ioctl DMX_SET_INPUT:%d error:%d", input, errno);
+        }
+        else
+        {
+            ALOGE("dvb_set_source ioctl succeeded src:%d DMX_SET_INPUT:%d dmx_idx:%d", source, input, id);
+            r = 0;
+        }
 
-    snprintf(buf, sizeof(buf), "/sys/class/stb/demux%d_source", dev->dev_no);
+        if (ioctl(fd, DMX_SET_HW_SOURCE, source) == -1)
+        {
+            ALOGD("dvb_set_source ioctl DMX_SET_HW_SOURCE:%d error:%d", source, errno);
+            r = -1;
+        }
+        else
+        {
+            ALOGE("dvb_set_source ioctl succeeded DMX_SET_HW_SOURCE:%d dmx_idx:%d", source, id);
+            r = 0;
+        }
+     }
+     close(fd);
+     return r;
 
-    switch (src)
-    {
-        case AM_DMX_SRC_TS0:
-            cmd = "ts0";
-            break;
-        case AM_DMX_SRC_TS1:
-            cmd = "ts1";
-            break;
-#if defined(CHIP_8226M) || defined(CHIP_8626X)
-        case AM_DMX_SRC_TS2:
-            cmd = "ts2";
-            break;
-#endif
-        case AM_DMX_SRC_TS3:
-            cmd = "ts3";
-            break;
-        case AM_DMX_SRC_HIU:
-            cmd = "hiu";
-            break;
-        case AM_DMX_SRC_HIU1:
-            cmd = "hiu1";
-            break;
-        default:
-            ALOGE("do not support demux source %d", src);
-        return AM_DMX_ERR_NOT_SUPPORTED;
-    }
-    return 0;
-    return AM_FileEcho(buf, cmd);
 }
-#endif
 
 AM_ErrorCode_t AmLinuxDvb::dvb_set_decode_info(AM_DMX_Filter * filter, int rp) {
     int fd = (long)filter->drv_data;

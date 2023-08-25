@@ -710,37 +710,21 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetFilterFd(int fhandle, int *fd) {
     pthread_mutex_unlock(&lock);
     return ret;
 }
- #if 0
-AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSource(AM_DMX_Source_t src)
+
+AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSource(int id, int input, int source)
 {
-//AM_DMX_Device_t *dev;
-AM_ErrorCode_t ret = AM_SUCCESS;
+    AM_ErrorCode_t ret = AM_SUCCESS;
 
-//  AM_TRY(dmx_get_opened_dev(dev_no, &dev));
+    pthread_mutex_lock(&lock);
 
-pthread_mutex_lock(&lock);
-//if(!dev->drv->set_source)
-//{
-//  printf("do not support set_source");
-//  ret = AM_DMX_ERR_NOT_SUPPORTED;
-//  }
+    if (ret == AM_SUCCESS) {
+        ret = drv->dvb_set_source(id, input, source);
+    }
 
-if (ret == AM_SUCCESS) {
-ret = drv->dvb_set_source(this, src);
+    pthread_mutex_unlock(&lock);
+
+    return ret;
 }
-
-pthread_mutex_unlock(&lock);
-
-if (ret == AM_SUCCESS)
-{
-//      pthread_mutex_lock(&am_gAdpLock);
-src = src;
-//      pthread_mutex_unlock(&am_gAdpLock);
-}
-
-return ret;
-}
-#endif
 
 #if 0
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetScrambleStatus(AM_Bool_t dev_status[2])
