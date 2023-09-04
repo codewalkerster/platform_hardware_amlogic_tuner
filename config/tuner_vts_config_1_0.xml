@@ -59,10 +59,12 @@
                                       guardInterval="1" standard="1" isMiso="0" plpMode="1"
                                       plpId="0" plpGroupId="0"/>
             </frontend>
+            <!--
             <frontend id="FE_DVBS_0" type="DVBS" isSoftwareFrontend="false"
                       connectToCicamId="0" frequency="1000000000" endFrequency="8000000000">
                       <dvbsFrontendSettings symbolRate="27500000"/>
             </frontend>
+            -->
         </frontends>
         <!-- Filter section:
             This section contains configurations of all the filters that would be used in the tests.
@@ -215,6 +217,7 @@
                    recordFilterConnection="FILTER_TS_RECORD_0"
                    dvrRecordConnection="DVR_RECORD_0"
                    dvrSoftwareFeConnection="DVR_PLAYBACK_0"/>
+        <!--
         <lnbLive frontendConnection="FE_DVBS_0"
                  audioFilterConnection="FILTER_AUDIO_DEFAULT"
                  videoFilterConnection="FILTER_VIDEO_DEFAULT"
@@ -225,6 +228,7 @@
                    dvrRecordConnection="DVR_RECORD_0"
                    lnbConnection="LNB_0"
                    diseqcMsgSender="DISEQC_POWER_ON"/>
+        -->
         <timeFilter timeFilterConnection="TIME_FILTER_0"/>
     </dataFlowConfiguration>
 </TunerConfiguration>

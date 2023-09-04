@@ -56,10 +56,12 @@
                       connectToCicamId="0" frequency="578000000" endFrequency="800000000">
                 <dvbtFrontendSettings bandwidth="8" transmissionMode="128" isHighPriority="1"/>
             </frontend>
+            <!--
             <frontend id="FE_DVBS_0" type="DVBS" isSoftwareFrontend="false"
                       connectToCicamId="0" frequency="1000000000" endFrequency="8000000000">
                 <dvbsFrontendSettings symbolRate="27500000"/>
             </frontend>
+            -->
         </frontends>
         <!-- Filter section:
             This section contains configurations of all the filters that would be used in the tests.

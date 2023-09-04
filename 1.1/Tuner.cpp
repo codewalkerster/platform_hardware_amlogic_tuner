@@ -402,7 +402,7 @@ Tuner::Tuner() {
 Tuner::~Tuner() {}
 
 Return<void> Tuner::getFrontendIds(getFrontendIds_cb _hidl_cb) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGV("%s mFrontendSize = %d", __FUNCTION__, mFrontendSize);
 
     vector<FrontendId> frontendIds;
     if (mFrontendSize > 0) {
