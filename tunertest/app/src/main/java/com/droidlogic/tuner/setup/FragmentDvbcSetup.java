@@ -84,6 +84,8 @@ public class FragmentDvbcSetup extends Fragment {
             @Override
             public void onClick(View v) {
                 startScan();
+                //test frontend for fcc
+                //startScanForFcc();
             }
         });
         return view;
@@ -139,4 +141,47 @@ public class FragmentDvbcSetup extends Fragment {
             }
         }, 0);
     }
+
+    private void startScanForFcc() {
+           int freqMhz = 578;
+           int symbolRate = 6875;
+           int qamMode = 3;
+           final Bundle bundle = new Bundle();
+           /*
+           if (mEditFrequency != null) {
+               String freqStr = mEditFrequency.getText().toString();
+               try {
+                   freqMhz = Integer.parseInt(freqStr);
+               } catch (Exception e) {
+                   freqMhz = 490;
+               }
+               mEditFrequency.setEnabled(false);
+               if (mEditSymbol != null) {
+                   String symbolStr = mEditSymbol.getText().toString();
+                   try {
+                       symbolRate = Integer.parseInt(symbolStr);
+                   } catch (Exception e) {
+                       symbolRate = 6900;
+                   }
+                   mEditSymbol.setEnabled(false);
+               }
+               qamMode = mSpinnerQamMode.getSelectedItemPosition();
+               mSpinnerQamMode.setEnabled(false);
+               mButtonScan.setEnabled(false);
+               mButtonScan.setText("Scanning");
+           }*/
+           final int finalFreqMhz = freqMhz;
+           bundle.putInt(ScanManager.KEY_FREQUENCY, freqMhz);
+           bundle.putInt(DvbcScanManager.KEY_SYMBOL_RATE, symbolRate);
+           bundle.putInt(DvbcScanManager.KEY_QAM_MODE, qamMode);
+           Log.d(TAG, "start dvbc scan for fcc, param:" + bundle.toString());
+           ThreadManager.getInstance().runOnMainThreadDelayed(new Runnable() {
+               @Override
+               public void run() {
+                   ScanManager.getInstance().startScanForFcc(
+                           requireActivity().getApplicationContext(), finalFreqMhz, bundle);
+               }
+           }, 0);
+       }
+
 }

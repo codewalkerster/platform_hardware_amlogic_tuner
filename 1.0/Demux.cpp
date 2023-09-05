@@ -87,7 +87,6 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d", mDemuxId, bSupportSoftDemuxForSubtitle);
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
     mAmDvrDevice[mDemuxId] = new AmDvr(mDemuxId);
-    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput(), true);
      //dump ts file
     //mfd = ::open("/data/local/tmp/media_demux.ts",  O_WRONLY|O_CREAT, 0666);
     //ALOGD("need dump ts file: ts file fd =%d %d", mfd, errno);
@@ -471,7 +470,10 @@ Return<Result> Demux::setFrontendDataSource(uint32_t frontendId) {
     }
 
     mTunerService->setFrontendAsDemuxSource(frontendId, mDemuxId);
-
+    if (mAmDvrDevice[mDemuxId]) {
+        mTsInput = mTunerService->getTsInput(frontendId);
+        mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput(frontendId), true);
+    }
     return Result::SUCCESS;
 }
 
@@ -1148,7 +1150,7 @@ int Demux::recordTsPacketForPesData(int filterId) {
     mPesFid = filterId;
 
     mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
-    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTunerService->getTsInput(), false);
+    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTsInput, false);
 
     int pid = getFilterTpid(filterId);
     ALOGD("%s/%d pid = %d", __FUNCTION__, __LINE__, pid);

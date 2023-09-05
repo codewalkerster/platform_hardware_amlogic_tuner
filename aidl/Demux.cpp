@@ -102,10 +102,6 @@ void Demux::setTunerService(std::shared_ptr<Tuner> tuner) {
     AmDmxDevice = new AM_DMX_Device(mDemuxId);
     AmDmxDevice->AM_DMX_Open();
 
-    AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTuner->getTsInput());
-
-    mAmCI = new AmCI(mDemuxId, mTuner->getTsInput(), INPUT_DEMOD);
-
     mHwDemuxOps = new HwDemuxOpsSCWrap();
     if (mHwDemuxOps != nullptr) {
         mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
@@ -133,14 +129,11 @@ Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
     AmDmxDevice = new AM_DMX_Device(mDemuxId);
     AmDmxDevice->AM_DMX_Open();
 
-    ALOGD("Support PVR Re-encyption");
-    AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTuner->getTsInput());
-
     mHwDemuxOps = new HwDemuxOpsSCWrap();
     if (mHwDemuxOps != nullptr) {
         mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
     }
-    mAmCI = new AmCI(mDemuxId, mTuner->getTsInput(), INPUT_DEMOD);
+
 }
 #endif
 
@@ -303,13 +296,11 @@ void Demux::getSectionData(int64_t filterId) {
     } else {
         ALOGV("fid =%lld section data size:%d", filterId, sectionSize);
         sectionData.resize(sectionSize);
-        /* for debug
+        /*
+        //for debug
         uint16_t tableId = sectionData[0];
         if (tableId == 0x0) {
             ALOGD("received PAT table tableId = %d, fid = %lld", tableId, filterId);
-        }
-        if (tableId == 0x2) {
-            ALOGD("received PMT table tableId = %d, fid = %lld", tableId, filterId);
             int i;
             string strData;
             char ch[3];
@@ -318,7 +309,10 @@ void Demux::getSectionData(int64_t filterId) {
                 snprintf(ch, 3, "%02x", sectionData[i]);
                 strData += ch;
             }
-            ALOGD("dump PMT data bytes: %s", strData.c_str());
+            ALOGD("dmxid = %d, fid = %lld, dump PAT data bytes: %s", mDemuxId, filterId, strData.c_str());
+        }
+        if (tableId == 0x2) {
+            ALOGD("received PMT table tableId = %d, fid = %lld", tableId, filterId);
         }*/
         updateFilterOutput(filterId, uint8DataToInt8Data(sectionData));
         startFilterHandler(filterId);
@@ -505,7 +499,11 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     }
 
     mTuner->setFrontendAsDemuxSource(in_frontendId, mDemuxId);
-
+    if (AmDmxDevice) {
+        mTsInput = mTuner->getTsInput(in_frontendId);
+        AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTsInput);
+        mAmCI = new AmCI(mDemuxId,mTsInput, INPUT_DEMOD);
+    }
     return ::ndk::ScopedAStatus::ok();
 }
 
@@ -1713,7 +1711,7 @@ bool Demux::checkSoftDemuxForTemi() {
 }
 
 int Demux::getTsInput() {
-    return mTuner->getTsInput();
+    return mTsInput;
 }
 
 std::shared_ptr<Descrambler> Demux::getDescrambler() {

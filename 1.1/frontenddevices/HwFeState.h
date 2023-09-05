@@ -31,11 +31,12 @@ namespace implementation {
 
 class HwFeState : public RefBase {
   public:
-   HwFeState(int hwId);
+   HwFeState(int hwId, int tsInput);
    int acquire(sp<FrontendDevice> device);
    int acquireForLnb();
    void release(int fd, sp<FrontendDevice> device);
    void releaseFromLnb();
+   int getTsInput();
 
   private:
   int atv_open(void);
@@ -44,6 +45,7 @@ class HwFeState : public RefBase {
   int dtv_close(int feId);
    virtual ~HwFeState();
    int hwId;
+   int tsInput;
    int fd;
    bool lnbUsing;
    sp<FrontendDevice> owner;

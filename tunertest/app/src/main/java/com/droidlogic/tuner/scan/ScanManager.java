@@ -115,6 +115,7 @@ public class ScanManager {
         }
     }
     public void startScan(@NonNull Context context, int freqMhz, @NonNull Bundle scanParam) {
+        Log.d(TAG, "start to scan");
         int tuneRest = 0;
         if (mScanEvt != null) {
             mScanEvt.onScanStart();
@@ -136,6 +137,40 @@ public class ScanManager {
         FrontendSettings setting = getFrontendSettings(freqMhz, scanParam);
         if (setting != null) {
             Log.d(TAG, "start tuner scan.");
+            tuneRest = tuner.scan(
+                    setting,
+                    Tuner.SCAN_TYPE_AUTO, mExecutor, new OnScanListenerImpl(tuner,
+                            freqMhz, scanParam));
+            getSession(mSignalType).onLaterScan();
+        } else {
+            tuneRest = 1;
+        }
+        if (tuneRest != 0 && mScanEvt != null) {
+            mScanEvt.onScanEnd();
+        }
+    }
+
+    public void startScanForFcc(@NonNull Context context, int freqMhz, @NonNull Bundle scanParam) {
+        Log.d(TAG, "start to scan for fcc");
+        int tuneRest = 0;
+        if (mScanEvt != null) {
+            mScanEvt.onScanStart();
+        }
+        Tuner tuner = TunerControl.getInstance().acquireTuner(context,
+                null, TvInputService.PRIORITY_HINT_USE_CASE_TYPE_LIVE);
+        if (tuner == null) {
+            Log.w(TAG, "could not got tuner instance.");
+            if (mScanEvt != null) {
+                mScanEvt.onScanEnd();
+            }
+            return;
+        }
+        //ChannelManager.getInstance().clearChannels();
+        tuner.clearOnTuneEventListener();
+        tuner.cancelScanning();
+        getSession(mSignalType).onEarlyScan(tuner, scanParam);
+        FrontendSettings setting = getFrontendSettings(freqMhz, scanParam);
+        if (setting != null) {
             tuneRest = tuner.scan(
                     setting,
                     Tuner.SCAN_TYPE_AUTO, mExecutor, new OnScanListenerImpl(tuner,

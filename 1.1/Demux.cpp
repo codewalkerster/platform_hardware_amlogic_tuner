@@ -94,9 +94,6 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d, bSupportSoftDemuxForTemi = %d", mDemuxId, bSupportSoftDemuxForSubtitle, bSupportSoftDemuxForTemi);
     AmDmxDevice->AM_DMX_Open();
 
-    ALOGD("Support PVR Re-encyption");
-    AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTunerService->getTsInput());
-
     mHwDemuxOps = new HwDemuxOpsSCWrap();
     if (mHwDemuxOps != nullptr) {
         mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
@@ -474,6 +471,10 @@ Return<Result> Demux::setFrontendDataSource(uint32_t frontendId) {
     }
 
     mTunerService->setFrontendAsDemuxSource(frontendId, mDemuxId);
+    if (AmDmxDevice) {
+        mTsInput = mTunerService->getTsInput(frontendId);
+        AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTsInput);
+    }
 
     return Result::SUCCESS;
 }
@@ -1478,7 +1479,7 @@ int Demux::getRecordAudioPid() {
 }
 
 int Demux::getTsInput() {
-    return mTunerService->getTsInput();
+    return mTsInput;
 }
 
 void Demux::TemiRecordThreadLoop() {

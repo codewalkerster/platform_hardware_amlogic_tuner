@@ -232,12 +232,12 @@ Tuner::Tuner() {
             if (reader.parse(data, root)) {
                 auto& arrayHwFes = root["hwfe"];
                 auto& arrayFronts = root["frontends"];
-                auto& dmxSetting = root["dmxsetting"];
                 auto& dvrSetting = root["dvrsetting"];
                 for (int i = 0; i < arrayHwFes.size(); i ++) {
                     if (!arrayHwFes[i]["id"].isNull()) {
                         int hwId = arrayHwFes[i]["id"].asInt();
-                        sp<HwFeState> hwFeState = new HwFeState(hwId);
+                        int tsInput = arrayHwFes[i]["ts_input"].asInt();
+                        sp<HwFeState> hwFeState = new HwFeState(hwId, tsInput);
                         mHwFes.push_back(hwFeState);
                     }
                 }
@@ -393,11 +393,6 @@ Tuner::Tuner() {
                         mFrontendSize ++;
                     }
                 }
-
-                if (!dmxSetting["ts_input"].isNull()) {
-                    mTsInput = dmxSetting["ts_input"].asInt();
-                    ALOGD("ts_input = %d", mTsInput);
-                }
                 if (!dvrSetting["encrypt_pvr"].isNull()) {
                     mEncryptPvr = dvrSetting["encrypt_pvr"].asInt();
                     ALOGD("encrypt_pvr = %d", mEncryptPvr);
@@ -445,7 +440,7 @@ Return<void> Tuner::getFrontendIds(getFrontendIds_cb _hidl_cb) {
 }
 
 Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _hidl_cb) {
-    ALOGV("%s frontendId = %d", __FUNCTION__, frontendId);
+    ALOGD("%s frontendId = %d", __FUNCTION__, frontendId);
 
     std::lock_guard<std::mutex> lock(mLock);
     if (frontendId >= mFrontendSize || (int)frontendId < 0) {
@@ -462,6 +457,7 @@ Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _h
     } else {
         frontend = mFrontendInfos[frontendId].mFrontend;
     }
+    mFrontendId = frontendId;
     _hidl_cb(Result::SUCCESS, frontend);
     return Void();
 }
@@ -695,8 +691,10 @@ void Tuner::detachDescramblerFromDemux(uint32_t descramblerId, uint32_t demuxId)
   }
 }
 
-uint32_t Tuner::getTsInput() {
-    return mTsInput;
+uint32_t Tuner::getTsInput(uint32_t frontendId) {
+    int tsInput = mHwFes[mFrontendInfos[frontendId].hwId]->getTsInput();
+    ALOGD("mFrontendId = %d, tsInput = %d", tsInput, frontendId);
+    return tsInput;
 }
 
 void Tuner::setTsnSource() {

@@ -31,7 +31,7 @@ namespace V1_0 {
 namespace implementation {
 
 
-HwFeState::HwFeState(int dev_no) {
+HwFeState::HwFeState(int dev_no, int tsInput) {
     this->hwId = dev_no;
     fd = -1;
     owner = nullptr;
@@ -189,6 +189,10 @@ void HwFeState::releaseFromLnb() {
         fd = -1;
         lnbUsing = false;
     }
+}
+
+int HwFeState::getTsInput() {
+    return this->tsInput;
 }
 
 }  // namespace implementation

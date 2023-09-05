@@ -30,8 +30,9 @@ namespace tv {
 namespace tuner {
 
 
-HwFeState::HwFeState(int dev_no) {
-    this->hwId = dev_no;
+HwFeState::HwFeState(int dev_no, int tsInput) {
+    this->hwId    = dev_no;
+    this->tsInput = tsInput;
     fd = -1;
     owner = nullptr;
     lnbUsing = false;
@@ -196,6 +197,11 @@ void HwFeState::releaseFromLnb() {
         fd = -1;
         lnbUsing = false;
     }
+}
+
+
+int HwFeState::getTsInput() {
+    return this->tsInput;
 }
 
 }  // namespace tuner

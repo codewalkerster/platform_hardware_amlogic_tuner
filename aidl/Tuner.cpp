@@ -89,12 +89,12 @@ void Tuner::init() {
             if (reader.parse(data, root)) {
                 auto& arrayHwFes = root["hwfe"];
                 auto& arrayFronts = root["frontends"];
-                auto& dmxSetting = root["dmxsetting"];
                 auto& dvrSetting = root["dvrsetting"];
                 for (int i = 0; i < arrayHwFes.size(); i ++) {
                     if (!arrayHwFes[i]["id"].isNull()) {
                         int hwId = arrayHwFes[i]["id"].asInt();
-                        sp<HwFeState> hwFeState = new HwFeState(hwId);
+                        int tsInput = arrayHwFes[i]["ts_input"].asInt();
+                        sp<HwFeState> hwFeState = new HwFeState(hwId, tsInput);
                         mHwFes.push_back(hwFeState);
                     }
                 }
@@ -330,17 +330,12 @@ void Tuner::init() {
                     }
                 }
 
-                if (!dmxSetting["ts_input"].isNull()) {
-                    mTsInput = dmxSetting["ts_input"].asInt();
-                    ALOGD("ts_input = %d", mTsInput);
-                }
-
                 if (!dvrSetting["encrypt_pvr"].isNull()) {
                     mEncryptPvr = dvrSetting["encrypt_pvr"].asInt();
                     ALOGD("encrypt_pvr = %d", mEncryptPvr);
                 }
-            }
 
+            }
             mLnbs.resize(1);
             if (mHwFes.size() > 0) {
                 mLnbs[0] = ndk::SharedRefBase::make<Lnb>(0, mHwFes[0], "hardware_lnb");
@@ -477,7 +472,8 @@ Tuner::~Tuner() {}
     } else {
         frontend = mFrontendInfos[in_frontendId].mFrontend;
     }
-
+    mFrontendId = in_frontendId;
+    ALOGD("%s/%d in_frontendId = %d", __FUNCTION__, __LINE__, in_frontendId);
     *_aidl_return = frontend;//mFrontends[in_frontendId];
     return ::ndk::ScopedAStatus::ok();
 }
@@ -794,8 +790,10 @@ void Tuner::detachDescramblerFromDemux(int32_t dscId, int32_t demuxId) {
   }
 }
 
-uint32_t Tuner::getTsInput() {
-    return mTsInput;
+uint32_t Tuner::getTsInput(uint32_t frontendId) {
+    int tsInput = mHwFes[mFrontendInfos[frontendId].hwId]->getTsInput();
+    ALOGD("[frontendId] = %d, tsInput = %d, hwId = %d", frontendId, tsInput, mFrontendInfos[frontendId].hwId);
+    return tsInput;
 }
 
 void Tuner::setTsnSource() {

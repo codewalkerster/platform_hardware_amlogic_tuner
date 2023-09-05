@@ -242,6 +242,7 @@ class Demux : public IDemux {
     bool bSupportSoftDemuxForSubtitle = false;
     //int mfd;
     vector<uint8_t> mScrambledCache;
+    int  mTsInput = -1;
 };
 
 }  // namespace implementation

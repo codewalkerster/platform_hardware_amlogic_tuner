@@ -87,7 +87,7 @@ class Tuner : public BnTuner {
     void detachDescramblerFromDemux(int32_t dscId, int32_t demuxId);
     std::shared_ptr<Demux> getDemuxById(uint32_t demuxId);
 
-    uint32_t getTsInput();
+    uint32_t getTsInput(uint32_t frontendId);
     void setTsnSource();
     void setTsnSourceNoTsClone();
     uint32_t getDscMode();
@@ -131,8 +131,8 @@ class Tuner : public BnTuner {
     vector<std::shared_ptr<Lnb>> mLnbs;
     map<FrontendType, int32_t> mMaxUsableFrontends;
     vector<sp<HwFeState>> mHwFes;
-    uint32_t mTsInput = -1;
     uint32_t mDscMode = -1;
+    uint32_t mFrontendId = -1;
     std::mutex mLock;
     uint32_t mEncryptPvr = -1;
 

@@ -290,6 +290,7 @@ class Demux : public IDemux {
     int mTemiRecordFid = -1;
     bool bSupportSoftDemuxForTemi = false;
     sp<Descrambler> mDesc = nullptr;
+    int  mTsInput = -1;
 };
 
 }  // namespace implementation

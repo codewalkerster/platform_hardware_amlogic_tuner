@@ -308,6 +308,7 @@ class Demux : public BnDemux {
     bool bDemuxUseRecord   = false;
     bool bCiInsert   = false;
     std::shared_ptr<Descrambler> mDesc = nullptr;
+    int  mTsInput = -1;
 };
 
 }  // namespace tuner

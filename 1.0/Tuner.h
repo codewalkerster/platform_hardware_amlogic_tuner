@@ -85,7 +85,7 @@ class Tuner : public ITuner {
 
     void removeDemux(uint32_t demuxId);
     void removeFrontend(uint32_t frontendId);
-    uint32_t getTsInput();
+    uint32_t getTsInput(uint32_t frontendId);
     void setTsnSource();
     uint32_t getDscMode();
 
@@ -119,8 +119,8 @@ class Tuner : public ITuner {
     int mLastUsedId = -1;
     vector<sp<Lnb>> mLnbs;
     vector<sp<HwFeState>> mHwFes;
-    uint32_t mTsInput = -1;
     uint32_t mDscMode = -1;
+    uint32_t mFrontendId = -1;
     std::mutex mLock;
 };
 

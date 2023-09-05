@@ -72,11 +72,11 @@ Tuner::Tuner() {
             if (reader.parse(data, root)) {
                 auto& arrayHwFes = root["hwfe"];
                 auto& arrayFronts = root["frontends"];
-                auto& dmxSetting = root["dmxsetting"];
                 for (int i = 0; i < arrayHwFes.size(); i ++) {
                     if (!arrayHwFes[i]["id"].isNull()) {
                         int hwId = arrayHwFes[i]["id"].asInt();
-                        sp<HwFeState> hwFeState = new HwFeState(hwId);
+                        int tsInput = arrayHwFes[i]["ts_input"].asInt();
+                        sp<HwFeState> hwFeState = new HwFeState(hwId, tsInput);
                         mHwFes.push_back(hwFeState);
                     }
                 }
@@ -211,11 +211,6 @@ Tuner::Tuner() {
                         mFrontendSize ++;
                     }
                 }
-
-                if (!dmxSetting["ts_input"].isNull()) {
-                    mTsInput = dmxSetting["ts_input"].asInt();
-                    ALOGD("ts_input = %d", mTsInput);
-                }
             }
             mLnbs.resize(1);
             if (mHwFes.size() > 0) {
@@ -274,6 +269,7 @@ Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _h
     } else {
         frontend = mFrontendInfos[frontendId].mFrontend;
     }
+    mFrontendId = frontendId;
     _hidl_cb(Result::SUCCESS, frontend);
     return Void();
 }
@@ -474,8 +470,10 @@ void Tuner::removeFrontend(uint32_t frontendId) {
    mFrontendToDemux.erase(frontendId);
 }
 
-uint32_t Tuner::getTsInput() {
-    return mTsInput;
+uint32_t Tuner::getTsInput(uint32_t frontendId) {
+    int tsInput = mHwFes[mFrontendInfos[frontendId].hwId]->getTsInput();
+    ALOGD("tsInput = %d, frontendId = %d", tsInput, frontendId);
+    return tsInput;
 }
 
 void Tuner::setTsnSource() {
