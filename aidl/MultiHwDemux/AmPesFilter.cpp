@@ -141,7 +141,7 @@ void AmPesFilter::ts_packet(uint8_t *pkt) {
         int alen = *p;
 
         p    += alen + 1;
-        left -= alen - 1;
+        left -= alen + 1;
     }
 
     if (left <= 0)
