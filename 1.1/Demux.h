@@ -117,9 +117,7 @@ class Demux : public IDemux {
     void combinePesData(uint64_t filterId);
     void getSectionData(uint64_t filterId);
     bool setStbSource(const char *path, const char *value);
-    void mapPassthroughMediaFilter(uint64_t fakefilterId, uint64_t filterId);
     uint32_t findFilterIdByfakeFilterId(uint64_t fakefilterId);
-    void eraseFakeFilterId(uint64_t fakefilterId);
     void destroyMediaSync();
     bool isRawData(uint64_t filterId);
     void getPesRawData(uint64_t filterId);
@@ -231,7 +229,6 @@ class Demux : public IDemux {
     sp<AmDvr> mAmDvrDevice[DMX_COUNT] = { NULL };
     sp<AmPesFilter> mAmPesFilter = NULL;
     int mAvSyncHwId = -1;
-    std::map<uint64_t, uint64_t> mMapFilter;
     int mPesFid = -1;
     int mPesRecordFid = -1;
     bool bSupportSoftDemuxForSubtitle = false;

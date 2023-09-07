@@ -676,7 +676,6 @@ Return<Result> Demux::close() {
     mPcrFilterIds.clear();
     mPesFilterIds.clear();
     mFilters.clear();
-    mMapFilter.clear();
     mLastUsedFilterId = -1;
     if (!mScrambledCache.empty())
         mScrambledCache.clear();
@@ -1061,27 +1060,31 @@ bool Demux::isRecording() {
 
 bool Demux::attachRecordFilter(uint64_t filterId) {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
+
+    uint64_t dmxFilterId = findFilterIdByfakeFilterId(filterId);
     std::lock_guard<std::mutex> lock(mFilterLock);
-    if (mFilters[filterId] == nullptr || mDvrRecord == nullptr ||
-        !mFilters[filterId]->isRecordFilter()) {
+    if (mFilters[dmxFilterId] == nullptr || mDvrRecord == nullptr ||
+        !mFilters[dmxFilterId]->isRecordFilter()) {
         return false;
     }
 
-    mRecordFilterIds.insert(filterId);
-    mFilters[filterId]->attachFilterToRecord(mDvrRecord);
+    mRecordFilterIds.insert(dmxFilterId);
+    mFilters[dmxFilterId]->attachFilterToRecord(mDvrRecord);
 
     return true;
 }
 
 bool Demux::detachRecordFilter(uint64_t filterId) {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
+
+    uint64_t dmxFilterId = findFilterIdByfakeFilterId(filterId);
     std::lock_guard<std::mutex> lock(mFilterLock);
-    if (mFilters[filterId] == nullptr || mDvrRecord == nullptr) {
+    if (mFilters[dmxFilterId] == nullptr || mDvrRecord == nullptr) {
         return false;
     }
 
-    mRecordFilterIds.erase(filterId);
-    mFilters[filterId]->detachFilterFromRecord();
+    mRecordFilterIds.erase(dmxFilterId);
+    mFilters[dmxFilterId]->detachFilterFromRecord();
 
     return true;
 }
@@ -1104,21 +1107,11 @@ bool Demux::checkPesFilterId(uint64_t filterId) {
     return false;
 }
 
-void Demux::mapPassthroughMediaFilter(uint64_t fakefilterId, uint64_t filterId) {
-    mMapFilter[fakefilterId] = filterId;
-}
-
 uint32_t Demux::findFilterIdByfakeFilterId(uint64_t fakefilterId) {
-    std::map<uint64_t, uint64_t>::iterator it;
-    it = mMapFilter.find(fakefilterId);
-    if (it != mMapFilter.end()) {
-        return it->second;
+    if (fakefilterId > DMX_FILTER_COUNT) {
+         return (fakefilterId >> 26) & 0x3f;
     }
-    return -1;
-}
-
-void Demux::eraseFakeFilterId(uint64_t fakefilterId) {
-    mMapFilter.erase(fakefilterId);
+    return fakefilterId;
 }
 
 bool Demux::setStbSource(const char *path, const char *value)
