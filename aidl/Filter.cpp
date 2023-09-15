@@ -259,10 +259,10 @@ GetNskEmmFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_par
         if (isRaw) {
             param.flags |= DMX_OUTPUT_RAW_MODE;
         }
-        bool isRepeat = tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().isRepeat;
+        /*bool isRepeat = tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().isRepeat;
         if (!isRepeat) {
             param.flags |= DMX_ONESHOT;
-        }
+        }*/
         param.pid =
         (unsigned short)(tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().condition.get<DemuxFilterSectionSettingsCondition::sectionBits>().mode[0]<< 8
         |
@@ -283,10 +283,10 @@ GetNskEmmFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_par
 static bool
 GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_params &param) {
     const DemuxTsFilterSettings& tsConf = settings.get<DemuxFilterSettings::ts>();
-    bool isRepeat = tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().isRepeat;
+    /*bool isRepeat = tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().isRepeat;
     if (!isRepeat) {
         param.flags |= DMX_ONESHOT;
-    }
+    }*/
     bool isCheckCrc = tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().isCheckCrc;
     if (isCheckCrc) {
         param.flags |= DMX_CHECK_CRC;
@@ -329,7 +329,7 @@ GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_pa
                 tsConf.filterSettings.get<DemuxTsFilterSettingsFilterSettings::section>().condition.get<DemuxFilterSectionSettingsCondition::tableInfo>().tableId;
             param.filter.mask[0] = 0xff;
     }
-    ALOGD("%s isRepeat:%d, isCheckCrc:%d, isRaw:%d, tableId:0x%x", __FUNCTION__, isRepeat, isCheckCrc, isRaw, param.filter.filter[0]);
+    ALOGD("%s /*isRepeat:%d,*/ isCheckCrc:%d, isRaw:%d, tableId:0x%x", __FUNCTION__, /*isRepeat,*/ isCheckCrc, isRaw, param.filter.filter[0]);
     return true;
 }
 
