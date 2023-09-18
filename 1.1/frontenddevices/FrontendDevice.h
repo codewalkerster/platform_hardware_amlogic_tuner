@@ -114,6 +114,7 @@ private:
     bool             unsupportSystem;
     bool             mRequestTuningStop;
     uint8_t          mPlpId;
+    FrontendScanType mScanType = FrontendScanType::SCAN_UNDEFINED;
 
     virtual bool     threadLoop(void);
     virtual status_t readyToRun(void);

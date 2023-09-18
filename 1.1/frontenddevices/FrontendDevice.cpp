@@ -222,7 +222,12 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);
+    if (mScanType == FrontendScanType::SCAN_BLIND) {
+        mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);
+    } else {
+        mDev.tuneFreq = fe_params.frequency;
+    }
+
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);
@@ -427,6 +432,7 @@ int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType typ
     int ret = 0;
 
     if (!checkOpen(true)) return UNAVAILABLE;
+    mScanType = type;
 
     if (type == FrontendScanType::SCAN_AUTO) {
         mDev.blindFreq = 0;
