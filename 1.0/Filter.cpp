@@ -182,7 +182,7 @@ GetSectionFltParam(const DemuxFilterSettings &settings, struct dmx_sct_filter_pa
             settings.ts().filterSettings.section().condition.tableInfo().tableId;
         param.filter.mask[0] = 0xff;
     }
-    ALOGD("%s /*isRepeat:%d,*/ isCheckCrc:%d, isRaw:%d, tableId:0x%x", __FUNCTION__, /*isRepeat,*/ isCheckCrc, isRaw, param.filter.filter[0]);
+    ALOGD("%s, isCheckCrc:%d, isRaw:%d, tableId:0x%x", __FUNCTION__, isCheckCrc, isRaw, param.filter.filter[0]);
     return Result::SUCCESS;
 }
 
