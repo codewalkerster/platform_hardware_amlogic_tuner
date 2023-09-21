@@ -367,6 +367,10 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
                 data_len = headerLen - read_len;
                 readRet = dmxDev->getAmDmxDevice()
                               ->AM_DMX_Read(fid, tmpData.data(), &data_len);
+                if (readRet == AM_FAILURE) {
+                    ALOGD("maybe filter has been closed, readRet = %d", readRet);
+                    return;
+                }
                 if (readRet == 0) {
                     read_len += data_len;
                 }
@@ -384,6 +388,10 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             while (readRet) {
                 readRet = dmxDev->getAmDmxDevice()
                       ->AM_DMX_Read(fid, tmpData.data()/* + headerLen*/, (int*)(&readLen));
+                if (readRet == AM_FAILURE) {
+                    ALOGD("maybe filter has been closed, readRet = %d", readRet);
+                    return;
+                }
                 if (readRet)
                     continue;
                 totalLen += readLen;
@@ -590,12 +598,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
     if (fid > DMX_FILTER_COUNT) {
         fid = findFilterIdByfakeFilterId(fid);
     }
-    if (!mPcrFilterIds.empty()) {
-        ALOGD("get avsyncid by pcrfilterid");
-        // Return the lowest pcr filter id in the default implementation as the av sync id
-        _hidl_cb(Result::SUCCESS, *mPcrFilterIds.begin());
-        return Void();
-    }
+
     if (mMediaSync == nullptr) {
         ALOGD("[debuglevel] new mediasync");
         mMediaSync = new MediaSyncWrap();
@@ -608,9 +611,16 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
         DemuxFilterType type = mFilters[fid]->getFilterType();
         if (mMediaSync != nullptr) {
             if (mAvSyncHwId == -1) {
-                mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
-                mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
-                mMediaSync->bindAvSyncId(mAvSyncHwId);
+                 if (!mPcrFilterIds.empty()) {
+                    mAvSyncHwId = *mPcrFilterIds.begin();
+                    ALOGD("%s/%d mAvSyncHwId = %llu", __FUNCTION__, __LINE__, *mPcrFilterIds.begin());
+                    mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
+                    mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
+                 } else {
+                    mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
+                    mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
+                    mMediaSync->bindAvSyncId(mAvSyncHwId);
+                }
             }
         }
         ALOGD("[Demux] mAvFilterId:%llu avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
@@ -621,9 +631,9 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
         uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
         if (mMediaSync != nullptr) {
             if (mAvSyncHwId == -1) {
-                mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
+                mAvSyncHwId = *mPcrFilterIds.begin();//mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
                 mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
-                mMediaSync->bindAvSyncId(mAvSyncHwId);
+                mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
             }
         }
         ALOGD("[Demux] mPcrFilterId:%llu pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
