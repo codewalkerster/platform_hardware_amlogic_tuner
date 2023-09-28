@@ -89,6 +89,7 @@ cc_defaults {
         "MultiHwDemux/AmDmx.cpp",
         "MultiHwDemux/AmLinuxDvb.cpp",
         "MultiHwDemux/AmPesFilter.cpp",
+        "MultiHwDemux/HwDemuxSCWrap.cpp",
         "mediasync/MediaSyncWrap.cpp",
         "dvr/AmDvr.cpp",
         "dsc/dsc_dev.c",

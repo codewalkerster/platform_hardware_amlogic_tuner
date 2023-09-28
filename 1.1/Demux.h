@@ -31,6 +31,7 @@
 #include "AmDvr.h"
 #include "AmPesFilter.h"
 #include "utils/stbtrace.h"
+#include "HwDemuxSCWrap.h"
 
 using namespace std;
 
@@ -239,6 +240,13 @@ class Demux : public IDemux {
     //int mfd;
     vector<uint8_t> mScrambledCache;
     vector<uint8_t> mClearCache;
+
+    // add stream speed control variable
+    sp<HwDemuxOpsSCWrap> mHwDemuxOps[DMX_COUNT] = { NULL };
+    void* mDemuxHandle[DMX_COUNT] = { NULL };
+    uint64_t mWriteTsSize = 0;
+    int mVidPid = 0x1FFF;
+    int mAudPid = 0x1FFF;
 };
 
 }  // namespace implementation

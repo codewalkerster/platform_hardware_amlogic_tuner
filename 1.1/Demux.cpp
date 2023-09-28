@@ -71,6 +71,11 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
     mAmDvrDevice[mDemuxId] = new AmDvr(mDemuxId);
     mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput(), true);
+
+    mHwDemuxOps[mDemuxId] = new HwDemuxOpsSCWrap();
+    if (mHwDemuxOps[mDemuxId] != nullptr) {
+        mDemuxHandle[mDemuxId] = mHwDemuxOps[mDemuxId]->AmHwDemux_Create(0, NULL);
+    }
 }
 
 Demux::~Demux() {
@@ -617,6 +622,22 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
 
     ALOGD("%s/%d fid = %llu", __FUNCTION__, __LINE__, fid);
     std::lock_guard<std::mutex> lock(mFilterLock);
+    set<uint64_t>::iterator it;
+    if (mDvrPlayback != nullptr) {
+       uint16_t avPid;
+       for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
+           avPid = mFilters[*it]->getTpid();
+           DemuxFilterType type = mFilters[*it]->getFilterType();
+           ALOGD("%s/%d avPid = %u", __FUNCTION__, __LINE__, avPid);
+           if (type.subType.tsFilterType() == DemuxTsFilterType::VIDEO) {
+               mVidPid = avPid;
+           }
+
+           if (type.subType.tsFilterType() == DemuxTsFilterType::AUDIO) {
+               mAudPid = avPid;
+           }
+       }
+    }
     if (mFilters[fid] != nullptr && mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty()) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
         DemuxFilterType type = mFilters[fid]->getFilterType();
@@ -634,6 +655,16 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
                 }
             }
         }
+        struct AmDemuxControlInfo info;
+        info.demuxId = mDemuxId;
+        info.mediasyncId = mAvSyncHwId;
+
+        if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId] && mDvrPlayback) {
+            ALOGD("%s/%d 0x%x 0x%x %u %d", __FUNCTION__, __LINE__, mVidPid, mAudPid, mDemuxId, mAvSyncHwId);
+            mHwDemuxOps[mDemuxId]->AmHwDemux_Init(mDemuxHandle[mDemuxId], 0, &info);
+            mWriteTsSize = 0;
+        }
+
         ALOGD("[Demux] mAvFilterId:%llu avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
@@ -707,6 +738,15 @@ Return<Result> Demux::close() {
     mDvrRecord   = nullptr;
     destroyMediaSync();
 
+    if (mHwDemuxOps[mDemuxId] != nullptr) {
+        if (mDemuxHandle[mDemuxId]) {
+            mHwDemuxOps[mDemuxId]->AmHwDemux_Destroy(mDemuxHandle[mDemuxId]);
+            mDemuxHandle[mDemuxId] = NULL;
+        }
+        mHwDemuxOps[mDemuxId] = nullptr;
+        mWriteTsSize = 0;
+    }
+
     if (AmDmxDevice[mDemuxId] != NULL) {
         AmDmxDevice[mDemuxId]->AM_DMX_Close();
         AmDmxDevice[mDemuxId] = NULL;
@@ -753,6 +793,8 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
                 }
             }
 
+            mVidPid = 0x1FFF;
+            mAudPid = 0x1FFF;
             _hidl_cb(Result::SUCCESS, mDvrPlayback);
             return Void();
         case DvrType::RECORD:
@@ -810,6 +852,11 @@ Result Demux::removeFilter(uint64_t filterId) {
 
     if (mFilters.size() == 0) {
         destroyMediaSync();
+        if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId] && mDvrPlayback) {
+            ALOGD("%s/%d ", __FUNCTION__, __LINE__);
+            mHwDemuxOps[mDemuxId]->AmHwDemux_ResetStatus(mDemuxHandle[mDemuxId]);
+            mWriteTsSize = 0;
+        }
     }
 
     return Result::SUCCESS;
@@ -865,6 +912,22 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
                 return;
             }
        }
+        if (isValidTsPacket(data)) {
+            if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId]) {
+                while (mHwDemuxOps[mDemuxId]->AmHwDemux_GetStreamControlStatus(mDemuxHandle[mDemuxId], NULL, mWriteTsSize,
+                    mVidPid, mAudPid) != AM_DEMUX_OK) {
+                    usleep(10 * 1000);
+                    if (mDvrPlayback) {
+                        if (mDvrPlayback->stopInjectTs()) {
+                           ALOGD("[dvr] exit Inject, break!");
+                           break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
 
         if (isDscReady && !mScrambledCache.empty()) {
             int writeRetry = 0;
@@ -900,7 +963,11 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
         } else {
             ALOGD("[Demux] data[0] = 0x%x", data[0]);
         }
-
+        if (mWriteTsSize < UINT64_MAX) {
+            mWriteTsSize += data.size();
+        } else {
+            mWriteTsSize = 0;
+        }
 }
 
 void Demux::sendFrontendInputToRecord(vector<uint8_t> data) {
