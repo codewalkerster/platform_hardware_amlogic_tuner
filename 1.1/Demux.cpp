@@ -88,6 +88,10 @@ void Demux::pesDataCallback(void* demux, int fid, uint8_t *pes, int len) {
         snprintf(ch, 3, "%02x", pes[i]);
         strData += ch;
     }
+    if ((pes[0] != 0) || (pes[1] != 0) || (pes[2] != 1) || (pes[3] != 0xbd)) {
+        ALOGE("PES is not start with 00 00 01 bd");
+        return;
+    }
     //ALOGD("dump bytes: %s", strData.c_str());
 
     Demux *dmxDev = (Demux*)demux;
