@@ -500,7 +500,11 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
      }*/
 
     std::lock_guard<std::mutex> lock(mFilterLock);
-    AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&dmxFilterIdx);
+    if (AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&dmxFilterIdx) != 0) {
+        ALOGE("Allocate filterid fail");
+        _hidl_cb(Result::INVALID_ARGUMENT, nullptr);
+        return Void();
+    }
     filterId = dmxFilterIdx;
 
     //Use demux fd as the tuner hal filter id
