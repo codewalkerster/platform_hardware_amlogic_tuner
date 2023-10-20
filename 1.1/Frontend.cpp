@@ -27,6 +27,7 @@
 #include "FrontendIsdbtDevice.h"
 #include "FrontendDtmbDevice.h"
 #include "FileSystemIo.h"
+#include "FrontendAtsc3Device.h"
 
 namespace android {
 namespace hardware {
@@ -56,6 +57,8 @@ Frontend::Frontend(FrontendType type, FrontendId id, sp<Tuner> tuner, const sp<H
         mFeDev = new FrontendDvbsDevice(id, type, this);
     } else if (type == FrontendType::ISDBT) {
         mFeDev = new FrontendIsdbtDevice(id, type, this);
+    } else if (type == FrontendType::ATSC3) {
+        mFeDev = new FrontendAtsc3Device(id, type, this);
     } else if (type == static_cast<V1_0::FrontendType>(V1_1::FrontendType::DTMB))
         mFeDev = new FrontendDtmbDevice(id ,type, this);
     else {
@@ -778,6 +781,22 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
         msg.plpIds(mFeDev->getMPLPIDList());
         mCallback->onScanMessage(FrontendScanMessageType::PLP_IDS, msg);
     }
+    if (mType == FrontendType::ATSC3 && mIsLocked) {
+        vector<atsc3_plp_list_entry_t> plpList = mFeDev->getAtsc3MPLPIDList();
+        vector<FrontendScanAtsc3PlpInfo> tunerPlpInfos;
+        for (int i = 0; i < plpList.size(); i++) {
+            ALOGV("%s plpList[i].id is =%d", __FUNCTION__, plpList[i].id);
+            ALOGV("%s plpEntry.lls_flg is =%d", __FUNCTION__, static_cast<bool>(plpList[i].lls_flg));
+            FrontendScanAtsc3PlpInfo plpInfo{
+                .plpId = plpList[i].id,
+                .bLlsFlag = static_cast<bool>(plpList[i].lls_flg),
+            };
+            tunerPlpInfos.push_back(plpInfo);
+        }
+
+        msg.atsc3PlpInfos(tunerPlpInfos);
+        mCallback->onScanMessage(FrontendScanMessageType::ATSC3_PLP_INFO, msg);
+    }
 }
 
 void Frontend::sendEventCallBack(FrontendEventType locked) {
@@ -796,6 +815,22 @@ void Frontend::sendEventCallBack(FrontendEventType locked) {
         mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
         msg.plpIds(mFeDev->getMPLPIDList());
         mCallback->onScanMessage(FrontendScanMessageType::PLP_IDS, msg);
+    }
+    if (mType == FrontendType::ATSC3 && mIsLocked) {
+        vector<atsc3_plp_list_entry_t> plpList = mFeDev->getAtsc3MPLPIDList();
+        vector<FrontendScanAtsc3PlpInfo> tunerPlpInfos;
+        for (int i = 0; i < plpList.size(); i++) {
+            ALOGV("%s plpList[i].id is =%d", __FUNCTION__, plpList[i].id);
+            ALOGV("%s plpEntry.lls_flg is =%d", __FUNCTION__, static_cast<bool>(plpList[i].lls_flg));
+            FrontendScanAtsc3PlpInfo plpInfo{
+                .plpId = plpList[i].id,
+                .bLlsFlag = static_cast<bool>(plpList[i].lls_flg),
+            };
+            tunerPlpInfos.push_back(plpInfo);
+        }
+        FrontendScanMessage msg;
+        msg.atsc3PlpInfos(tunerPlpInfos);
+        mCallback->onScanMessage(FrontendScanMessageType::ATSC3_PLP_INFO, msg);
     }
 }
 

@@ -478,6 +478,146 @@ enum atscmh_rs_code_mode
     ATSCMH_RSCODE_RES        = 3,
 };
 
+typedef enum {
+    ATSC3_TIME_INFO_FLAG_NONE,   /**< Time information is not included */
+    ATSC3_TIME_INFO_FLAG_MS,     /**< ms precision */
+    ATSC3_TIME_INFO_FLAG_US,     /**< us precision */
+    ATSC3_TIME_INFO_FLAG_NS      /**< ns precision */
+} atsc3_time_info_flag_t;
+
+typedef enum {
+    ATSC3_PAPR_NONE,    /**< No PAPR reduction used */
+    ATSC3_PAPR_TR,      /**< Tone reservation only */
+    ATSC3_PAPR_ACE,     /**< ACE (Active Constellation Extension) only */
+    ATSC3_PAPR_TR_ACE   /**< Both TR and ACE */
+} atsc3_papr_t;
+
+typedef enum {
+    ATSC3_L1D_FEC_TYPE_MODE1,    /**< Mode 1 */
+    ATSC3_L1D_FEC_TYPE_MODE2,    /**< Mode 2 */
+    ATSC3_L1D_FEC_TYPE_MODE3,    /**< Mode 3 */
+    ATSC3_L1D_FEC_TYPE_MODE4,    /**< Mode 4 */
+    ATSC3_L1D_FEC_TYPE_MODE5,    /**< Mode 5 */
+    ATSC3_L1D_FEC_TYPE_MODE6,    /**< Mode 6 */
+    ATSC3_L1D_FEC_TYPE_MODE7,    /**< Mode 7 */
+    ATSC3_L1D_FEC_TYPE_RESERVED  /**< Reserved */
+} atsc3_l1d_fec_type_t;
+
+typedef enum {
+    ATSC3_FFT_SIZE_8K,        /**< 8K */
+    ATSC3_FFT_SIZE_16K,       /**< 16K */
+    ATSC3_FFT_SIZE_32K,       /**< 32K */
+    ATSC3_FFT_SIZE_RESERVED   /**< Reserved */
+} atsc3_fft_size_t;
+
+typedef enum {
+    ATSC3_MISO_NONE,             /**< No MISO */
+    ATSC3_MISO_64,               /**< MISO with 64 coefficients */
+    ATSC3_MISO_256,              /**< MISO with 256 coefficients */
+    ATSC3_MISO_RESERVED          /**< Reserved */
+} atsc3_miso_t;
+
+typedef enum {
+    ATSC3_GI_RESERVED_0,         /**< Reserved */
+    ATSC3_GI_1_192,              /**< 1/192 */
+    ATSC3_GI_2_384,              /**< 2/384 */
+    ATSC3_GI_3_512,              /**< 3/512 */
+    ATSC3_GI_4_768,              /**< 4/768 */
+    ATSC3_GI_5_1024,             /**< 5/1024 */
+    ATSC3_GI_6_1536,             /**< 6/1536 */
+    ATSC3_GI_7_2048,             /**< 7/2048 */
+    ATSC3_GI_8_2432,             /**< 8/2432 */
+    ATSC3_GI_9_3072,             /**< 9/3072 */
+    ATSC3_GI_10_3648,            /**< 10/3648 */
+    ATSC3_GI_11_4096,            /**< 11/4096 */
+    ATSC3_GI_12_4864,            /**< 12/4864 */
+    ATSC3_GI_RESERVED_13,        /**< Reserved */
+    ATSC3_GI_RESERVED_14,        /**< Reserved */
+    ATSC3_GI_RESERVED_15         /**< Reserved */
+} atsc3_gi_t;
+
+typedef enum {
+    ATSC3_SP_3_2,          /**< SP3_2 for SISO,  MP3_2 for MISO */
+    ATSC3_SP_3_4,          /**< SP3_4 for SISO,  MP3_4 for MISO */
+    ATSC3_SP_4_2,          /**< SP4_2 for SISO,  MP4_2 for MISO */
+    ATSC3_SP_4_4,          /**< SP4_4 for SISO,  MP4_4 for MISO */
+    ATSC3_SP_6_2,          /**< SP6_2 for SISO,  MP6_2 for MISO */
+    ATSC3_SP_6_4,          /**< SP6_4 for SISO,  MP6_4 for MISO */
+    ATSC3_SP_8_2,          /**< SP8_2 for SISO,  MP8_2 for MISO */
+    ATSC3_SP_8_4,          /**< SP8_4 for SISO,  MP8_4 for MISO */
+    ATSC3_SP_12_2,         /**< SP12_2 for SISO, MP12_2 for MISO */
+    ATSC3_SP_12_4,         /**< SP12_4 for SISO, MP12_4 for MISO */
+    ATSC3_SP_16_2,         /**< SP16_2 for SISO, MP16_2 for MISO */
+    ATSC3_SP_16_4,         /**< SP16_4 for SISO, MP16_4 for MISO */
+    ATSC3_SP_24_2,         /**< SP24_2 for SISO, MP24_2 for MISO */
+    ATSC3_SP_24_4,         /**< SP24_4 for SISO, MP24_4 for MISO */
+    ATSC3_SP_32_2,         /**< SP32_2 for SISO, MP32_2 for MISO */
+    ATSC3_SP_32_4,         /**< SP32_4 for SISO, MP32_4 for MISO */
+    ATSC3_SP_RESERVED_16,  /**< Reserved */
+    ATSC3_SP_RESERVED_17,  /**< Reserved */
+    ATSC3_SP_RESERVED_18,  /**< Reserved */
+    ATSC3_SP_RESERVED_19,  /**< Reserved */
+    ATSC3_SP_RESERVED_20,  /**< Reserved */
+    ATSC3_SP_RESERVED_21,  /**< Reserved */
+    ATSC3_SP_RESERVED_22,  /**< Reserved */
+    ATSC3_SP_RESERVED_23   /**< Reserved */
+} atsc3_sp_t;
+
+typedef struct atsc3_plp_list_entry_t {
+    unsigned char id; /**< PIP ID (0 - 63) assigned uniquely in each RF channel */
+    unsigned char lls_flg; /**< PLP contains LLS information or not */
+    unsigned char layer; /**< Layer index of current PLP (0 (Core Layer) or 1 (Enhanced Layer)) */
+    unsigned char chbond; /**< The PLP is channel bonded or not */
+} atsc3_plp_list_entry_t;
+
+typedef struct atsc3_l1basic_t {
+    /* System and Frame Parameters */
+    unsigned char version; /**< L1-Basic structure version. (currently 0) */
+    unsigned char mimo_sp_enc; /**< MIMO pilot encoding scheme (0 or 1) */
+    unsigned char lls_flg; /**< Presence or absence of Low Level Signaling (LLS) */
+    atsc3_time_info_flag_t time_info_flg; /**< Presence or absence, and precision of timing information */
+    unsigned char return_ch_flg; /**< Dedicated return channel (DRC) is present or not */
+    atsc3_papr_t papr; /**< PAPR reduction */
+    unsigned char frame_length_mode; /**< Frame is time-aligned (0) or symbol-aligned (1) */
+    /* Valid if frame_length_mode == 0 (time-aligned frame) */
+    unsigned short frame_length; /**< Frame length (5ms unit) */
+    unsigned short excess_smp_per_sym; /**< Additional number of excess samples included in the guard interval */
+    /* Valid if frame_length_mode == 1 (symbol-aligned frame) */
+    unsigned short time_offset; /**< Number of sample periods */
+    unsigned char additional_smp; /**< Number of additional samples at the end of frames */
+    /* endif */
+    unsigned char num_subframe; /**< Number of subframe - 1 */
+
+    /* Parameters for L1-Detail */
+
+    unsigned char pb_num_symbol; /**< Number of preamble symbol - 1 */
+    unsigned char pb_reduced_carriers; /**< Cred_coeff indicator for preamble (0 - 4) */
+    unsigned char l1d_content_tag; /**< Incremented if L1-Detail content is modified */
+    unsigned short l1d_size; /**< L1-Detail information size (byte) */
+    atsc3_l1d_fec_type_t l1d_fec_type; /**< L1-Detail fec type */
+    unsigned char l1d_add_parity_mode; /**< L1-Detail Additional parity mode (0 - 2) */
+    unsigned int l1d_total_cells; /**< The total size (specified in OFDM cells) of L1-Detail signaling */
+
+    /* Parameters for First Subframe */
+    unsigned char sf0_mimo; /**< Subframe #0 MIMO or not */
+    atsc3_miso_t sf0_miso; /**< Subframe #0 MISO option */
+    atsc3_fft_size_t sf0_fft_size; /**< Subframe #0 FFT size */
+    unsigned char sf0_reduced_carriers;/**< Cred_coeff indicator for subframe #0 (0 - 4) */
+    atsc3_gi_t sf0_gi; /**< Subframe #0 guard interval */
+    unsigned short sf0_num_ofdm_symbol; /**< Subframe #0 number of data payload OFDM symbols - 1 */
+    atsc3_sp_t sf0_sp; /**< Subframe #0 scattered pilot pattern */
+    unsigned char sf0_sp_boost; /**< Subframe #0 scattered pilot boost (0 - 4) */
+    unsigned char sf0_sbs_first; /**< Subframe #0 subframe boundary symbol first flag */
+    unsigned char sf0_sbs_last; /**< Subframe #0 subframe boundary symbol last flag */
+    /* Miscellaneous Parameters */
+    unsigned char reserved[6]; /**< Reserved for future use */
+} atsc3_l1basic_t;
+
+typedef struct atsc3_l1detail_raw_t {
+    unsigned short size; /**< L1-Detail information size (byte) */
+    unsigned char data[8191]; /**< Raw data buffer */
+} atsc3_l1detail_raw_t;
+
 #define NO_STREAM_ID_FILTER	(~0U)
 #define LNA_AUTO                (~0U)
 

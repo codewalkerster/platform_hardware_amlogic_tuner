@@ -61,6 +61,7 @@ public:
     uint32_t  getSymbolRate();
     uint32_t  getActualTerrHierarchy();
     vector<uint8_t> getMPLPIDList();
+    vector<atsc3_plp_list_entry_t> getAtsc3MPLPIDList();
     uint8_t getCurrentMPlpId();
     virtual int getFrontendSettings(FrontendSettings *settings, void* fe_params) {return -1;};
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
