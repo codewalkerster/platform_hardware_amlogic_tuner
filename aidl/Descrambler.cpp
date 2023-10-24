@@ -61,7 +61,7 @@ Descrambler::Descrambler(int32_t descramblerId,     std::shared_ptr<Tuner> tuner
       mDscType = mTuner->getDscMode();
 #ifdef SUPPORT_TSD
   if (mDscType == CA_DSC_TSD_TYPE) {
-    mDscType = FileSystem_getPropertyInt(TUNERHAL_DSC_TYPE_PROP, mDscType);
+    mDscType = FileSystem_getPropertyInt(TUNERHAL_DSC_TYPE_PROP, CA_DSC_COMMON_TYPE);
     TUNER_DSC_DBG(mDescramblerId, "get dsc type:%d", mDscType);
   }
 #endif
