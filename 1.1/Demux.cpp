@@ -941,13 +941,13 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
             vector<uint8_t>().swap(mScrambledCache);
         }
         if (isValidTsPacket(data)) {
-            while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
+            while (AmDmxDevice[mDemuxId] != NULL && AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
+                usleep(100 * 1000);
                 if (mDvrPlayback && mDvrPlayback->stopInjectTs()) {
                     ALOGD("[demux] stop Inject TS, break!");
                     break;
                 }
                 ALOGD("[Demux] wait for 100ms to write dvr device");
-                usleep(100 * 1000);
             }
             if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0)) {
                 FILE *filedump = fopen("/data/local/tmp/demux_inject.ts", "ab+");
