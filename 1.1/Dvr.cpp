@@ -52,7 +52,9 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux
     ALOGD("%s/%d type:%d bufsize:%d MB", __FUNCTION__, __LINE__, (int)type, bufferSize/1024/1024);
     if (mType == DvrType::PLAYBACK) {
         mStartDvrThread = true;
-        pthread_create(&mDvrThread, NULL, __threadLoopPlayback, this);
+        if (pthread_create(&mDvrThread, NULL, __threadLoopPlayback, this)) {
+            ALOGD("[Filter] can't create mDvrThread thread!");
+        }
         pthread_setname_np(mDvrThread, "playback_waiting_loop");
     }
 }

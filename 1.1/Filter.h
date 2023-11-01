@@ -251,8 +251,8 @@ class Filter : public V1_1::IFilter {
     bool mUsingSharedAvMem = false;
     uint32_t mSharedAvMemOffset = 0;
 
-    uint32_t mAudioStreamType;
-    uint32_t mVideoStreamType;
+    uint32_t mAudioStreamType = static_cast<uint32_t>(V1_1::AudioStreamType::UNDEFINED);
+    uint32_t mVideoStreamType = static_cast<uint32_t>(V1_1::VideoStreamType::UNDEFINED);
 
     // Scrambling status to be monitored
     uint32_t mStatuses = 0;
@@ -266,16 +266,16 @@ class Filter : public V1_1::IFilter {
     int mTableId;
     struct timeval mTable_start;
 
-    uint64_t tempAudioFilterId;
-    uint64_t tempVideoFilterId;
-    uint32_t mTsIndex;
-    DemuxRecordScIndexType mScIndexType;
-    uint32_t mScIndex;
+    uint64_t tempAudioFilterId = -1;
+    uint64_t tempVideoFilterId = -1;
+    uint32_t mTsIndex = 0;
+    DemuxRecordScIndexType mScIndexType = DemuxRecordScIndexType::NONE;
+    uint32_t mScIndex = 0;
     int mEnableDmaBuf;
     int mFilterFd;
     int mFilterToken;
-    void * mEsPrivateHeader;
-    uint64_t mMediaEventNum;
+    void * mEsPrivateHeader = NULL;
+    uint64_t mMediaEventNum = 0;
     uint32_t mSequenceNumber = 0;
 };
 

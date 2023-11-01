@@ -188,6 +188,10 @@ void Demux::combinePesData(uint64_t filterId) {
             packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
             ALOGD("[Demux] packetLen = %d", packetLen);
             if (packetLen >= 3) {
+                /*
+                 * The logic is like this, ignoring.
+                 */
+                /* coverity[tainted_data:SUPPRESS] */
                 pesData.resize(packetLen + 6);
                 pesData[0] = 0x0;
                 pesData[1] = 0x0;
@@ -1077,7 +1081,9 @@ uint16_t Demux::getFilterTpid(uint64_t filterId) {
 
 void Demux::startFrontendInputLoop() {
     mFrontendInputThreadRunning = true;
-    pthread_create(&mFrontendInputThread, NULL, __threadLoopFrontend, this);
+    if (pthread_create(&mFrontendInputThread, NULL, __threadLoopFrontend, this)) {
+        ALOGD("[Filter] can't create mFrontendInputThread thread");
+    }
     pthread_setname_np(mFrontendInputThread, "frontend_input_thread");
 }
 

@@ -50,7 +50,7 @@ class Lnb : public ILnb {
     int getId();
 
   private:
-    int mId;
+    int mId = 0;
     sp<HwFeState> mHw;
     const char* name;
     virtual ~Lnb();

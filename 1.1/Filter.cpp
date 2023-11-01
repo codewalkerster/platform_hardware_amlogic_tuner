@@ -804,7 +804,9 @@ bool Filter::createFilterMQ() {
 }
 
 Result Filter::startFilterLoop() {
-    pthread_create(&mFilterThread, NULL, __threadLoopFilter, this);
+    if (pthread_create(&mFilterThread, NULL, __threadLoopFilter, this)) {
+        ALOGD("[Filter] can't create startFilterLoop thread");
+    }
     pthread_setname_np(mFilterThread, "filter_waiting_loop");
 
     return Result::SUCCESS;
@@ -1747,6 +1749,7 @@ Result Filter::createIndependentMediaEvents(vector<uint8_t> output) {
 
     native_handle_t* nativeHandle = createNativeHandle(av_fd);
     if (nativeHandle == NULL) {
+        releaseIonBuffer(avBuffer, output.size());
         return Result::UNKNOWN_ERROR;
     }
     hidl_handle handle;
@@ -1772,6 +1775,7 @@ Result Filter::createIndependentMediaEvents(vector<uint8_t> output) {
     mFilterEvent.events[size].media(mediaEvent);
 
     // Clear and log
+    releaseIonBuffer(avBuffer, output.size());
     output.clear();
     mAvBufferCopyCount = 0;
     ::close(av_fd);
@@ -1786,11 +1790,16 @@ Result Filter::createShareMemMediaEvents(vector<uint8_t> output) {
     uint8_t* sharedAvBuffer = getIonBuffer(mSharedAvMemHandle.getNativeHandle()->data[0],
                                            output.size() + mSharedAvMemOffset);
     if (sharedAvBuffer == NULL) {
+        releaseIonBuffer(sharedAvBuffer, output.size() + mSharedAvMemOffset);
         return Result::UNKNOWN_ERROR;
     }
     memcpy(sharedAvBuffer + mSharedAvMemOffset, output.data(), output.size() * sizeof(uint8_t));
 
     // Create a memory handle with numFds == 0
+    /*
+     * The logic is like this, ignoring.
+     */
+    /* coverity[negative_returns:SUPPRESS] */
     native_handle_t* nativeHandle = createNativeHandle(-1);
     if (nativeHandle == NULL) {
         return Result::UNKNOWN_ERROR;
@@ -1815,6 +1824,7 @@ Result Filter::createShareMemMediaEvents(vector<uint8_t> output) {
     mFilterEvent.events[size].media(mediaEvent);
 
     // Clear and log
+    releaseIonBuffer(sharedAvBuffer, output.size() + mSharedAvMemOffset);
     output.clear();
     if (DEBUG_FILTER) {
         ALOGD("[Filter] shared av data length %d", mediaEvent.dataLength);

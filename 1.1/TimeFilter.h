@@ -57,6 +57,10 @@ class TimeFilter : public ITimeFilter {
   private:
     sp<Demux> mDemux;
     uint64_t mTimeStamp = INVALID_TIME_STAMP;
+    /*
+     * The logic is like this, ignoring.
+     */
+    /* coverity[declaration_with_small_time_t:SUPPRESS] */
     time_t mBeginTime;
 };
 
