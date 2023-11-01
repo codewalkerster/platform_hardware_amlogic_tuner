@@ -939,6 +939,7 @@ int FrontendDevice::setDvbsBlindScanParams(bool start) {
     if (!start) {
         struct dtv_properties props;
         struct dtv_property property;
+        memset(&property, 0, sizeof(struct dtv_property));
 
         props.num = 1;
         props.props = &property;
@@ -951,9 +952,15 @@ int FrontendDevice::setDvbsBlindScanParams(bool start) {
         }
     } else {
         struct dtv_properties props;
-        struct dtv_property cmds[16];
+        struct dtv_property cmds[9];
         struct dtv_property *cmd = cmds;
         int ncmd = 0;
+        memset(cmds, 0, sizeof(struct dtv_property) * 9);
+
+        cmd->cmd = DTV_DELIVERY_SYSTEM;
+        cmd->u.data = getFeDeliverySystem(mDev.type);
+        cmd ++;
+        ncmd ++;
 
         /*set min fre*/
         cmd->cmd = DTV_BLIND_SCAN_MIN_FRE;
