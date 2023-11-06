@@ -182,10 +182,10 @@ bool FrontendDevice::checkOpen(bool autoOpen) {
     return ret;
 }
 
-int FrontendDevice::tune(const FrontendSettings & settings) {
+int FrontendDevice::tune(const FrontendSettings & settings, const V1_1::FrontendSettingsExt1_1 &settingsExt) {
     requestTuneStop();
     updateThreadState(FrontendDevice::STATE_TUNE_START);
-    return internalTune(settings);
+    return internalTune(settings, settingsExt);
 }
 
 static int bandwidth_hz (enum fe_bandwidth bw) {
@@ -216,16 +216,20 @@ static int bandwidth_hz (enum fe_bandwidth bw) {
     return hz;
 }
 
-int FrontendDevice::internalTune(const FrontendSettings & settings) {
-    ALOGD("%s, id(%d)", __FUNCTION__, mDev.id);
+int FrontendDevice::internalTune(const FrontendSettings & settings, const V1_1::FrontendSettingsExt1_1 &settingsExt) {
+    ALOGD("%s, id(%d), type = %d", __FUNCTION__, mDev.id, (int)mDev.type);
     dvb_frontend_parameters fe_params;
-
-    FrontendSettings tuneSettings = settings;
-    mDev.feSettings = &tuneSettings;
-    if (getFrontendSettings(&tuneSettings, &fe_params) <0) {
-        ALOGE("[id:%d] Wrong delivery system in FrontendSettings, or not support it.", mDev.id);
-        sem_post(&threadSemaphore);
-        return INVALID_ARGUMENT;
+    if (mDev.type == static_cast<V1_0::FrontendType>(V1_1::FrontendType::DTMB)) {
+        V1_1::FrontendSettingsExt1_1 tuneSettingsext = settingsExt;
+        getFrontendSettingsExt(&tuneSettingsext, &fe_params);
+    } else {
+        FrontendSettings tuneSettings = settings;
+        mDev.feSettings = &tuneSettings;
+        if (getFrontendSettings(&tuneSettings, &fe_params) <0) {
+            ALOGE("[id:%d] Wrong delivery system in FrontendSettings, or not support it.", mDev.id);
+            sem_post(&threadSemaphore);
+            return INVALID_ARGUMENT;
+        }
     }
 
     mDev.tuneFreq = fe_params.frequency;
@@ -255,14 +259,14 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
     cmd ++;
     ncmd ++;
 
-    switch (mDev.type) {
-    case FrontendType::ATSC:
+    switch ((int)mDev.type) {
+    case (int)FrontendType::ATSC:
         cmd->cmd = DTV_MODULATION;
         cmd->u.data = fe_params.u.vsb.modulation;
         cmd ++;
         ncmd ++;
         break;
-    case FrontendType::DVBC:
+    case (int)FrontendType::DVBC:
         cmd->cmd = DTV_MODULATION;
         cmd->u.data = fe_params.u.qam.modulation;
         cmd ++;
@@ -273,7 +277,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         cmd ++;
         ncmd ++;
         break;
-    case FrontendType::DVBS:
+    case (int)FrontendType::DVBS:
         cmd->cmd = DTV_SYMBOL_RATE;
         cmd->u.data = fe_params.u.qpsk.symbol_rate;
         cmd ++;
@@ -284,7 +288,8 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         cmd ++;
         ncmd ++;
         break;
-    case FrontendType::DVBT:
+    case (int)FrontendType::DVBT:
+    case (int)V1_1::FrontendType::DTMB:
         if (fe_params.u.ofdm.bandwidth != BANDWIDTH_AUTO) {
             cmd->cmd = DTV_BANDWIDTH_HZ;
             cmd->u.data = bandwidth_hz(fe_params.u.ofdm.bandwidth);
@@ -302,7 +307,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         cmd ++;
         ncmd ++;
 
-        if ((settings.dvbt().standard == FrontendDvbtStandard::T2)) {
+        if ((mDev.type == FrontendType::DVBT) && (settings.dvbt().standard == FrontendDvbtStandard::T2)) {
             cmd->cmd = DTV_DVBT2_PLP_ID_LEGACY;
             cmd->u.data = settings.dvbt().plpId;
             ALOGD("DTV DVBT2 plpId = %d", settings.dvbt().plpId);
@@ -311,7 +316,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
             ncmd ++;
         }
         break;
-    case FrontendType::ISDBT:
+    case (int)FrontendType::ISDBT:
         if (fe_params.u.ofdm.bandwidth != BANDWIDTH_AUTO) {
             cmd->cmd = DTV_BANDWIDTH_HZ;
             cmd->u.data = bandwidth_hz(fe_params.u.ofdm.bandwidth);
@@ -457,7 +462,7 @@ int FrontendDevice::blindTune(const FrontendSettings & settings) {
 
 }
 
-int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType type) {
+int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType type, const V1_1::FrontendSettingsExt1_1 &settingsExt) {
     int ret = 0;
 
     if (!checkOpen(true)) return UNAVAILABLE;
@@ -467,7 +472,7 @@ int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType typ
         mDev.blindFreq = 0;
         requestTuneStop();
         updateThreadState(FrontendDevice::STATE_SCAN_START);
-        ret = internalTune(settings);
+        ret = internalTune(settings, settingsExt);
     } else if (type == FrontendScanType::SCAN_BLIND) {
         ret = blindTune(settings);
     } else {

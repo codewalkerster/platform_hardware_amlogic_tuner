@@ -75,9 +75,13 @@ int FrontendDvbsDevice::getFeDeliverySystem(FrontendType type) {
     if (type != FrontendType::DVBS) {
         feSystem = SYS_UNDEFINED;
     } else {
-        if (getFeDevice()->feSettings->dvbs().standard == FrontendDvbsStandard::S2
-            || getFeDevice()->feSettings->dvbs().standard == FrontendDvbsStandard::S2X) {
-            feSystem = SYS_DVBS2;
+        if (getFeDevice()->feSettings != NULL && getFeDevice()->feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbs) {
+            if (getFeDevice()->feSettings->dvbs().standard == FrontendDvbsStandard::S2
+                || getFeDevice()->feSettings->dvbs().standard == FrontendDvbsStandard::S2X) {
+                feSystem = SYS_DVBS2;
+            } else {
+                feSystem = SYS_DVBS;
+            }
         } else {
             feSystem = SYS_DVBS;
         }

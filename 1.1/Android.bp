@@ -73,6 +73,7 @@ cc_defaults {
         "frontenddevices/FrontendDvbcDevice.cpp",
         "frontenddevices/FrontendDvbsDevice.cpp",
         "frontenddevices/FrontendIsdbtDevice.cpp",
+        "frontenddevices/FrontendDtmbDevice.cpp",
         "frontenddevices/HwFeState.cpp",
         //"utils/TSPMessage.cpp",
         "utils/TSPLooper.cpp",

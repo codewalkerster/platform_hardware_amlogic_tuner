@@ -25,6 +25,7 @@
 #include "FrontendDvbcDevice.h"
 #include "FrontendDvbsDevice.h"
 #include "FrontendIsdbtDevice.h"
+#include "FrontendDtmbDevice.h"
 
 namespace android {
 namespace hardware {
@@ -52,7 +53,9 @@ Frontend::Frontend(FrontendType type, FrontendId id, sp<Tuner> tuner, const sp<H
         mFeDev = new FrontendDvbsDevice(id, type, this);
     } else if (type == FrontendType::ISDBT) {
         mFeDev = new FrontendIsdbtDevice(id, type, this);
-    } else {
+    } else if (type == static_cast<V1_0::FrontendType>(V1_1::FrontendType::DTMB))
+        mFeDev = new FrontendDtmbDevice(id ,type, this);
+    else {
         mFeDev = new FrontendDevice(id, type, this);
     }
     mFeDev->setHwFe(hwFe);
@@ -91,8 +94,8 @@ Return<Result> Frontend::tune(const FrontendSettings& settings) {
         ALOGW("[   WARN   ] Frontend callback is not set when tune");
         return Result::INVALID_STATE;
     }
-
-    int ret = mFeDev->tune(settings);
+    V1_1::FrontendSettingsExt1_1 settingsExt1_1;
+    int ret = mFeDev->tune(settings , settingsExt1_1);
     if (mId != mExistId) {
         mTunerService->frontendStartTune(mId);
         mExistId = mId;
@@ -104,9 +107,21 @@ Return<Result> Frontend::tune(const FrontendSettings& settings) {
 }
 
 Return<Result> Frontend::tune_1_1(const FrontendSettings& settings,
-                                  const V1_1::FrontendSettingsExt1_1& /*settingsExt1_1*/) {
-    ALOGV("%s", __FUNCTION__);
-    return tune(settings);
+                                  const V1_1::FrontendSettingsExt1_1& settingsExt1_1) {
+    ALOGD("%s", __FUNCTION__);
+    if (mCallback == nullptr) {
+        ALOGW("[   WARN   ] Frontend callback is not set when tune");
+        return Result::INVALID_STATE;
+    }
+    int ret = mFeDev->tune(settings , settingsExt1_1);
+    if (mId != mExistId) {
+        mTunerService->frontendStartTune(mId);
+        mExistId = mId;
+    }
+    //mCallback->onEvent(FrontendEventType::LOCKED);
+    //mIsLocked = true;
+
+    return Result(ret);
 }
 
 Return<Result> Frontend::stopTune() {
@@ -121,9 +136,10 @@ Return<Result> Frontend::stopTune() {
 }
 
 Return<Result> Frontend::scan(const FrontendSettings& settings, FrontendScanType type) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGD("%s", __FUNCTION__);
+    V1_1::FrontendSettingsExt1_1 settingsExt1_1;
 
-    int ret = mFeDev->scan(settings, type);
+    int ret = mFeDev->scan(settings, type, settingsExt1_1);
 
     return Result(ret);
     /*
@@ -251,7 +267,8 @@ Return<Result> Frontend::scan_1_1(const FrontendSettings& settings, FrontendScan
                                   const V1_1::FrontendSettingsExt1_1& settingsExt1_1) {
     ALOGV("%s", __FUNCTION__);
     ALOGD("[Frontend] scan_1_1 end frequency %d", settingsExt1_1.endFrequency);
-    return scan(settings, type);
+    int ret = mFeDev->scan(settings, type, settingsExt1_1);
+    return Result(ret);
 }
 
 Return<Result> Frontend::stopScan() {
@@ -740,7 +757,7 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
     }
 
     FrontendSettings* feSettings = mFeDev->getFeSetting();
-    if (feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&
+    if (mType == FrontendType::DVBT &&
         feSettings->dvbt().standard == FrontendDvbtStandard::T2 && mIsLocked) {
         msg.hierarchy((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());
         mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
@@ -758,7 +775,7 @@ void Frontend::sendEventCallBack(FrontendEventType locked) {
       mIsLocked = false;
     }
     FrontendSettings* feSettings = mFeDev->getFeSetting();
-    if (feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&
+    if (mType == FrontendType::DVBT &&
         feSettings->dvbt().standard == FrontendDvbtStandard::T2 && mIsLocked) {
         FrontendScanMessage msg;
         msg.hierarchy((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());

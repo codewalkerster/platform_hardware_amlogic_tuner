@@ -322,6 +322,15 @@ Tuner::Tuner() {
                                 caps.isdbtCaps(isdbtCaps);
                             }
                             break;
+                            case static_cast<int>(V1_1::FrontendType::DTMB): {
+                                mDtmbCaps.transmissionModeCap = arrayFronts[i]["transmissionCap"].asUInt();
+                                mDtmbCaps.bandwidthCap        = arrayFronts[i]["bandwidthCap"].asUInt();
+                                mDtmbCaps.modulationCap       = arrayFronts[i]["modulationCap"].asUInt();
+                                mDtmbCaps.codeRateCap         = arrayFronts[i]["coderateCap"].asUInt();
+                                mDtmbCaps.guardIntervalCap    = arrayFronts[i]["guardIntervalCap"].asUInt();
+                                mDtmbCaps.interleaveModeCap   = arrayFronts[i]["interleaveModeCap"].asUInt();
+                            }
+                            break;
                             default:
                                 break;
                         }
@@ -416,7 +425,7 @@ Return<void> Tuner::getFrontendIds(getFrontendIds_cb _hidl_cb) {
 }
 
 Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _hidl_cb) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGV("%s frontendId = %d", __FUNCTION__, frontendId);
 
     std::lock_guard<std::mutex> lock(mLock);
     if (frontendId >= mFrontendSize || (int)frontendId < 0) {
@@ -516,7 +525,7 @@ Return<void> Tuner::openDescrambler(openDescrambler_cb _hidl_cb) {
 }
 
 Return<void> Tuner::getFrontendInfo(FrontendId frontendId, getFrontendInfo_cb _hidl_cb) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGV("%s frontendId =%d", __FUNCTION__, frontendId);
 
     FrontendInfo info;
     if (frontendId >= mFrontendSize) {
@@ -578,11 +587,10 @@ Return<void> Tuner::openLnbByName(const hidl_string& lnbName, openLnbByName_cb _
 
 Return<void> Tuner::getFrontendDtmbCapabilities(uint32_t frontendId,
                                                 getFrontendDtmbCapabilities_cb _hidl_cb) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGV("%s frontendId = %d", __FUNCTION__, frontendId);
 
-    if (mFrontends[frontendId] != nullptr &&
-        (mFrontends[frontendId]->getFrontendType() ==
-         static_cast<V1_0::FrontendType>(V1_1::FrontendType::DTMB))) {
+    if (mFrontendInfos[frontendId].mInfo.type ==
+         static_cast<V1_0::FrontendType>(V1_1::FrontendType::DTMB)) {
         _hidl_cb(Result::SUCCESS, mDtmbCaps);
     } else {
         _hidl_cb(Result::UNAVAILABLE, mDtmbCaps);

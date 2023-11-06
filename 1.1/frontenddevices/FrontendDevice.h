@@ -18,6 +18,7 @@
 #define ANDROID_HARDWARE_TV_TUNER_V1_0_FRONTEND_DEVICE_H_
 
 #include <android/hardware/tv/tuner/1.0/ITuner.h>
+#include <android/hardware/tv/tuner/1.1/IFrontend.h>
 
 #define CONFIG_AMLOGIC_DVB_COMPAT
 #include <semaphore.h>
@@ -46,8 +47,8 @@ public:
     virtual void stop();
     virtual void stopByHw();
     virtual void clearTuner();
-    virtual int  tune(const FrontendSettings& settings);
-    virtual int  scan(const FrontendSettings& settings, FrontendScanType type);
+    virtual int  tune(const FrontendSettings& settings, const V1_1::FrontendSettingsExt1_1 &settingsExt);
+    virtual int  scan(const FrontendSettings& settings, FrontendScanType type, const V1_1::FrontendSettingsExt1_1 &settingsExt);
     uint16_t getFeSnr();
     uint32_t getFeBer();
     uint16_t getSignalStrength();
@@ -63,6 +64,7 @@ public:
     uint8_t getCurrentMPlpId();
     virtual int getFrontendSettings(FrontendSettings *settings, void* fe_params) {return -1;};
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
+    virtual int getFrontendSettingsExt(V1_1::FrontendSettingsExt1_1 *settingsExt, void* fe_params) {return -1;};
     void setHwFe(const sp<HwFeState>& hwFe);
     int getFrontendId();
     stbtrace_info mStbTrace_info;
@@ -127,7 +129,7 @@ private:
     int getFeProp(struct dtv_properties *prop);
 
     int setFeSystem();
-    int internalTune(const FrontendSettings & settings);
+    int internalTune(const FrontendSettings & settings, const V1_1::FrontendSettingsExt1_1 &settingsExt);
     int blindTune(const FrontendSettings& settings);
     timeval tuneStartTime();
     int dvb_wait_event (dvb_frontend_event *evt, int timeout);
