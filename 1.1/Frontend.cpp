@@ -757,7 +757,7 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
     }
 
     FrontendSettings* feSettings = mFeDev->getFeSetting();
-    if (mType == FrontendType::DVBT &&
+    if (mType == FrontendType::DVBT && feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&
         feSettings->dvbt().standard == FrontendDvbtStandard::T2 && mIsLocked) {
         msg.hierarchy((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());
         mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
@@ -775,7 +775,7 @@ void Frontend::sendEventCallBack(FrontendEventType locked) {
       mIsLocked = false;
     }
     FrontendSettings* feSettings = mFeDev->getFeSetting();
-    if (mType == FrontendType::DVBT &&
+    if (mType == FrontendType::DVBT && feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbt &&
         feSettings->dvbt().standard == FrontendDvbtStandard::T2 && mIsLocked) {
         FrontendScanMessage msg;
         msg.hierarchy((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());
