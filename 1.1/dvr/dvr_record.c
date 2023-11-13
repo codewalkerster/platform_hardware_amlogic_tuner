@@ -24,7 +24,7 @@
 #include "dvr_record.h"
 #include "ts_indexer.h"
 
-#define DVR_MAX_RECORD_SESSION_CNT  (2)
+#define DVR_MAX_RECORD_SESSION_CNT  (4)
 #define DVR_MAX_RECORD_PID_CNT      (16)
 #define DVR_MAX_RECORD_PUSI_CNT     (1000)
 #define DVR_TIMEOUT                 (100)
@@ -72,6 +72,14 @@ typedef struct {
 } DVR_RecordContext_t;
 
 static DVR_RecordContext_t record_ctx[DVR_MAX_RECORD_SESSION_CNT] = {
+  {
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .state = DVR_RECORD_STATE_CLOSED
+  },
+  {
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .state = DVR_RECORD_STATE_CLOSED
+  },
   {
     .lock = PTHREAD_MUTEX_INITIALIZER,
     .state = DVR_RECORD_STATE_CLOSED

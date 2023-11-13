@@ -23,6 +23,8 @@
 #include "dvr_types.h"
 #include "dvr_playback.h"
 
+#define DVR_MAX_PLAYBACK_SESSION_CNT (4)
+
 /**\brief DVR plaback state*/
 typedef enum {
   DVR_PLAYBACK_STATE_OPENED,    /**< DVR Playback state is opened*/
@@ -42,10 +44,23 @@ typedef struct {
   int dump_fd;                  /**< DVR Playback dump fd*/
 } DVR_PlaybackContext_t;
 
-static DVR_PlaybackContext_t playback_ctx =
-{
-  .lock = PTHREAD_MUTEX_INITIALIZER,
-  .state = DVR_PLAYBACK_STATE_CLOSED
+static DVR_PlaybackContext_t playback_ctx[DVR_MAX_PLAYBACK_SESSION_CNT] = {
+  {
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .state = DVR_PLAYBACK_STATE_CLOSED
+  },
+  {
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .state = DVR_PLAYBACK_STATE_CLOSED
+  },
+  {
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .state = DVR_PLAYBACK_STATE_CLOSED
+  },
+  {
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .state = DVR_PLAYBACK_STATE_CLOSED
+  }
 };
 
 // Open a playback session with a demux device id
@@ -60,12 +75,19 @@ DVR_Result_t dvr_playback_open(
     DVR_PlaybackHandle_t *p_handle,
     DVR_PlaybackOpenParams_t *params)
 {
+  DVR_PlaybackContext_t *p_ctx;
+  int i;
   DVR_CHECK(p_handle != NULL);
   DVR_CHECK(params != NULL);
 
-  DVR_PlaybackContext_t *p_ctx = &playback_ctx;
-  DVR_CHECK(p_ctx->state == DVR_PLAYBACK_STATE_CLOSED);
+  for (i = 0; i < DVR_MAX_PLAYBACK_SESSION_CNT; i++) {
+    if (playback_ctx[i].state == DVR_PLAYBACK_STATE_CLOSED) {
+      break;
+    }
+  }
+  DVR_CHECK(i < DVR_MAX_PLAYBACK_SESSION_CNT);
 
+  p_ctx = &playback_ctx[i];
   pthread_mutex_lock(&p_ctx->lock);
 #ifndef DEBUG_ON_PC
   int fd;
@@ -79,12 +101,12 @@ DVR_Result_t dvr_playback_open(
   snprintf(node, sizeof(node), "/dev/dvb0.dvr%d", params->dmx_dev_id);
   fd = open(node, O_WRONLY);
   DVR_CHECK_WITH_UNLOCK(fd >= 0, &p_ctx->lock);
-  playback_ctx.fd = fd;
+  p_ctx->fd = fd;
 #endif
-  playback_ctx.dump_fd = params->reserved[0];
+  p_ctx->dump_fd = params->reserved[0];
 
-  *p_handle = &playback_ctx;
-  playback_ctx.state = DVR_PLAYBACK_STATE_OPENED;
+  *p_handle = p_ctx;
+  p_ctx->state = DVR_PLAYBACK_STATE_OPENED;
 
   pthread_mutex_unlock(&p_ctx->lock);
 
