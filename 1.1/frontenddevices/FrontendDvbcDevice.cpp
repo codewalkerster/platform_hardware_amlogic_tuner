@@ -85,16 +85,20 @@ int FrontendDvbcDevice::getFeDeliverySystem(FrontendType type) {
     if (type != FrontendType::DVBC) {
         feSystem = SYS_UNDEFINED;
     } else {
-        switch (getFeDevice()->feSettings->dvbc().annex) {
-            case FrontendDvbcAnnex::B:
-                feSystem = SYS_DVBC_ANNEX_B;
-                break;
-            case FrontendDvbcAnnex::C:
-                feSystem = SYS_DVBC_ANNEX_C;
-                break;
-            default:
-                feSystem = SYS_DVBC_ANNEX_A;
-                break;
+        if (getFeDevice()->feSettings != NULL && getFeDevice()->feSettings->getDiscriminator() == FrontendSettings::hidl_discriminator::dvbc) {
+            switch (getFeDevice()->feSettings->dvbc().annex) {
+                case FrontendDvbcAnnex::B:
+                    feSystem = SYS_DVBC_ANNEX_B;
+                    break;
+                case FrontendDvbcAnnex::C:
+                    feSystem = SYS_DVBC_ANNEX_C;
+                    break;
+                default:
+                    feSystem = SYS_DVBC_ANNEX_A;
+                    break;
+            }
+        } else {
+            feSystem = SYS_DVBC_ANNEX_A;
         }
     }
 
