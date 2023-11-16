@@ -117,6 +117,8 @@ private:
     bool             mRequestTuningStop;
     uint8_t          mPlpId;
     FrontendScanType mScanType = FrontendScanType::SCAN_UNDEFINED;
+    FrontendSettings userFeSettings;
+    V1_1::FrontendSettingsExt1_1 userSettingsExt;
 
     virtual bool     threadLoop(void);
     virtual status_t readyToRun(void);

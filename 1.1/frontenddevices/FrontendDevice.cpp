@@ -185,6 +185,9 @@ bool FrontendDevice::checkOpen(bool autoOpen) {
 int FrontendDevice::tune(const FrontendSettings & settings, const V1_1::FrontendSettingsExt1_1 &settingsExt) {
     requestTuneStop();
     updateThreadState(FrontendDevice::STATE_TUNE_START);
+    userFeSettings = settings;
+    userSettingsExt = settingsExt;
+    mDev.feSettings = &userFeSettings;
     return internalTune(settings, settingsExt);
 }
 
@@ -224,7 +227,6 @@ int FrontendDevice::internalTune(const FrontendSettings & settings, const V1_1::
         getFrontendSettingsExt(&tuneSettingsext, &fe_params);
     } else {
         FrontendSettings tuneSettings = settings;
-        mDev.feSettings = &tuneSettings;
         if (getFrontendSettings(&tuneSettings, &fe_params) <0) {
             ALOGE("[id:%d] Wrong delivery system in FrontendSettings, or not support it.", mDev.id);
             sem_post(&threadSemaphore);
@@ -472,6 +474,9 @@ int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType typ
         mDev.blindFreq = 0;
         requestTuneStop();
         updateThreadState(FrontendDevice::STATE_SCAN_START);
+        userFeSettings = settings;
+        userSettingsExt = settingsExt;
+        mDev.feSettings = &userFeSettings;
         ret = internalTune(settings, settingsExt);
     } else if (type == FrontendScanType::SCAN_BLIND) {
         ret = blindTune(settings);
