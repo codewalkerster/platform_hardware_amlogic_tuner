@@ -74,6 +74,34 @@ typedef enum
  * \retval -1 On error.
  */
 int dvb_set_demux_source(int dmx_idx, DVB_DemuxSource_t src);
+
+/**
+ * Set the demux's secure buffer.
+ * \param dmx_idx Demux device's index.
+ * \param sec_buf The secure buffer.
+ * \param len The secure buffer length.
+ * \retval 0 On success.
+ * \retval -1 On error.
+ */
+int dvb_set_secure_buffer(int dmx_idx, uint8_t *sec_buf, size_t len);
+
+/**
+ * Open the dvr device.
+ * \param dev_dev_id Dvr device's index.
+ * \param rw 1 means read only, 0 means write only
+ * \retval fd On success.
+ * \retval -1 On error.
+ */
+int dvb_dvr_device_open(int dvr_dev_id, int rw);
+
+/**
+ * Setting record ringbuffer for the normal dvr device.
+ * \param fd Dvr device's file descriptor.
+ * \param len Dvr ringbuffer length.
+ * \retval 0 On success.
+ * \retval -1 On error.
+ */
+int dvb_dvr_set_ringbuffer(int fd, size_t len);
 #ifdef __cplusplus
 }
 #endif

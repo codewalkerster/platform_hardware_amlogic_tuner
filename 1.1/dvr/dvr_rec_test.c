@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include "dvr_record.h"
+#include "libdsm.h"
 
 #define INF(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
 #define ERR(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
@@ -33,16 +34,105 @@
 #define has_iframe(_m_) ((_m_) & DVR_INDEX_IFRAME)
 #define has_pts(_m_)    ((_m_) & DVR_INDEX_PTS)
 
-#define DVR_MAX_PUSI_LEN    (20*188*1024)
+#define DVR_BUFFER_LEN    (20*188*1024)
 
 static char *help_vfmt =
   "\n\t0:DVR_VIDEO_FORMAT_MPEG2" /**< MPEG2 video.*/
   "\n\t1:DVR_VIDEO_FORMAT_H264" /**< H264.*/
   "\n\t2:DVR_VIDEO_FORMAT_HEVC"; /**<HEVC.*/
 
+typedef struct {
+  int dsm_handle;
+  uint32_t token;
+  struct dsm_keyslot dec_even_keyslot;
+  struct dsm_keyslot dec_odd_keyslot;
+  struct dsm_keyslot enc_00_keyslot;
+} dvr_casinfo_t;
+
+static dvr_casinfo_t g_casinfo;
+
+// Manage KTE/DSM
+// Return keytoken
+static uint32_t cas_create(void)
+{
+  uint32_t param = 0;
+  int ret = -1;
+  uint32_t token = -1;
+  uint32_t dsm_handle;
+  struct dsm_keyslot *enc_00_keyslot = &g_casinfo.enc_00_keyslot;
+  struct dsm_keyslot *dec_even_keyslot = &g_casinfo.dec_even_keyslot;
+  struct dsm_keyslot *dec_odd_keyslot = &g_casinfo.dec_odd_keyslot;
+
+  memset(&g_casinfo, 0, sizeof(dvr_casinfo_t));
+  g_casinfo.dsm_handle = -1;
+  g_casinfo.token = -1;
+
+  dsm_handle = DSM_OpenSession(param);
+  ret = DSM_GenerateToken(dsm_handle, &token);
+
+  // Prepare even/odd kte/keyslot for descrambling
+  dec_even_keyslot->id = 0;
+  dec_even_keyslot->algo = DSM_ALGO_CSA2;
+  dec_even_keyslot->parity = DSM_PARITY_EVEN;
+  dec_even_keyslot->is_enc = 0;
+  ret = DSM_AddKeySlot(dsm_handle, dec_even_keyslot);
+
+  dec_odd_keyslot->id = 1;
+  dec_odd_keyslot->algo = DSM_ALGO_CSA2;
+  dec_odd_keyslot->parity = DSM_PARITY_ODD;
+  dec_odd_keyslot->is_enc = 0;
+  ret |= DSM_AddKeySlot(dsm_handle, dec_odd_keyslot);
+  ret |= DSM_SetProperty(dsm_handle,
+                    DSM_PROP_DEC_SLOT_READY,
+                    DSM_PROP_SLOT_IS_READY);
+
+  // Prepare 00 kte/keyslot for dvr re-encryption
+  enc_00_keyslot->id = 2;
+  enc_00_keyslot->algo = DSM_ALGO_AES_CBC_CLR_END;
+  enc_00_keyslot->parity = DSM_PARITY_NONE;
+  enc_00_keyslot->is_enc = 1;
+  ret |= DSM_AddKeySlot(dsm_handle, enc_00_keyslot);
+  ret |= DSM_SetProperty(dsm_handle,
+                    DSM_PROP_ENC_SLOT_READY,
+                    DSM_PROP_SLOT_IS_READY);
+
+  g_casinfo.dsm_handle = dsm_handle;
+  g_casinfo.token = token;
+  INF("%s ret: %d\n", __func__, ret);
+
+  if (!ret) {
+    return token;
+  } else {
+    return -1;
+  }
+}
+
+static int cas_destroy(void)
+{
+  int ret = -1;
+  uint32_t dsm_handle = g_casinfo.dsm_handle;
+  struct dsm_keyslot *enc_00_keyslot = &g_casinfo.enc_00_keyslot;
+  struct dsm_keyslot *dec_even_keyslot = &g_casinfo.dec_even_keyslot;
+  struct dsm_keyslot *dec_odd_keyslot = &g_casinfo.dec_odd_keyslot;
+
+  if (dsm_handle == -1) {
+    ERR("%s invalid DSM handle\n", __func__);
+    return -1;
+  }
+
+  ret = DSM_RemoveKeySlot(dsm_handle, enc_00_keyslot->id);
+  ret |= DSM_RemoveKeySlot(dsm_handle, dec_even_keyslot->id);
+  ret |= DSM_RemoveKeySlot(dsm_handle, dec_odd_keyslot->id);
+  DSM_CloseSession(dsm_handle);
+  dsm_handle = -1;
+
+  INF("%s ret: %d\n", __func__, ret);
+  return ret;
+}
+
 static void usage(int argc, char *argv[])
 {
-  INF("Usage: %s [src=] [dmx=] [vpid=] [vfmt=] [apid=] [rec=]\n", argv[0]);
+  INF("Usage: %s [src=] [dmx=] [vpid=] [vfmt=] [apid=] [rec=] [cas=]\n", argv[0]);
   INF("Usage: %s\n", help_vfmt);
 }
 
@@ -56,6 +146,7 @@ int main(int argc, char **argv)
   int vfmt = -1;
   int dmx = 0;
   int src = 0;
+  int is_cas = 0;
 
   DVR_Result_t ret;
   int v_filter_idx = -1;
@@ -82,6 +173,8 @@ int main(int argc, char **argv)
       sscanf(argv[i], "vfmt=%i", &vfmt);
     else if (!strncmp(argv[i], "apid=", 5))
       sscanf(argv[i], "apid=%i", &apid);
+    else if (!strncmp(argv[i], "cas=", 4))
+      sscanf(argv[i], "cas=%i", &is_cas);
     else if (!strncmp(argv[i], "help", 4)) {
       usage(argc, argv);
       exit(0);
@@ -99,7 +192,10 @@ int main(int argc, char **argv)
   open_params.src = DVB_DEMUX_SOURCE_TS0 + src;
   // FTA only use one demux device
   open_params.dmx_dev_id[0] = dmx;
-  open_params.none_sec_ringbuf_size = DVR_MAX_PUSI_LEN;
+  open_params.dmx_dev_id[1] = dmx + 1;
+  open_params.dmx_dev_id[2] = dmx + 2;
+  open_params.non_sec_ringbuf_size = DVR_BUFFER_LEN;
+  open_params.sec_buf_size = DVR_BUFFER_LEN;
 
 #ifdef DEBUG_ON_PC
   FILE *in_fp = fopen(in_file_path, "rb");
@@ -115,6 +211,15 @@ int main(int argc, char **argv)
   if (ret != DVR_SUCCESS) {
     ERR("open record failed!\n");
     return -1;
+  }
+
+  if (is_cas) {
+    uint32_t token;
+    token = cas_create();
+    if (token != -1) {
+      dvr_record_set_key_token(rec_handle, vpid, token);
+      dvr_record_set_key_token(rec_handle, apid, token);
+    }
   }
 
   memset(&filter_params, 0, sizeof(DVR_RecordFilterParams_t));
@@ -147,6 +252,17 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  filter_params.pid = 0;
+  filter_params.type = DVR_STREAM_SECTION_TYPE;
+  int filter_idx = dvr_record_open_filter(rec_handle, &filter_params);
+  if (filter_idx != -1) {
+    ret = dvr_record_start_filter(rec_handle, filter_idx);
+    if (ret != DVR_SUCCESS) {
+      ERR("start section filter failed!\n");
+      return -1;
+    }
+  }
+
   ret = dvr_record_start(rec_handle);
   if (ret != DVR_SUCCESS) {
     ERR("start record failed!\n");
@@ -162,27 +278,30 @@ int main(int argc, char **argv)
   }
 
   memset(&receive_params, 0, sizeof(DVR_RecordReceiveParams_t));
-  receive_params.buf = malloc(DVR_MAX_PUSI_LEN);
-  receive_params.len = DVR_MAX_PUSI_LEN;
+  receive_params.buf = malloc(DVR_BLOCK_SIZE);
+  receive_params.len = DVR_BLOCK_SIZE;
   receive_params.mode = DVR_PUSI_RECORD_MODE;
   while (1) {
     ssize_t len;
     static int time = 0;
     size_t speed = 2; //speed 2x
     static int cnt = 0;
-    if (time == 50)
-      break;
+    //if (time == 200)
+      //break;
     len = dvr_record_read(rec_handle, &receive_params);
     if (len <= 0) {
       usleep(100*1000);
       time++;
-      ERR("dvr no data\n");
+      //ERR("dvr no data\n");
       continue;
     }
 
     time = 0;
 
 #if 0
+    if (receive_params.flags & 0x02) {
+       INF("I-frame, flags: %d\n", receive_params.flags);
+    }
     if (vpid != 0x1fff && !has_iframe(receive_params.flags))
       continue;
     if (vpid != 0x1fff && (cnt++ % speed) != 0)
@@ -193,6 +312,10 @@ int main(int argc, char **argv)
     } else {
       INF("%#zx bytes written\n", len);
     }
+  }
+
+  if (is_cas) {
+    cas_destroy();
   }
 
   dvr_record_close_filter(rec_handle, v_filter_idx);

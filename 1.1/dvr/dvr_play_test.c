@@ -25,15 +25,81 @@
 #include <assert.h>
 
 #include "dvr_playback.h"
+#include "libdsm.h"
 
 #define INF(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
 #define ERR(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 
 #define DVR_BLOCK_SIZE    (188*1024)
 
+typedef struct {
+  int dsm_handle;
+  uint32_t token;
+  struct dsm_keyslot dec_00_keyslot;
+} dvr_casinfo_t;
+
+static dvr_casinfo_t g_casinfo;
+
+// Manage KTE/DSM
+// Return keytoken
+static uint32_t cas_create(void)
+{
+  uint32_t param = 0;
+  int ret = -1;
+  uint32_t token = -1;
+  uint32_t dsm_handle;
+  struct dsm_keyslot *dec_00_keyslot = &g_casinfo.dec_00_keyslot;
+
+  memset(&g_casinfo, 0, sizeof(dvr_casinfo_t));
+  g_casinfo.dsm_handle = -1;
+  g_casinfo.token = -1;
+
+  dsm_handle = DSM_OpenSession(param);
+  ret = DSM_GenerateToken(dsm_handle, &token);
+
+  // Prepare 00 kte/keyslot for cas dvr decryption
+  dec_00_keyslot->id = 1;
+  dec_00_keyslot->algo = DSM_ALGO_AES_CBC_CLR_END;
+  dec_00_keyslot->parity = DSM_PARITY_NONE;
+  dec_00_keyslot->is_enc = 0;
+  ret |= DSM_AddKeySlot(dsm_handle, dec_00_keyslot);
+  ret |= DSM_SetProperty(dsm_handle,
+                    DSM_PROP_DEC_SLOT_READY,
+                    DSM_PROP_SLOT_IS_READY);
+
+  g_casinfo.dsm_handle = dsm_handle;
+  g_casinfo.token = token;
+  INF("%s ret: %d\n", __func__, ret);
+
+  if (!ret) {
+    return token;
+  } else {
+    return -1;
+  }
+}
+
+static int cas_destroy(void)
+{
+  int ret = -1;
+  uint32_t dsm_handle = g_casinfo.dsm_handle;
+  struct dsm_keyslot *dec_00_keyslot = &g_casinfo.dec_00_keyslot;
+
+  if (dsm_handle == -1) {
+    ERR("%s invalid DSM handle\n", __func__);
+    return -1;
+  }
+
+  ret = DSM_RemoveKeySlot(dsm_handle, dec_00_keyslot->id);
+  DSM_CloseSession(dsm_handle);
+  dsm_handle = -1;
+
+  INF("%s ret: %d\n", __func__, ret);
+  return ret;
+}
+
 static void usage(int argc, char *argv[])
 {
-  INF("Usage: %s [ts=] [dmx=] [vpid=] [apid=] [dump=]\n", argv[0]);
+  INF("Usage: %s [ts=] [dmx=] [vpid=] [apid=] [dump=] [is_cas=]\n", argv[0]);
 }
 
 int main(int argc, char **argv)
@@ -44,6 +110,7 @@ int main(int argc, char **argv)
   int vpid = 0x1fff;
   int apid = 0x1fff;
   int dmx = 0;
+  int is_cas = 0;
 
   uint8_t *buf = NULL;
   DVR_Result_t ret;
@@ -63,6 +130,8 @@ int main(int argc, char **argv)
       sscanf(argv[i], "vpid=%i", &vpid);
     else if (!strncmp(argv[i], "apid=", 5))
       sscanf(argv[i], "apid=%i", &apid);
+    else if (!strncmp(argv[i], "cas=", 4))
+      sscanf(argv[i], "cas=%i", &is_cas);
     else if (!strncmp(argv[i], "help", 4)) {
       usage(argc, argv);
       exit(0);
@@ -98,6 +167,14 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  if (is_cas) {
+    uint32_t token = cas_create();
+    if (token != -1) {
+      dvr_playback_set_key_token(play_handle, vpid, token);
+      dvr_playback_set_key_token(play_handle, apid, token);
+    }
+  }
+
   ret = dvr_playback_start(play_handle);
   if (ret != DVR_SUCCESS) {
     ERR("start dvr playback failed!\n");
@@ -121,6 +198,10 @@ int main(int argc, char **argv)
         break;
       actual -= act_write;
     } while (actual > 0);
+  }
+
+  if (is_cas) {
+    cas_destroy();
   }
 
   dvr_playback_stop(play_handle);

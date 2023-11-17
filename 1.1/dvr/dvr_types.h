@@ -16,7 +16,7 @@ extern "C"
 #endif
 
 /**Log facilities.*/
-#define LOG_LV_DEFAULT  3
+#define LOG_LV_DEFAULT  2
 
 #define LOG_LV_DEBUG    1
 #define LOG_LV_INFO     2
@@ -73,6 +73,7 @@ typedef enum {
 
 /**Invalid PID value*/
 #define DVR_INVALID_PID 0x1fff
+#define DVR_MAX_CA_CHAN_CNT         (4)
 
 #ifdef __cplusplus
 }

@@ -73,11 +73,11 @@ typedef struct
 /**PUSI.*/
 typedef struct
 {
-  size_t start;         /**< start position of PUSI */
-  size_t end;           /**< end position of PUSI*/
-  int flags;            /**< index INDEX_PUSI/INDEX_PTS/INDEX_IFRAME etc.*/
-  uint64_t pts;         /**< PTS of the PUSI*/
-  uint8_t state;        /**< index valid flag*/
+  size_t start;                 /**< start position of PUSI */
+  size_t end;                   /**< end position of PUSI*/
+  int flags;                    /**< index INDEX_PUSI/INDEX_PTS/INDEX_IFRAME etc.*/
+  uint64_t pts;                 /**< PTS of the PUSI*/
+  TS_Indexer_Pusi_State_t state;/**< index valid flag*/
 } TS_Indexer_Pusi_t;
 
 /**TS indexer.*/

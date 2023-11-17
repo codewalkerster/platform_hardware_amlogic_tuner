@@ -20,10 +20,13 @@
 #include <dmx.h>
 #endif
 
+#include "libdsm.h"
+#include "dsc_dev.h"
 #include "dvr_types.h"
 #include "dvr_playback.h"
 
-#define DVR_MAX_PLAYBACK_SESSION_CNT (4)
+#define DVR_MAX_PLAYBACK_SESSION_CNT    (4)
+#define DVR_MAX_PLAYBACK_ENCRYPT_CNT     (8)
 
 /**\brief DVR plaback state*/
 typedef enum {
@@ -33,15 +36,22 @@ typedef enum {
   DVR_PLAYBACK_STATE_CLOSED     /**< DVR Playback state is closed*/
 } DVR_PlaybackState_t;
 
+/**\brief DVR playback stream CA info*/
+typedef struct {
+  uint16_t pid;                     /**< DVR Playback stream pid*/
+  uint32_t key_token;               /**< DVR Playback dsm key token*/
+  int ca_chans[DVR_MAX_CA_CHAN_CNT];/**< DVR Playback ca channels*/
+} DVR_PlaybackEncryptStream_t;
+
 /**\brief DVR plaback context*/
 typedef struct {
-  int fd;                       /**< DVR Playback device filter descriptor*/
-  int dmx_dev_id;               /**< DVR Playback device*/
-  pthread_mutex_t lock;         /**< DVR Playback context mutex*/
-  DVR_PlaybackState_t state;    /**< DVR Playback state*/
-  int is_encrypted;             /**< DVR Playback needs decryption*/
-  uint32_t key_token;           /**< DVR Playback decryption keytoken*/
-  int dump_fd;                  /**< DVR Playback dump fd*/
+  int fd;                                                           /**< DVR Playback device filter descriptor*/
+  int dmx_dev_id;                                                   /**< DVR Playback device*/
+  pthread_mutex_t lock;                                             /**< DVR Playback context mutex*/
+  DVR_PlaybackState_t state;                                        /**< DVR Playback state*/
+  size_t dsm_sess;                                                  /**< DVR Playback decryption session*/
+  DVR_PlaybackEncryptStream_t streams[DVR_MAX_PLAYBACK_ENCRYPT_CNT]; /**< DVR Playback encryped pid count*/
+  int dump_fd;                                                      /**< DVR Playback dump fd*/
 } DVR_PlaybackContext_t;
 
 static DVR_PlaybackContext_t playback_ctx[DVR_MAX_PLAYBACK_SESSION_CNT] = {
@@ -62,6 +72,99 @@ static DVR_PlaybackContext_t playback_ctx[DVR_MAX_PLAYBACK_SESSION_CNT] = {
     .state = DVR_PLAYBACK_STATE_CLOSED
   }
 };
+
+static int ca_prepare(
+    DVR_PlaybackContext_t *p_ctx,
+    DVR_PlaybackEncryptStream_t *stream)
+{
+  uint32_t ready = DSM_PROP_SLOT_NOT_READY;
+  struct dsm_keyslot_list keyslot_list;
+
+  if (stream->key_token != -1) {
+    return DVR_SUCCESS;
+  }
+
+  DVR_CHECK(
+        DSM_GetProperty(p_ctx->dsm_sess,
+        DSM_PROP_DEC_SLOT_READY,
+        &ready) == 0);
+  DVR_CHECK(ready == DSM_PROP_SLOT_IS_READY);
+
+  memset(&keyslot_list, 0, sizeof(struct dsm_keyslot_list));
+  // Get key slot list from DSM
+  DVR_CHECK(
+        DSM_GetKeySlots(p_ctx->dsm_sess,
+        &keyslot_list) == 0);
+  DVR_CHECK(keyslot_list.count > 0);
+
+  DVR_INFO("%s decryption slot is ready, total count: %d",
+        __func__, keyslot_list.count);
+
+  // Loop all the key slots and get the algo/is_iv/parity etc.
+  for (int i = 0; i < keyslot_list.count; i++) {
+    int j;
+    int ca_chan = -1;
+    int dsc_type = CA_DSC_COMMON_TYPE;
+    uint32_t parity;
+    struct dsm_keyslot *slot = &keyslot_list.keyslots[i];
+    if (slot->is_enc)
+      continue;
+
+    // Allocate ca dsc channel
+    ca_chan = ca_alloc_chan(
+                    p_ctx->dmx_dev_id,
+                    stream->pid,
+                    slot->algo,
+                    dsc_type);
+    DVR_CHECK(ca_chan >= 0);
+
+    DVR_INFO("%s alloc ca channel(%d, %d) ok.",
+        __func__, stream->pid, ca_chan);
+    for (j = 0; j < DVR_MAX_CA_CHAN_CNT; j++) {
+      if (stream->ca_chans[j] == -1) {
+        stream->ca_chans[j] = ca_chan;
+        break;
+      }
+    }
+    DVR_CHECK(j < DVR_MAX_CA_CHAN_CNT);
+
+    if (slot->parity == DSM_PARITY_EVEN) {
+      parity = slot->is_iv ? CA_KEY_EVEN_IV_TYPE : CA_KEY_EVEN_TYPE;
+    } else if (slot->parity == DSM_PARITY_ODD) {
+      parity = slot->is_iv ? CA_KEY_ODD_IV_TYPE : CA_KEY_ODD_TYPE;
+    } else {
+      parity = slot->is_iv ? CA_KEY_ODD_IV_TYPE : CA_KEY_ODD_TYPE;
+    }
+
+    // Set KTE to ca dsc channel
+    DVR_CHECK(ca_set_key(p_ctx->dmx_dev_id, ca_chan, parity, slot->id) ==0);
+    DVR_INFO("%s set ca key(%d, %d, %d, %d)",
+          __func__,
+          p_ctx->dmx_dev_id,
+          ca_chan,
+          parity,
+          slot->id);
+  }
+
+  return 0;
+}
+
+static int ca_release(
+    DVR_PlaybackContext_t *p_ctx,
+    DVR_PlaybackEncryptStream_t *stream)
+{
+  int i;
+
+  // Free the ca channel
+  for (i = 0; i < DVR_MAX_CA_CHAN_CNT; i++) {
+    if (stream->ca_chans[i] >= 0) {
+        ca_free_chan(p_ctx->dmx_dev_id, stream->ca_chans[i]);
+        stream->ca_chans[i] = -1;
+    }
+  }
+
+  return 0;
+}
 
 // Open a playback session with a demux device id
 // open the demux device and dvr device with the same id
@@ -89,6 +192,14 @@ DVR_Result_t dvr_playback_open(
 
   p_ctx = &playback_ctx[i];
   pthread_mutex_lock(&p_ctx->lock);
+  for (i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
+    p_ctx->streams[i].pid = DVR_INVALID_PID;
+    p_ctx->streams[i].key_token = -1;
+    for (int j = 0; j < DVR_MAX_CA_CHAN_CNT; j++) {
+      p_ctx->streams[i].ca_chans[j] = -1;
+    }
+  }
+  p_ctx->dsm_sess = -1;
 #ifndef DEBUG_ON_PC
   int fd;
   char node[32] = {0};
@@ -104,6 +215,7 @@ DVR_Result_t dvr_playback_open(
   p_ctx->fd = fd;
 #endif
   p_ctx->dump_fd = params->reserved[0];
+  p_ctx->dmx_dev_id = params->dmx_dev_id;
 
   *p_handle = p_ctx;
   p_ctx->state = DVR_PLAYBACK_STATE_OPENED;
@@ -126,9 +238,21 @@ DVR_Result_t dvr_playback_close(DVR_PlaybackHandle_t handle)
 #ifndef DEBUG_ON_PC
   // Close inject device
   close(p_ctx->fd);
+  p_ctx->fd = -1;
 #endif
 
-  p_ctx->is_encrypted = 0;
+  if (p_ctx->dsm_sess != -1) {
+    DSM_CloseSession(p_ctx->dsm_sess);
+    p_ctx->dsm_sess = -1;
+  }
+  // We should release decryption ca channels if the pid stream is secure
+  for (int i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
+    if (p_ctx->streams[i].key_token != -1) {
+      ca_release(p_ctx, &p_ctx->streams[i]);
+      p_ctx->streams[i].key_token = -1;
+    }
+  }
+
   p_ctx->state = DVR_PLAYBACK_STATE_CLOSED;
   pthread_mutex_unlock(&p_ctx->lock);
 
@@ -179,13 +303,57 @@ DVR_Result_t dvr_playback_set_key_token(
     int pid,
     uint32_t key_token)
 {
+  int i;
+  DVR_PlaybackContext_t *p_ctx = (DVR_PlaybackContext_t *)handle;
+  DVR_CHECK(p_ctx != NULL);
+  DVR_CHECK(pid != DVR_INVALID_PID);
+  DVR_CHECK(key_token != -1);
+  pthread_mutex_lock(&p_ctx->lock);
+  DVR_CHECK_WITH_UNLOCK(
+        p_ctx->state != DVR_PLAYBACK_STATE_CLOSED,
+        &p_ctx->lock);
+
+  if (p_ctx->dsm_sess == -1) {
+    p_ctx->dsm_sess = DSM_OpenSession(0);
+    DVR_CHECK_WITH_UNLOCK(p_ctx->dsm_sess != -1, &p_ctx->lock);
+    DVR_CHECK_WITH_UNLOCK(
+            DSM_BindToken(p_ctx->dsm_sess, key_token) == 0,
+            &p_ctx->lock);
+    DVR_CHECK_WITH_UNLOCK(ca_open(p_ctx->dmx_dev_id) == 0,
+            &p_ctx->lock);
+  }
+
+  for (i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
+    // Return directly if the pid had been set key token already
+    if (p_ctx->streams[i].pid == pid &&
+        p_ctx->streams[i].key_token != -1) {
+      goto exit;
+    }
+  }
+
+  // This is a new pid, and we need to find a slot to store it
+  for (i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
+    if (p_ctx->streams[i].pid == DVR_INVALID_PID) {
+      break;
+    }
+  }
+  DVR_CHECK_WITH_UNLOCK(i < DVR_MAX_PLAYBACK_ENCRYPT_CNT, &p_ctx->lock);
+  p_ctx->streams[i].pid = pid;
+  // Prepare ca
+  DVR_CHECK_WITH_UNLOCK(
+      ca_prepare(p_ctx, &p_ctx->streams[i]) == 0,
+      &p_ctx->lock);
+  p_ctx->streams[i].key_token = key_token;
+
+exit:
+  pthread_mutex_unlock(&p_ctx->lock);
   return DVR_SUCCESS;
 }
 
 size_t dvr_playback_write(
     DVR_PlaybackHandle_t handle,
     uint8_t *data,
-    size_t len)
+     size_t len)
 {
   DVR_PlaybackContext_t *p_ctx = (DVR_PlaybackContext_t *)handle;
 

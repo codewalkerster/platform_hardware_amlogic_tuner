@@ -87,4 +87,98 @@ int dvb_set_demux_source(int dmx_idx, DVB_DemuxSource_t src)
 
     return r;
 }
+
+/**
+ * Set the demux's secure buffer.
+ * \param dmx_idx Demux device's index.
+ * \param sec_buf The secure buffer.
+ * \param len The secure buffer length.
+ * \retval 0 On success.
+ * \retval -1 On error.
+ */
+int dvb_set_secure_buffer(int dmx_idx, uint8_t *sec_buf, size_t len)
+{
+    char node[20] = {0};
+    int ret = 0;
+
+    snprintf(node, sizeof(node), "/dev/dvb0.demux%d", dmx_idx);
+    int fd = open(node, O_RDONLY);
+    if (fd == -1) {
+      DVR_ERROR("%s open \"%s\" failed, error:%d", __func__, node, errno);
+      return -1;
+    }
+
+    struct dmx_sec_mem sec_mem;
+    sec_mem.buff = (uint32_t)sec_buf;
+    sec_mem.size = len;
+    ret = ioctl(fd, DMX_SET_SEC_MEM, &sec_mem);
+    close(fd);
+    if (ret == -1) {
+      DVR_ERROR("%s ioctl DMX_SET_SEC_MEM error: %d", __func__, errno);
+      return -1;
+    } else {
+      DVR_INFO("%s ioctl DMX_SET_SEC_MEM succeed. sec_mem: %#x, size: %#x",
+        __func__, (size_t)sec_buf, len);
+      return 0;
+    }
+}
+
+/**
+ * Open the dvr device.
+ * \param dev_dev_id Dvr device's index.
+ * \param rw 1 means read only, 0 means write only
+ * \retval fd On success.
+ * \retval -1 On error.
+ */
+int dvb_dvr_device_open(int dvr_dev_id, int rw)
+{
+  int fd;
+  int flags = 0;
+  char dev_name[32];
+
+  memset(dev_name, 0, sizeof(dev_name));
+  snprintf(dev_name, sizeof(dev_name), "/dev/dvb0.dvr%d", dvr_dev_id);
+  if (rw) {
+    flags = O_RDONLY;
+  } else {
+    flags = O_WRONLY;
+  }
+  fd = open(dev_name, flags);
+  if (fd == -1) {
+    DVR_ERROR("%s cannot open \"%s\" (%s)", __func__, dev_name, strerror(errno));
+  }
+
+  DVR_INFO("%s open %s succeed, fd: %d, rw: %d", __func__, dev_name, fd, rw);
+
+  return fd;
+}
+
+/**
+ * Setting record ringbuffer for the normal dvr device.
+ * \param fd Dvr device's file descriptor.
+ * \param len Dvr ringbuffer length.
+ * \retval 0 On success.
+ * \retval -1 On error.
+ */
+int dvb_dvr_set_ringbuffer(int fd, size_t len)
+{
+  if (fd < 0)
+    return -1;
+
+  if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0) < 0) {
+    DVR_ERROR("%s set nonblock flag failed \"%s\"", __func__ ,strerror(errno));
+    return -1;
+  }
+
+  if (ioctl(fd, DMX_SET_BUFFER_SIZE, len) == -1) {
+    DVR_ERROR("%s set dvr ringbuf size failed (%s) buf_size:%d",
+      __func__, strerror(errno), len);
+    return -1;
+  }
+
+  DVR_INFO("%s set fd: %d ringbuf size success buf_size:%#x",
+      __func__, fd, len);
+
+  return 0;
+}
 #endif

@@ -18,6 +18,9 @@ extern "C"
 #include "dvr_types.h"
 #include "dvb_utils.h"
 
+// Max PUSI data len
+#define DVR_BLOCK_SIZE              (3*188*1024)
+
 /**\brief DVR record handle*/
 typedef void* DVR_RecordHandle_t;
 
@@ -40,14 +43,16 @@ typedef enum {
   DVR_STREAM_SECTION_TYPE,     /**< section type*/
   DVR_STREAM_VIDEO_TYPE,       /**< video stream type*/
   DVR_STREAM_AUDIO_TYPE,       /**< audio stream type*/
-  DVR_STREAM_OTHER_PES_TYPE    /**< other pes stream type*/
+  DVR_STREAM_OTHER_PES_TYPE,   /**< other pes stream type*/
+  DVR_STREAM_INVALID_TYPE      /**< invalid stream type*/
 } DVR_StreamType_t;
 
 /**\brief DVR video stream format*/
 typedef enum {
   DVR_VIDEO_FORMAT_MPEG2, /**< MPEG2*/
   DVR_VIDEO_FORMAT_H264,  /**< H264*/
-  DVR_VIDEO_FORMAT_HEVC   /**< HEVC*/
+  DVR_VIDEO_FORMAT_HEVC,  /**< HEVC*/
+  DVR_VIDEO_FORMAT_INVALID/**< Invalid*/
 } DVR_VideoFormat_t;
 
 /**\brief DVR Record filter parameters*/
@@ -62,7 +67,7 @@ typedef struct {
   DVB_DemuxSource_t     src;                    /**< Demux input source */
   int                   dmx_dev_id[3];          /**< Demux device id */
   int                   sec_buf_size;           /**< secure dvr buffer size */
-  int                   none_sec_ringbuf_size;  /**< none secure ring buffer size */
+  int                   non_sec_ringbuf_size;   /**< none secure ring buffer size */
   int                   reserved[8];            /**< reserved */
 } DVR_RecordOpenParams_t;
 
