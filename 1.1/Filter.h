@@ -109,7 +109,6 @@ class Filter : public V1_1::IFilter {
     bool fillDataToDecoder();
     DemuxFilterType getFilterType();
     bool isRawData();
-    timeval getTableStartTime();
 
   private:
     // Tuner service
@@ -263,8 +262,6 @@ class Filter : public V1_1::IFilter {
     uint8_t mIpCidMonitored = 0;
     bool bIsRaw;
     bool mIsPesFilter = false;
-    int mTableId;
-    struct timeval mTable_start;
 
     uint64_t tempAudioFilterId = -1;
     uint64_t tempVideoFilterId = -1;

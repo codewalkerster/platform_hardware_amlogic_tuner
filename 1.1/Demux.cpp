@@ -20,7 +20,6 @@
 #include <cutils/properties.h>
 #include "Demux.h"
 #include "FileSystemIo.h"
-#include "utils/stbtrace.h"
 
 namespace android {
 namespace hardware {
@@ -286,8 +285,6 @@ void Demux::combinePesData(uint64_t filterId) {
 void Demux::getSectionData(uint64_t filterId) {
     vector<uint8_t> sectionData;
     int sectionSize = PSI_MAX_SIZE;
-    memset(&mStbTrace_info, 0, sizeof(stbtrace_info));
-    snprintf(mStbTrace_info.module_name, sizeof(mStbTrace_info.module_name), "android.hardware.tv.tuner@1.1-Demux");
 
     sectionData.resize(sectionSize);
     int readRet = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, sectionData.data(), &sectionSize);
@@ -297,7 +294,7 @@ void Demux::getSectionData(uint64_t filterId) {
     } else {
         ALOGV("fid =%llu section data size:%d", filterId, sectionSize);
         sectionData.resize(sectionSize);
-        gettimeofday(&mTable_end, NULL);
+        /*gettimeofday(&mTable_end, NULL);
         timeval table_start;
         if (mFilters[filterId] != nullptr) {
             table_start = mFilters[filterId]->getTableStartTime();
@@ -320,7 +317,7 @@ void Demux::getSectionData(uint64_t filterId) {
         if (tableId == 0x2) {
             //ALOGD("received PMT table tableId = %d, fid = %llu", tableId, filterId);
             table_time_trace_log(&mStbTrace_info, "received PMT table", tableId, filterId, mDemuxId, mTable_elapsed);
-        }
+        }*/
         updateFilterOutput(filterId, sectionData);
         startFilterHandler(filterId);
     }
