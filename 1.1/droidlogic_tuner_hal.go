@@ -39,5 +39,11 @@ func globalDefaults(ctx android.BaseContext) ([]string) {
             cppflags = append(cppflags,"-DSUPPORT_TSD")
         default:
     }
+
+    CBSSrcPath := "vendor/google/tv/broadcaststack"
+    if android.ExistentPathForSource(ctx, CBSSrcPath).Valid() == true {
+        //fmt.Printf("cbs:%s exist, define support cbs\n", CBSSrcPath)
+        cppflags = append(cppflags,"-DSUPPORT_CBS")
+    }
     return cppflags
 }

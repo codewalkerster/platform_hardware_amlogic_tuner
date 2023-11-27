@@ -700,10 +700,12 @@ void Tuner::setTsnSource() {
         return;
     }
     if (!strncmp(dmx_ver, "sc2-d", 5)) {
+        #ifdef SUPPORT_CBS
         if (!strstr(tsn_source, TSN_LOCAL)) {
             ALOGD("set tsn_source to local");
             FileSystem_writeFile(TSN_SOURCE, TSN_LOCAL);
         }
+        #endif
     } else {
         if (!strstr(tsn_source, TSN_DEMOD)) {
             ALOGD("set tsn_source to demod");
