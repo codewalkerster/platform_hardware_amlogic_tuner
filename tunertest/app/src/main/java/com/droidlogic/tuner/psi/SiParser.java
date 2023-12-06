@@ -8,6 +8,7 @@ import android.media.tv.tuner.filter.FilterEvent;
 import android.media.tv.tuner.filter.SectionEvent;
 import android.media.tv.tuner.filter.SectionSettingsWithSectionBits;
 import android.media.tv.tuner.filter.TsFilterConfiguration;
+import android.media.tv.tuner.filter.TemiEvent;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.text.TextUtils;
@@ -90,6 +91,8 @@ public class SiParser {
                 mChannelState.mFreqMhz = freqMhz;
                 startFilter(tuner, FilterType.FILTER_TYPE_PAT, 0);
                 mChannelParsing = STATE_PROGRESS;
+                //Log.w(TAG, "open temi filter");
+                //openTemiFilter(tuner, 150);
             } else if (mChannelParsing == STATE_PROGRESS) {
                 if (mChannelState == null) {
                     Log.w(TAG, "Should not to here, need finish psi build.");
@@ -192,6 +195,29 @@ public class SiParser {
             mChannelState.mSdtData.clear();
             mChannelState = null;
         }
+    }
+
+    private Filter openTemiFilter(@NonNull Tuner tuner, int pid) {
+        long bufferSize = 4 * 1024;
+        if (pid == 0x1FFF || pid <= 0) {
+            return null;
+        }
+
+        Filter temiFilter = tuner.openFilter(Filter.TYPE_TS,
+            Filter.SUBTYPE_TEMI,
+            bufferSize,
+            mExecutor,
+            mfilterCallback);
+        if (temiFilter == null) return null;
+
+        FilterConfiguration temiConfig = TsFilterConfiguration
+                .builder()
+                .setTpid(pid)
+                .setSettings(null)
+                .build();
+        temiFilter.configure(temiConfig);
+        temiFilter.start();
+        return temiFilter;
     }
 
     private void startFilter(Tuner tuner, FilterType type, int pid) {
@@ -465,6 +491,12 @@ public class SiParser {
                         filter.read(data, 0, sectionEvent.getDataLength());
                         parseSectionData(filter.getId(), data);
                     }
+                } else if (event instanceof TemiEvent) {
+                    Log.d(TAG, "receive TemiEvent");
+                    TemiEvent temiEvent = (TemiEvent) event;
+                    temiEvent.getPts();
+                    temiEvent.getDescriptorTag();
+                    temiEvent.getDescriptorData();
                 }
             }
         }

@@ -488,6 +488,23 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                 }
                 break;
             }
+            case DemuxTsFilterType::TEMI: {
+                ALOGD("%s subType:TEMI mTpid:%d", __FUNCTION__, mTpid);
+                struct dmx_pes_filter_params temip;
+                memset(&temip, 0, sizeof(temip));
+                temip.pid = mTpid;
+                temip.output = DMX_OUT_TAP;
+                temip.pes_type = DMX_PES_OTHER;
+                temip.input = DMX_IN_FRONTEND;
+                temip.flags |= DMX_TEMI_FLAGS;
+                if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0) {
+                    return Result::UNAVAILABLE;
+                }
+                if (mDemux->getAmDmxDevice()->AM_DMX_SetPesFilter(mFilterId, &temip) != 0) {
+                    return Result::UNAVAILABLE;
+                }
+                break;
+            }
             default:
                 break;
             }
@@ -1726,6 +1743,21 @@ Result Filter::startPcrFilterHandler() {
 
 Result Filter::startTemiFilterHandler() {
     // TODO handle starting TEMI filter
+    std::lock_guard<std::mutex> lock(mFilterEventLock);
+    if (!writeDataToFilterMQ(mFilterOutput)) {
+        return Result::UNKNOWN_ERROR;
+    }
+    dmx_temi_data *temiData = (dmx_temi_data *)(mFilterOutput.data());
+    uint64_t pts = temiData->pts;
+    vector<uint8_t> descrData;
+    descrData.resize(188);
+    memcpy(descrData.data(), temiData->temi, 188 * sizeof(uint8_t));
+    uint8_t descrTag = temiData->pts_dts_flag;
+    int size = mFilterEvent.events.size();
+    mFilterEvent.events.resize(size + 1);
+    mFilterEvent.events[size].temi({.pts = pts, .descrTag = descrTag, .descrData = descrData});
+    fillDataToDecoder();
+    mFilterOutput.clear();
     return Result::SUCCESS;
 }
 

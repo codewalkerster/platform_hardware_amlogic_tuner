@@ -116,6 +116,7 @@ class Demux : public IDemux {
     void detachDescrambler(uint32_t descramblerId);
     sp<AmDvr> getAmDvrDevice();
     bool checkPesFilterId(uint64_t filterId);
+    bool checkTemiFilterId(uint64_t filterId);
     void combinePesData(uint64_t filterId);
     void getSectionData(uint64_t filterId);
     bool setStbSource(const char *path, const char *value);
@@ -129,6 +130,7 @@ class Demux : public IDemux {
     int recordTsPacketForPesData(uint64_t filterId);
     void closePesRecordFilter();
     bool checkSoftDemuxForSubtitle();
+    void getTemiData(uint64_t filterId);
     uint64_t getVideoFid();
     sp<AmTsIndexer> getAmTsIndexer();
     TS_Indexer_StreamFormat_t convertVideoFormatToTsIndexFormat(int vf);
@@ -151,6 +153,7 @@ class Demux : public IDemux {
     uint64_t count = 0;
     bool     bUseTsIndexer = false;
     uint32_t flags = 0;
+
   private:
     // Tuner service
     sp<Tuner> mTunerService;
@@ -183,6 +186,7 @@ class Demux : public IDemux {
     uint32_t mCiCamId;
     set<uint64_t> mPcrFilterIds;
     set<uint64_t> mPesFilterIds;
+    set<uint64_t> mTemiFilterIds;
     /**
      * Record the last used filter id. Initial value is -1.
      * Filter Id starts with 0.

@@ -40,6 +40,7 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define WAIT_TIMEOUT 3000000000
 #define PSI_MAX_SIZE 4096
 #define PES_RAW_DATA_SIZE 64 * 1024
+#define TEMI_DATA_SIZE 4 * 1024
 #define PRIVATE_STREAM_1   0x1bd
 #define PRIVATE_STREAM_2   0x1bf
 #define SUPPORT_SOFTWARE_DEMUX_SUBTITLE "vendor.tunerhal.softwaredemux.subtitle"
@@ -526,6 +527,22 @@ void Demux::getPesRawData(uint64_t filterId) {
     }
 }
 
+void Demux::getTemiData(uint64_t filterId) {
+    vector<uint8_t> temiData;
+    int temiDataSize = TEMI_DATA_SIZE;
+    temiData.resize(temiDataSize);
+    int readRet = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, temiData.data(), &temiDataSize);
+    if (readRet != 0) {
+        ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
+        return;
+    } else {
+        ALOGD("fid =%llu Temi data size:%d", filterId, temiDataSize);
+        temiData.resize(temiDataSize);
+        updateFilterOutput(filterId, temiData);
+        startFilterHandler(filterId);
+    }
+}
+
 void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     vector<uint8_t> tmpData;
     Demux *dmxDev = (Demux*)demux;
@@ -637,6 +654,11 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             }
         }
     } else {
+        bool bTemiFilterId = dmxDev->checkTemiFilterId(fid);
+        if (bTemiFilterId) {
+            dmxDev->getTemiData(fid);
+            return;
+        }
         bool isPesFilterId = dmxDev->checkPesFilterId(fid);
         if (isPesFilterId) {
             if (dmxDev->isRawData(fid)) {
@@ -717,14 +739,13 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         if (tsFilterType == DemuxTsFilterType::SECTION
             || tsFilterType == DemuxTsFilterType::VIDEO
             || tsFilterType == DemuxTsFilterType::AUDIO
-            || tsFilterType == DemuxTsFilterType::PES) {
-            //AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, this->postData, this);
+            || tsFilterType == DemuxTsFilterType::PES
+            || tsFilterType == DemuxTsFilterType::TEMI) {
             bCheckVts = true;
             AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, postData, this);
         } else if (tsFilterType == DemuxTsFilterType::PCR) {
             AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
         } else if (tsFilterType == DemuxTsFilterType::RECORD) {
-            //mAmDvrDevice->AM_DVR_SetCallback(this->postDvrData, this);
             bCheckVts = false;
             mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
         }
@@ -738,6 +759,11 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PCR) {
         mPcrFilterIds.insert(dmxFilterIdx);
         ALOGD("Insert pcr filter");
+    }
+
+    if (hasTsFilterType && tsFilterType == DemuxTsFilterType::TEMI) {
+        mTemiFilterIds.insert(dmxFilterIdx);
+        ALOGD("Insert Temi filter");
     }
     bool result = true;
 
@@ -1478,6 +1504,16 @@ bool Demux::checkPesFilterId(uint64_t filterId) {
     return false;
 }
 
+bool Demux::checkTemiFilterId(uint64_t filterId) {
+    set<uint64_t>::iterator it;
+    for (it = mTemiFilterIds.begin(); it != mTemiFilterIds.end(); it++) {
+        if (*it == filterId) {
+            return true;
+         }
+    }
+    return false;
+
+}
 uint32_t Demux::findFilterIdByfakeFilterId(uint64_t fakefilterId) {
     if (fakefilterId > DMX_FILTER_COUNT) {
          return (fakefilterId >> 26) & 0x3f;
