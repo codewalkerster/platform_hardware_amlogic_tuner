@@ -420,7 +420,7 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
             case DemuxTsFilterType::RECORD: {
                 mTsIndexMask     = settings.ts().filterSettings.record().tsIndexMask;
                 ALOGD("%s subType:RECORD mTsIndexMask = %d", __FUNCTION__, mTsIndexMask);
-                if (mTsIndexMask && static_cast<uint32_t>(V1_1::DemuxTsIndex::MPT_INDEX_AUDIO) != 0) {
+                if ((mTsIndexMask & static_cast<uint32_t>(V1_1::DemuxTsIndex::MPT_INDEX_AUDIO)) != 0) {
                     mRecordAudioPid = mTpid;
                     ALOGD("%s set mRecordAudioPid pid = %d", __FUNCTION__, mRecordAudioPid);
                 }
