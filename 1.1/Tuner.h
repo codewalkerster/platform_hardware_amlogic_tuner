@@ -125,7 +125,7 @@ class Tuner : public ITuner {
     map<uint32_t, sp<Demux>> mDemuxes;
     map<uint32_t, sp<Descrambler>> mDescramblers;
     // To maintain how many Frontends we have
-    int mFrontendSize;
+    int mFrontendSize = 0;
     // The last used demux id. Initial value is -1.
     // First used id will be 0.
     uint32_t mLastUsedId = -1;

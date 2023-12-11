@@ -147,8 +147,14 @@ cc_defaults {
         "-Wno-unused-function",
         "-Wno-deprecated-declarations",
         "-Wno-deprecated-register",
-    ],
-
+    ],// + [//Only enabled when using Asan for debugging or self-testing
+      //  "-g",
+      //  "-fno-omit-frame-pointer",
+      //],
+   // sanitize: {
+    //    address: true,
+    //    recover: ["address"],
+    //},
     include_dirs: [
         "hardware/amlogic/tuner/1.1/frontenddevices",
         "vendor/amlogic/common/frameworks/services/systemcontrol",
