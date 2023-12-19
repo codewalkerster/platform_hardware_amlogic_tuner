@@ -673,7 +673,7 @@ void FrontendDevice::onFirstRef(void) {
 bool FrontendDevice::threadLoop() {
     int state = getThreadState();
     bool stop;
-    uint32_t start_time, fe_timeout;
+    uint32_t start_time;
     uint32_t locked_freq = mDev.tuneFreq;
     struct pollfd pfd;
     struct dvb_frontend_event fe_event;
@@ -688,10 +688,8 @@ bool FrontendDevice::threadLoop() {
             stop = true;
         }
         if (mScanType == FrontendScanType::SCAN_BLIND) {
-            fe_timeout = 30*3000;
             bool inBlindScan = true;
-            for (start_time = getClockMilliSeconds();
-               !stop && ((getClockMilliSeconds() - start_time) < fe_timeout);)
+            while (!stop)
             {
                 struct dvbsx_blindscanevent cur_bsevent;
 
