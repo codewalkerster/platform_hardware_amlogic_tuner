@@ -741,12 +741,10 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
             || tsFilterType == DemuxTsFilterType::AUDIO
             || tsFilterType == DemuxTsFilterType::PES
             || tsFilterType == DemuxTsFilterType::TEMI) {
-            bCheckVts = true;
             AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, postData, this);
         } else if (tsFilterType == DemuxTsFilterType::PCR) {
             AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
         } else if (tsFilterType == DemuxTsFilterType::RECORD) {
-            bCheckVts = false;
             mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
         }
     }
@@ -996,10 +994,8 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
         case DvrType::PLAYBACK:
             ALOGD("%s/%d DvrType::PLAYBACK bufferSize:%d KB", __FUNCTION__, __LINE__,  bufferSize/1024);
             mDvrPlayback = new Dvr(type, bufferSize, cb, this);
-            if (bCheckVts) {
-                ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL demuxId = %d", mDemuxId);
-                AmDmxDevice[mDemuxId]->dmx_dvr_open(INPUT_LOCAL);
-            }
+            ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL demuxId = %d", mDemuxId);
+            AmDmxDevice[mDemuxId]->dmx_dvr_open(INPUT_LOCAL);
             if (!mDvrPlayback->createDvrMQ()) {
                 _hidl_cb(Result::UNKNOWN_ERROR, mDvrPlayback);
                 return Void();

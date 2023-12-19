@@ -260,7 +260,6 @@ class Demux : public IDemux {
     int mPesFid = -1;
     int mPesRecordFid = -1;
     bool bSupportSoftDemuxForSubtitle = false;
-    bool bCheckVts = true;
     //int mfd;
     vector<uint8_t> mScrambledCache;
     vector<uint8_t> mClearCache;
