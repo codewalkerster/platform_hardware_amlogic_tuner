@@ -164,7 +164,7 @@ static void find_mpeg(uint8_t *data, int len, TS_Indexer_t *indexer, TSParser *s
 
   for (i = 0; i < haystack_len - sizeof(needle) + 1;) {
     if (left < 5) {
-      DVR_INFO("MPEG2 picture header across TS Packet\n");
+      //DVR_INFO("MPEG2 picture header across TS Packet\n");
 
       /* MEPG2 picture header across TS packet, should cache the left data */
       memcpy(&stream->PES.data[0], haystack + i, left);
@@ -458,16 +458,16 @@ pes_packet(TS_Indexer_t *ts_indexer, uint8_t *data, int len, TSParser *stream)
   TS_Indexer_t *pi = ts_indexer;
   int left = len;
 
-  DVR_INFO("stream: %p, state: %d\n", stream, stream->PES.state);
+  //DVR_INFO("stream: %p, state: %d\n", stream, stream->PES.state);
   if (stream->PES.state <= TS_INDEXER_STATE_INIT) {
-    DVR_INFO("%s, invalid state\n", __func__);
+    //DVR_INFO("%s, invalid state\n", __func__);
     stream->PES.len = 0;
     return;
   }
 
   /* needs splice two pieces of data together if have cache data */
   if (stream->PES.len > 0) {
-    DVR_INFO("%s have cache data %d bytes\n", __func__, stream->PES.len);
+    //DVR_INFO("%s have cache data %d bytes\n", __func__, stream->PES.len);
     memcpy(&stream->PES.data[stream->PES.len], data, len);
     p = &stream->PES.data[0];
     left = stream->PES.len + len;
@@ -543,7 +543,7 @@ pes_packet(TS_Indexer_t *ts_indexer, uint8_t *data, int len, TSParser *stream)
     return;
   }
 
-  DVR_INFO("stream->format: %d, left: %d\n", stream->format, left);
+  //DVR_INFO("stream->format: %d, left: %d\n", stream->format, left);
   switch (stream->format) {
     case DVR_VIDEO_FORMAT_MPEG2:
       find_mpeg(p, left, pi, &pi->video_parser);
@@ -598,13 +598,13 @@ ts_packet(TS_Indexer_t *ts_indexer, uint8_t *data, size_t rp)
 
     if (pid == pi->video_parser.pid ||
         (pi->video_parser.pid == 0x1fff && pid == pi->audio_parser.pid)) {
-      pi->pusi_cur_idx++;
-      if (pi->pusi_cur_idx > pi->pusi_max_cnt - 1) {
+      if (pi->pusi_cur_idx >= pi->pusi_max_cnt - 1) {
         DVR_ERROR("error! pusi_cur_idx: %d, pusi_max_cnt: %d",
                 pi->pusi_cur_idx,
                 pi->pusi_max_cnt);
         return;
       }
+      pi->pusi_cur_idx++;
 
       if (pi->pusi_cur_idx >= 1) {
         if (rp > 0) {

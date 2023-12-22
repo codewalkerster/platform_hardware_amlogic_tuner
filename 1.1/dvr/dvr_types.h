@@ -73,7 +73,7 @@ typedef enum {
 
 /**Invalid PID value*/
 #define DVR_INVALID_PID 0x1fff
-#define DVR_MAX_CA_CHAN_CNT         (4)
+#define DVR_MAX_CA_CHAN_CNT         (2)
 
 #ifdef __cplusplus
 }

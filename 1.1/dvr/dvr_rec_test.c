@@ -13,7 +13,7 @@
  * \li rec:  the dvr recording file path
  *
  * \code
- *    dvr_rec_test [src=] [dmx=] [vpid=] [vfmt=] [apid=] [rec=]
+ *    dvr_rec_test [src=] [dmx=] [vpid=] [vfmt=] [apid=] [rec=] [cas=]
  * \endcode
  *
  * \endsection
@@ -26,6 +26,7 @@
 
 #include "dvr_record.h"
 #include "libdsm.h"
+#include "spi_dsm_kte_test.h"
 
 #define INF(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
 #define ERR(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
@@ -53,81 +54,47 @@ static dvr_casinfo_t g_casinfo;
 
 // Manage KTE/DSM
 // Return keytoken
+static uint8_t CW[8] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+static uint8_t CRYPTO_KEY[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
 static uint32_t cas_create(void)
 {
-  uint32_t param = 0;
   int ret = -1;
   uint32_t token = -1;
-  uint32_t dsm_handle;
-  struct dsm_keyslot *enc_00_keyslot = &g_casinfo.enc_00_keyslot;
-  struct dsm_keyslot *dec_even_keyslot = &g_casinfo.dec_even_keyslot;
-  struct dsm_keyslot *dec_odd_keyslot = &g_casinfo.dec_odd_keyslot;
 
-  memset(&g_casinfo, 0, sizeof(dvr_casinfo_t));
-  g_casinfo.dsm_handle = -1;
-  g_casinfo.token = -1;
-
-  dsm_handle = DSM_OpenSession(param);
-  ret = DSM_GenerateToken(dsm_handle, &token);
-
-  // Prepare even/odd kte/keyslot for descrambling
-  dec_even_keyslot->id = 0;
-  dec_even_keyslot->algo = DSM_ALGO_CSA2;
-  dec_even_keyslot->parity = DSM_PARITY_EVEN;
-  dec_even_keyslot->is_enc = 0;
-  ret = DSM_AddKeySlot(dsm_handle, dec_even_keyslot);
-
-  dec_odd_keyslot->id = 1;
-  dec_odd_keyslot->algo = DSM_ALGO_CSA2;
-  dec_odd_keyslot->parity = DSM_PARITY_ODD;
-  dec_odd_keyslot->is_enc = 0;
-  ret |= DSM_AddKeySlot(dsm_handle, dec_odd_keyslot);
-  ret |= DSM_SetProperty(dsm_handle,
-                    DSM_PROP_DEC_SLOT_READY,
-                    DSM_PROP_SLOT_IS_READY);
-
-  // Prepare 00 kte/keyslot for dvr re-encryption
-  enc_00_keyslot->id = 2;
-  enc_00_keyslot->algo = DSM_ALGO_AES_CBC_CLR_END;
-  enc_00_keyslot->parity = DSM_PARITY_NONE;
-  enc_00_keyslot->is_enc = 1;
-  ret |= DSM_AddKeySlot(dsm_handle, enc_00_keyslot);
-  ret |= DSM_SetProperty(dsm_handle,
-                    DSM_PROP_ENC_SLOT_READY,
-                    DSM_PROP_SLOT_IS_READY);
-
-  g_casinfo.dsm_handle = dsm_handle;
+  ret = cas_dvr_record_open_ext(&token, CW, 8, CRYPTO_KEY, 16);
   g_casinfo.token = token;
-  INF("%s ret: %d\n", __func__, ret);
 
-  if (!ret) {
-    return token;
-  } else {
-    return -1;
-  }
+  INF("%s ret: %d, token: %#x\n", __func__, ret, token);
+  return token;
 }
 
 static int cas_destroy(void)
 {
   int ret = -1;
-  uint32_t dsm_handle = g_casinfo.dsm_handle;
-  struct dsm_keyslot *enc_00_keyslot = &g_casinfo.enc_00_keyslot;
-  struct dsm_keyslot *dec_even_keyslot = &g_casinfo.dec_even_keyslot;
-  struct dsm_keyslot *dec_odd_keyslot = &g_casinfo.dec_odd_keyslot;
+  uint32_t token = g_casinfo.token;
 
-  if (dsm_handle == -1) {
-    ERR("%s invalid DSM handle\n", __func__);
-    return -1;
-  }
+  if (token == -1)
+    return 0;
 
-  ret = DSM_RemoveKeySlot(dsm_handle, enc_00_keyslot->id);
-  ret |= DSM_RemoveKeySlot(dsm_handle, dec_even_keyslot->id);
-  ret |= DSM_RemoveKeySlot(dsm_handle, dec_odd_keyslot->id);
-  DSM_CloseSession(dsm_handle);
-  dsm_handle = -1;
-
-  INF("%s ret: %d\n", __func__, ret);
+  ret = cas_dvr_record_close(token);
+  INF("%s ret: %d, token: %#x\n", __func__, ret, token);
+  if (ret == 0)
+    g_casinfo.token = -1;
   return ret;
+}
+
+static void handle_signal(int signal)
+{
+  cas_destroy();
+  exit(0);
+}
+
+static void init_signal_handler(void)
+{
+  struct sigaction act;
+  memset(&act, 0, sizeof(struct sigaction));
+  act.sa_handler = handle_signal;
+  sigaction(SIGINT, &act, NULL);
 }
 
 static void usage(int argc, char *argv[])
@@ -156,6 +123,7 @@ int main(int argc, char **argv)
   DVR_RecordFilterParams_t filter_params;
   DVR_RecordReceiveParams_t receive_params;
 
+  init_signal_handler();
   memset(&in_file_path[0], 0, sizeof(in_file_path));
   memset(&out_file_path[0], 0, sizeof(out_file_path));
   for (i = 1; i < argc; i++) {

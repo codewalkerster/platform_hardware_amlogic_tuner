@@ -47,16 +47,23 @@ typedef enum {
   DVR_RECORD_STATE_CLOSED       /**< DVR record state is closed*/
 } DVR_RecordState_t;
 
-/**\brief DVR CA usage flags*/
+/**\brief DVR CA flags*/
 enum {
   DVR_CA_USAGE_DES = 1 << 0,    /**< DVR CA descrambling usage flag*/
-  DVR_CA_USAGE_ENC = 1 << 1     /**< DVR CA encryption usage flag*/
+  DVR_CA_USAGE_ENC = 1 << 1,    /**< DVR CA encryption usage flag*/
+  DVR_CA_ENC_KEY = 1 << 10,     /**< DVR CA encryption key flag*/
+  DVR_CA_ENC_IV = 1 << 11       /**< DVR CA encryption iv flag*/
 };
 
 /**\brief DVR record CA info*/
 typedef struct {
   int dev_id;                           /**< DVR record dmx/dsc dev id*/
-  int chans[DVR_MAX_CA_CHAN_CNT];       /**< DVR record ca channels*/
+  int chans[DVR_MAX_CA_CHAN_CNT];       /**< DVR record ca channels. 0: des, 1: enc*/
+  int even_key_kte;                     /**< DVR record encryption even kte*/
+  int even_iv_kte;                      /**< DVR record encryption even kte*/
+  int odd_key_kte;                      /**< DVR record encryption odd kte*/
+  int odd_iv_kte;                       /**< DVR record encryption odd kte*/
+  int parity;                           /**< DVR record current used parity*/
   int flags;                            /**< DVR record ca usage flags*/
 } DVR_CAInfo_t;
 
@@ -249,8 +256,9 @@ static int secure_resource_prepare(DVR_RecordContext_t *p_ctx)
                         p_ctx->rb1.len);
 
   // Set secure inject demux source with TSE, hardcode to SECSOURCE_DMA7
-  dvb_set_demux_source(p_ctx->dmx_dev_id[2], DVB_DEMUX_SECSOURCE_DMA4); // TSE
-  //dvb_set_demux_source(p_ctx->dmx_dev_id[2], DVB_DEMUX_SECSOURCE_DMA4_1); // without TSE
+  dvb_set_demux_source(
+        p_ctx->dmx_dev_id[2],
+        DVB_DEMUX_SECSOURCE_DMA0 + p_ctx->dmx_dev_id[2]);
 
   // Open dmx_dev_id[2] for inject and recording the re-encrypted ts
   if (p_ctx->fd[2] == -1) {
@@ -262,7 +270,6 @@ static int secure_resource_prepare(DVR_RecordContext_t *p_ctx)
     dvb_dvr_set_ringbuffer(p_ctx->fd[3], 5 * 188 * 1024);
   }
 
-#if 1
   if (p_ctx->recfd == -1) {
     // Create the 0x2000 pid filter to record the whole ts on the demux
     p_ctx->recfd = create_filter(p_ctx->dmx_dev_id[2], 0x2000);
@@ -274,7 +281,6 @@ static int secure_resource_prepare(DVR_RecordContext_t *p_ctx)
     }
     DVR_CHECK(ret != -1);
   }
-#endif
 
   if (p_ctx->dsm_sess == -1) {
     p_ctx->dsm_sess = DSM_OpenSession(0);
@@ -396,51 +402,93 @@ static int ca_prepare(
 
   // Loop all the key slot and get the algo/is_enc/is_iv/parity etc.
   for (i = 0; i < keyslot_list.count; i++) {
-    int j;
     int ca_chan = -1;
     uint32_t parity;
     struct dsm_keyslot *slot = &keyslot_list.keyslots[i];
+    DVR_INFO("slot id: %#x, parity: %d, algo: %d, is_iv: %d, is_enc: %d, ca_flags: %#x",
+        slot->id, slot->parity, slot->algo, slot->is_iv, slot->is_enc, stream->ca.flags);
 
-    if (slot->is_enc && usage != DVR_CA_USAGE_ENC)
+    if (slot->is_enc && usage != DVR_CA_USAGE_ENC) {
       continue;
-    if (!slot->is_enc && usage != DVR_CA_USAGE_DES)
+    }
+    if (!slot->is_enc && usage != DVR_CA_USAGE_DES) {
       continue;
+    }
+
+    if (dsc_type == CA_DSC_TSE_TYPE) {
+      parity = slot->is_iv ? CA_KEY_00_IV_TYPE : CA_KEY_00_TYPE;
+      if (slot->is_iv) {
+        if (slot->parity == DSM_PARITY_EVEN) {
+          stream->ca.even_iv_kte = slot->id;
+        } else {
+          stream->ca.odd_iv_kte = slot->id;
+        }
+      } else {
+        if (slot->parity == DSM_PARITY_EVEN) {
+          stream->ca.even_key_kte = slot->id;
+        } else {
+          stream->ca.odd_key_kte = slot->id;
+        }
+      }
+      ca_chan = stream->ca.chans[1];
+
+      if ((stream->ca.flags & DVR_CA_ENC_IV) && slot->is_iv) {
+        continue;
+      }
+      else if ((stream->ca.flags & DVR_CA_ENC_KEY) && !slot->is_iv) {
+        continue;
+      }
+    } else {
+      if (slot->parity == DSM_PARITY_EVEN) {
+        parity = slot->is_iv ? CA_KEY_EVEN_IV_TYPE : CA_KEY_EVEN_TYPE;
+      } else if (slot->parity == DSM_PARITY_ODD) {
+        parity = slot->is_iv ? CA_KEY_ODD_IV_TYPE : CA_KEY_ODD_TYPE;
+      } else {
+        parity = slot->is_iv ? CA_KEY_00_IV_TYPE : CA_KEY_00_TYPE;
+      }
+
+      ca_chan = stream->ca.chans[0];
+    }
 
     // Allocate ca dsc channel
-    ca_chan = ca_alloc_chan(
-                    dmx_dev_id,
-                    stream->pid,
-                    slot->algo,
-                    dsc_type);
+    if (ca_chan == -1) {
+      ca_chan = ca_alloc_chan(
+                      dmx_dev_id,
+                      stream->pid,
+                      slot->algo,
+                      dsc_type);
+    }
     DVR_CHECK(ca_chan >= 0);
+
+    if (dsc_type == CA_DSC_TSE_TYPE) {
+      int scb = 3; // ODD
+      DVR_CHECK(ca_set_scb(dmx_dev_id, ca_chan, scb, 0) == 0);
+      stream->ca.parity = scb;
+    }
 
     DVR_INFO("%s alloc ca channel(%#x, %d) ok.",
         __func__, stream->pid, ca_chan);
     // Record the ca channel
-    for (j = 0; j < DVR_MAX_CA_CHAN_CNT; j++) {
-      if (stream->ca.chans[j] == -1) {
-        stream->ca.chans[j] = ca_chan;
-        break;
+    if (usage == DVR_CA_USAGE_ENC) {
+      stream->ca.chans[1] = ca_chan;
+      if (slot->is_iv) {
+        stream->ca.flags |= DVR_CA_ENC_IV;
+      } else {
+        stream->ca.flags |= DVR_CA_ENC_KEY;
       }
-    }
-    DVR_CHECK(j < DVR_MAX_CA_CHAN_CNT);
-
-    if (slot->parity == DSM_PARITY_EVEN) {
-      parity = slot->is_iv ? CA_KEY_EVEN_IV_TYPE : CA_KEY_EVEN_TYPE;
-    } else if (slot->parity == DSM_PARITY_ODD) {
-      parity = slot->is_iv ? CA_KEY_ODD_IV_TYPE : CA_KEY_ODD_TYPE;
     } else {
-      parity = slot->is_iv ? CA_KEY_00_IV_TYPE : CA_KEY_00_TYPE;
+      stream->ca.chans[0] = ca_chan;
     }
 
     // Set KTE to ca dsc channel
     DVR_CHECK(ca_set_key(dmx_dev_id, ca_chan, parity, slot->id) ==0);
-    DVR_INFO("%s set ca key(%d, %d, %d, %d)",
+    DVR_INFO("%s set ca key(%d, %d, %d, %d), is_iv: %d",
           __func__,
           dmx_dev_id,
           ca_chan,
           parity,
-          slot->id);
+          slot->id,
+          slot->is_iv);
 
     // This is a flag used to indicate whether the current pid stream's
     // descrambling key and re-encryption key are ready.
@@ -520,6 +568,11 @@ DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_
       p_ctx->streams[i].ca.chans[j] = -1;
     }
     p_ctx->streams[j].ca.flags = 0;
+    p_ctx->streams[j].ca.even_key_kte = -1;
+    p_ctx->streams[j].ca.even_iv_kte = -1;
+    p_ctx->streams[j].ca.odd_key_kte = -1;
+    p_ctx->streams[j].ca.odd_iv_kte = -1;
+    p_ctx->streams[j].ca.parity = -1;
     p_ctx->streams[j].ca.dev_id = -1;
   }
 
@@ -1084,8 +1137,8 @@ static int normal_dvr_with_rb(int dvr_fd,
     len = read(dvr_fd,
             ringbuf->buffer + ringbuf->w_offset,
             ringbuf->len - ringbuf->w_offset);
-    //ringbuf->size = ringbuf->w_offset - ringbuf->r_offset + len;;
-    ringbuf->size += len;
+    ringbuf->size = ringbuf->w_offset - ringbuf->r_offset + len;;
+    //ringbuf->size += len;
   } else {
     len = read(dvr_fd,
             ringbuf->buffer + ringbuf->w_offset,
@@ -1134,6 +1187,9 @@ static ssize_t secure_inject_record2normal(
   size_t inj_buf = 0;
   struct dmx_sec_ts_data sec_ts_data;
 
+#if 0
+  inj_buf = (size_t)sec_buf;
+#else
   if ( SECTS_Map2InjBuff_Func != NULL) {
     inj_buf = SECTS_Map2InjBuff_Func(sects_sess, (size_t)sec_buf, sec_buf_len);
   }
@@ -1142,6 +1198,7 @@ static ssize_t secure_inject_record2normal(
     DVR_ERROR("%s map2inject failed\n", __func__);
     return -1;
   }
+#endif
 
   sec_ts_data.buf_start = inj_buf;
   sec_ts_data.buf_end = (size_t) (sec_ts_data.buf_start + sec_buf_len);

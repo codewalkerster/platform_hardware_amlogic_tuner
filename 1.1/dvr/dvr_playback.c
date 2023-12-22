@@ -8,6 +8,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -15,6 +16,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <errno.h>
+#include <poll.h>
 
 #ifndef DEBUG_ON_PC
 #include <dmx.h>
@@ -25,6 +27,7 @@
 #include "dvr_types.h"
 #include "dvr_playback.h"
 
+//#define DVR_DUMP_INJECT
 #define DVR_MAX_PLAYBACK_SESSION_CNT    (4)
 #define DVR_MAX_PLAYBACK_ENCRYPT_CNT     (8)
 
@@ -40,7 +43,7 @@ typedef enum {
 typedef struct {
   uint16_t pid;                     /**< DVR Playback stream pid*/
   uint32_t key_token;               /**< DVR Playback dsm key token*/
-  int ca_chans[DVR_MAX_CA_CHAN_CNT];/**< DVR Playback ca channels*/
+  int ca_chan;                      /**< DVR Playback ca channels*/
 } DVR_PlaybackEncryptStream_t;
 
 /**\brief DVR plaback context*/
@@ -52,6 +55,8 @@ typedef struct {
   size_t dsm_sess;                                                  /**< DVR Playback decryption session*/
   DVR_PlaybackEncryptStream_t streams[DVR_MAX_PLAYBACK_ENCRYPT_CNT]; /**< DVR Playback encryped pid count*/
   int dump_fd;                                                      /**< DVR Playback dump fd*/
+  int fd2;                                                          /**< DVR Playback record fd*/
+  int recfd;                                                        /**< DVR Playback record filter fd*/
 } DVR_PlaybackContext_t;
 
 static DVR_PlaybackContext_t playback_ctx[DVR_MAX_PLAYBACK_SESSION_CNT] = {
@@ -102,8 +107,7 @@ static int ca_prepare(
 
   // Loop all the key slots and get the algo/is_iv/parity etc.
   for (int i = 0; i < keyslot_list.count; i++) {
-    int j;
-    int ca_chan = -1;
+    int ca_chan = stream->ca_chan;
     int dsc_type = CA_DSC_COMMON_TYPE;
     uint32_t parity;
     struct dsm_keyslot *slot = &keyslot_list.keyslots[i];
@@ -111,22 +115,18 @@ static int ca_prepare(
       continue;
 
     // Allocate ca dsc channel
-    ca_chan = ca_alloc_chan(
-                    p_ctx->dmx_dev_id,
-                    stream->pid,
-                    slot->algo,
-                    dsc_type);
-    DVR_CHECK(ca_chan >= 0);
+    if (ca_chan == -1) {
+      ca_chan = ca_alloc_chan(
+                      p_ctx->dmx_dev_id,
+                      stream->pid,
+                      slot->algo,
+                      dsc_type);
+      DVR_CHECK(ca_chan >= 0);
+      stream->ca_chan = ca_chan;
+    }
 
     DVR_INFO("%s alloc ca channel(%d, %d) ok.",
         __func__, stream->pid, ca_chan);
-    for (j = 0; j < DVR_MAX_CA_CHAN_CNT; j++) {
-      if (stream->ca_chans[j] == -1) {
-        stream->ca_chans[j] = ca_chan;
-        break;
-      }
-    }
-    DVR_CHECK(j < DVR_MAX_CA_CHAN_CNT);
 
     if (slot->parity == DSM_PARITY_EVEN) {
       parity = slot->is_iv ? CA_KEY_EVEN_IV_TYPE : CA_KEY_EVEN_TYPE;
@@ -153,18 +153,45 @@ static int ca_release(
     DVR_PlaybackContext_t *p_ctx,
     DVR_PlaybackEncryptStream_t *stream)
 {
-  int i;
-
   // Free the ca channel
-  for (i = 0; i < DVR_MAX_CA_CHAN_CNT; i++) {
-    if (stream->ca_chans[i] >= 0) {
-        ca_free_chan(p_ctx->dmx_dev_id, stream->ca_chans[i]);
-        stream->ca_chans[i] = -1;
-    }
-  }
+  ca_free_chan(p_ctx->dmx_dev_id, stream->ca_chan);
+  stream->ca_chan = -1;
 
   return 0;
 }
+
+#ifdef DVR_DUMP_INJECT
+// Return the filter fd
+static int create_filter(int dmx_dev_id, int pid)
+{
+  int ret;
+  int fd = -1;
+  char dev_name[32];
+  struct dmx_pes_filter_params filter_params;
+
+  // open pid filter
+  snprintf(dev_name, sizeof(dev_name), "/dev/dvb0.demux%d", dmx_dev_id);
+  fd = open(dev_name, O_RDWR);
+  if (fd == -1) {
+    DVR_ERROR("%s cannot open \"%s\" (%s)", __func__, dev_name, strerror(errno));
+    return fd;
+  }
+
+  // setting pes filter
+  memset(&filter_params, 0, sizeof(filter_params));
+  filter_params.pid = pid;
+  filter_params.input = DMX_IN_FRONTEND;
+  filter_params.output = DMX_OUT_TS_TAP;
+  filter_params.pes_type = DMX_PES_OTHER;
+  ret = ioctl(fd, DMX_SET_PES_FILTER, &filter_params);
+  if (ret == -1) {
+    DVR_ERROR("%s set pes filter failed: %s", __func__, strerror(errno));
+  }
+
+  DVR_INFO("create record filter success, pid: %#x, dmx: %d", pid, dmx_dev_id);
+  return fd;
+}
+#endif
 
 // Open a playback session with a demux device id
 // open the demux device and dvr device with the same id
@@ -195,26 +222,45 @@ DVR_Result_t dvr_playback_open(
   for (i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
     p_ctx->streams[i].pid = DVR_INVALID_PID;
     p_ctx->streams[i].key_token = -1;
-    for (int j = 0; j < DVR_MAX_CA_CHAN_CNT; j++) {
-      p_ctx->streams[i].ca_chans[j] = -1;
-    }
+    p_ctx->streams[i].ca_chan = -1;
   }
   p_ctx->dsm_sess = -1;
-#ifndef DEBUG_ON_PC
-  int fd;
-  char node[32] = {0};
+  p_ctx->fd = -1;
+  p_ctx->fd2 = -1;
+  p_ctx->recfd = -1;
 
   dvb_set_demux_source(
         params->dmx_dev_id,
         DVB_DEMUX_SOURCE_DMA0 + params->dmx_dev_id
   );
-  memset(node, 0, sizeof(node));
-  snprintf(node, sizeof(node), "/dev/dvb0.dvr%d", params->dmx_dev_id);
-  fd = open(node, O_WRONLY);
-  DVR_CHECK_WITH_UNLOCK(fd >= 0, &p_ctx->lock);
-  p_ctx->fd = fd;
-#endif
+
+  // Open dmx_dev_id[2] for inject and recording the re-encrypted ts
+  if (p_ctx->fd == -1) {
+    // DVR write fd
+    p_ctx->fd = dvb_dvr_device_open(params->dmx_dev_id, 0);
+
+    #ifdef DVR_DUMP_INJECT
+    // DVR read fd
+    p_ctx->fd2 = dvb_dvr_device_open(params->dmx_dev_id, 1);
+    DVR_CHECK(p_ctx->fd2 >= 0);
+    dvb_dvr_set_ringbuffer(p_ctx->fd2, 5 * 188 * 1024);
+    #endif
+  }
+
+  #ifdef DVR_DUMP_INJECT
+  if (p_ctx->recfd == -1) {
+    // Create the 0x2000 pid filter to record the whole ts on the demux
+    p_ctx->recfd = create_filter(params->dmx_dev_id, 0x2000);
+    DVR_CHECK(p_ctx->recfd != -1);
+    // Start a filter
+    int ret = ioctl(p_ctx->recfd, DMX_START, 0);
+    if (ret == -1) {
+      DVR_ERROR("DMX_START failed, %s", strerror(errno));
+    }
+    DVR_CHECK(ret != -1);
+  }
   p_ctx->dump_fd = params->reserved[0];
+  #endif
   p_ctx->dmx_dev_id = params->dmx_dev_id;
 
   *p_handle = p_ctx;
@@ -238,7 +284,8 @@ DVR_Result_t dvr_playback_close(DVR_PlaybackHandle_t handle)
 #ifndef DEBUG_ON_PC
   // Close inject device
   close(p_ctx->fd);
-  p_ctx->fd = -1;
+  close(p_ctx->fd2);
+  close(p_ctx->recfd);
 #endif
 
   if (p_ctx->dsm_sess != -1) {
@@ -350,6 +397,50 @@ exit:
   return DVR_SUCCESS;
 }
 
+#ifdef DVR_DUMP_INJECT
+static int dvr_poll(int dvr_fd, pthread_mutex_t lock)
+{
+  int ret;
+  struct pollfd poll_fd;
+
+  memset(&poll_fd, 0, sizeof(poll_fd));
+  poll_fd.fd = dvr_fd;
+  poll_fd.events = POLLIN | POLLERR;
+
+  pthread_mutex_unlock(&lock);
+  ret = poll(&poll_fd, 1, 100);
+  if (ret < 0) {
+    DVR_ERROR("%s failed: %s. fd: %d", __func__, strerror(errno), dvr_fd);
+    pthread_mutex_lock(&lock);
+    return -1;
+  }
+
+  if (!(poll_fd.revents & POLLIN)) {
+    pthread_mutex_lock(&lock);
+    return -1;
+  }
+
+  pthread_mutex_lock(&lock);
+  return 0;
+}
+
+// Record pid stream to normal buffer
+// Return recorded data length
+static ssize_t normal_dvr(int dvr_fd, uint8_t *buf, size_t len, pthread_mutex_t lock)
+{
+  ssize_t rec_len = 0;
+
+  if (dvr_poll(dvr_fd, lock) || dvr_fd < 0) {
+    DVR_INFO("%s no poll in, dvr_fd: %d\n", __func__, dvr_fd);
+    return rec_len;
+  }
+
+  rec_len = read(dvr_fd, buf, len);
+
+  return rec_len;
+}
+#endif
+
 size_t dvr_playback_write(
     DVR_PlaybackHandle_t handle,
     uint8_t *data,
@@ -383,11 +474,29 @@ size_t dvr_playback_write(
     DVR_INFO("%s %#x bytes written", __func__, ret);
   }
 #endif
+#ifdef DVR_DUMP_INJECT
   if (p_ctx->dump_fd >= 0) {
-    if (write(p_ctx->dump_fd, data, len) != len) {
+    uint8_t *buf = (uint8_t *)malloc(len);
+    ssize_t act_rec_len = 0;
+    int time = 5;
+    do {
+      act_rec_len += normal_dvr(p_ctx->fd2,
+                            buf + act_rec_len,
+                            len - act_rec_len,
+                            p_ctx->lock);
+      if (act_rec_len >= len) {
+        break;
+      }
+      usleep(2000*1000);
+    } while (time-- > 0);
+    if (write(p_ctx->dump_fd, buf, act_rec_len) != act_rec_len) {
       DVR_ERROR("%s dump write failed\n", __func__);
     }
+    if (act_rec_len != len) {
+      DVR_ERROR("lost %#x bytes", len - act_rec_len);
+    }
   }
+#endif
 
   pthread_mutex_unlock(&p_ctx->lock);
   return ret;

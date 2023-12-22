@@ -26,6 +26,7 @@
 
 #include "dvr_playback.h"
 #include "libdsm.h"
+#include "spi_dsm_kte_test.h"
 
 #define INF(fmt, ...) fprintf(stdout, fmt, ##__VA_ARGS__)
 #define ERR(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
@@ -42,59 +43,46 @@ static dvr_casinfo_t g_casinfo;
 
 // Manage KTE/DSM
 // Return keytoken
+static uint8_t CRYPTO_KEY[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
 static uint32_t cas_create(void)
 {
-  uint32_t param = 0;
   int ret = -1;
   uint32_t token = -1;
-  uint32_t dsm_handle;
-  struct dsm_keyslot *dec_00_keyslot = &g_casinfo.dec_00_keyslot;
 
-  memset(&g_casinfo, 0, sizeof(dvr_casinfo_t));
-  g_casinfo.dsm_handle = -1;
-  g_casinfo.token = -1;
-
-  dsm_handle = DSM_OpenSession(param);
-  ret = DSM_GenerateToken(dsm_handle, &token);
-
-  // Prepare 00 kte/keyslot for cas dvr decryption
-  dec_00_keyslot->id = 1;
-  dec_00_keyslot->algo = DSM_ALGO_AES_CBC_CLR_END;
-  dec_00_keyslot->parity = DSM_PARITY_NONE;
-  dec_00_keyslot->is_enc = 0;
-  ret |= DSM_AddKeySlot(dsm_handle, dec_00_keyslot);
-  ret |= DSM_SetProperty(dsm_handle,
-                    DSM_PROP_DEC_SLOT_READY,
-                    DSM_PROP_SLOT_IS_READY);
-
-  g_casinfo.dsm_handle = dsm_handle;
+  ret = cas_dvr_playback_open_ext(&token, CRYPTO_KEY, 16);
   g_casinfo.token = token;
-  INF("%s ret: %d\n", __func__, ret);
 
-  if (!ret) {
-    return token;
-  } else {
-    return -1;
-  }
+  INF("%s ret: %d, token: %#x\n", __func__, ret, token);
+  return token;
 }
 
 static int cas_destroy(void)
 {
   int ret = -1;
-  uint32_t dsm_handle = g_casinfo.dsm_handle;
-  struct dsm_keyslot *dec_00_keyslot = &g_casinfo.dec_00_keyslot;
+  uint32_t token = g_casinfo.token;
 
-  if (dsm_handle == -1) {
-    ERR("%s invalid DSM handle\n", __func__);
-    return -1;
-  }
+  if (token == -1)
+    return 0;
 
-  ret = DSM_RemoveKeySlot(dsm_handle, dec_00_keyslot->id);
-  DSM_CloseSession(dsm_handle);
-  dsm_handle = -1;
-
-  INF("%s ret: %d\n", __func__, ret);
+  ret = cas_dvr_playback_close(token);
+  INF("%s ret: %d, token: %#x\n", __func__, ret, token);
+  if (ret == 0)
+    g_casinfo.token = -1;
   return ret;
+}
+
+static void handle_signal(int signal)
+{
+  cas_destroy();
+  exit(0);
+}
+
+static void init_signal_handler(void)
+{
+  struct sigaction act;
+  memset(&act, 0, sizeof(struct sigaction));
+  act.sa_handler = handle_signal;
+  sigaction(SIGINT, &act, NULL);
 }
 
 static void usage(int argc, char *argv[])
@@ -117,6 +105,7 @@ int main(int argc, char **argv)
   DVR_PlaybackHandle_t play_handle;
   DVR_PlaybackOpenParams_t open_params;
 
+  init_signal_handler();
   memset(&play_file_path[0], 0, sizeof(play_file_path));
   memset(&dump_file_path[0], 0, sizeof(dump_file_path));
   for (i = 1; i < argc; i++) {

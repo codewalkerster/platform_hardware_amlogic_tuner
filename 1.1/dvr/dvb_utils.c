@@ -146,9 +146,14 @@ int dvb_dvr_device_open(int dvr_dev_id, int rw)
   fd = open(dev_name, flags);
   if (fd == -1) {
     DVR_ERROR("%s cannot open \"%s\" (%s)", __func__, dev_name, strerror(errno));
+    return fd;
   }
 
   DVR_INFO("%s open %s succeed, fd: %d, rw: %d", __func__, dev_name, fd, rw);
+
+  if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0) < 0) {
+    DVR_ERROR("%s set nonblock flag failed \"%s\"", __func__ ,strerror(errno));
+  }
 
   return fd;
 }
