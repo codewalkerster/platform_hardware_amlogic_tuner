@@ -29,8 +29,8 @@
 #include <aidlcommonsupport/NativeHandle.h>
 #include <inttypes.h>
 #include <utils/Log.h>
-
 #include "Filter.h"
+#include "ParseTEMIData.h"
 
 namespace aidl {
 namespace android {
@@ -666,6 +666,25 @@ Filter::~Filter() {
                     }
                     break;
                 }
+                case DemuxTsFilterType::TEMI: {
+                    ALOGD("%s subType:TEMI mTpid:%d", __FUNCTION__, mTpid);
+                    struct dmx_pes_filter_params temip;
+                    memset(&temip, 0, sizeof(temip));
+                    temip.pid = mTpid;
+                    temip.output = DMX_OUT_TAP;
+                    temip.pes_type = DMX_PES_OTHER;
+                    temip.input = DMX_IN_FRONTEND;
+                    temip.flags |= DMX_TEMI_FLAGS;
+                    if (mDemux->getAmDmxDevice()->AM_DMX_SetBufferSize(mFilterId, mBufferSize) != 0) {
+                        return ::ndk::ScopedAStatus::fromServiceSpecificError(
+                                    static_cast<int32_t>(Result::UNAVAILABLE));
+                    }
+                    if (mDemux->getAmDmxDevice()->AM_DMX_SetPesFilter(mFilterId, &temip) != 0) {
+                        return ::ndk::ScopedAStatus::fromServiceSpecificError(
+                                    static_cast<int32_t>(Result::UNAVAILABLE));
+                    }
+                    break;
+                }
                 default:
                     break;
             }
@@ -688,6 +707,12 @@ Filter::~Filter() {
 
 ::ndk::ScopedAStatus Filter::start() {
     ALOGD("%s/%d mFilterId:(0x%llx:%lld)", __FUNCTION__, __LINE__, mExtendId, mFilterId);
+
+    if (mDemux->checkSoftDemuxForTemi() && mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::TEMI) {
+        bFilterStart = true;
+    }
+
     if (mDemux->getAmDmxDevice()
         ->AM_DMX_StartFilter(mFilterId) != 0) {
         bool isPassthrough =
@@ -707,6 +732,11 @@ Filter::~Filter() {
 
 ::ndk::ScopedAStatus Filter::stop() {
     ALOGD("%s/%d mFilterId:(0x%llx:%lld)", __FUNCTION__, __LINE__, mExtendId, mFilterId);
+    if (mDemux->checkSoftDemuxForTemi() && mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::TEMI) {
+        bFilterStart = false;
+    }
+
     mCallbackScheduler.flushEvents();
     mDemux->getAmDmxDevice()->AM_DMX_StopFilter(mFilterId);
 
@@ -772,6 +802,10 @@ void Filter::clear() {
     }
 
     //mCallbackScheduler.flushEvents();
+}
+
+bool Filter::getFilterStatus() {
+    return bFilterStart;
 }
 
 ::ndk::ScopedAStatus Filter::configureIpCid(int32_t in_ipCid) {
@@ -1682,6 +1716,64 @@ static FILE *filedump_IFrame = NULL;
 
 ::ndk::ScopedAStatus Filter::startTemiFilterHandler() {
     // TODO handle starting TEMI filter
+    if (mDemux->checkSoftDemuxForTemi()) {
+        int size = mFilterOutput.size();
+        vector<uint8_t> filterOutput;
+        filterOutput.resize(size);
+        for (int i = 0; i < size; i++) {
+            filterOutput[i] = mFilterOutput[i];
+        }
+        for (int i = 0; i < filterOutput.size(); i += 188) {
+            if (filterOutput[i] != 0x47) {
+                ALOGE("%s/%d the TS packet not start with 0x47", __FUNCTION__, __LINE__);
+                continue;
+            }
+            PES_PACKET_DATA pes_packet             = GetPESHeaderFromTS(filterOutput.data() + i, 188);
+            PTS_VALUE ptsValue                     = GetPTSValueFromPESPacket(filterOutput.data() + i, pes_packet);
+            ADAPTATION_FIELD_DATA adaptation_filed = GetAdaptationFieldFromTS(filterOutput.data() + i, 188);
+            AF_DESC_DATA af_descriptor             = GetAFDescriptorFromAdaptationField(filterOutput.data() + i, adaptation_filed);
+            ALOGD("%s/%d af descr exist:%d, pts exist:%d", __FUNCTION__, __LINE__, af_descriptor.af_descr_exist, ptsValue.PTSExist);
+            if (!af_descriptor.af_descr_exist) {
+                continue;
+            }
+            uint64_t pts = ptsValue.PTS_value;
+            uint8_t descrTag = af_descriptor.af_descr_tag;
+            int length = af_descriptor.af_descr_length;
+            int offset = af_descriptor.flag;
+            ALOGD("%s/%d pts = %llu, length = %d, offset = %d", __FUNCTION__, __LINE__, pts, length, offset);
+
+            DemuxFilterTemiEvent temi;
+            temi.pts = pts;
+            temi.descrTag = descrTag;
+            memcpy(temi.descrData.data(), filterOutput.data() + i + offset, length * sizeof(uint8_t));
+            {
+                std::lock_guard<std::mutex> lock(mFilterEventsLock);
+                mFilterEvents.push_back(DemuxFilterEvent::make<DemuxFilterEvent::Tag::temi>(std::move(temi)));
+            }
+
+            fillDataToDecoder();
+        }
+        mFilterOutput.clear();
+    } else {
+        if (!writeDataToFilterMQ(mFilterOutput)) {
+            return ::ndk::ScopedAStatus::fromServiceSpecificError(
+                        static_cast<int32_t>(Result::UNKNOWN_ERROR));
+        }
+        dmx_temi_data *temiData = (dmx_temi_data *)(mFilterOutput.data());
+        uint64_t pts = temiData->pts;
+        uint8_t descrTag = temiData->pts_dts_flag;
+        DemuxFilterTemiEvent temi;
+        temi.pts = pts;
+        temi.descrTag = descrTag;
+        memcpy(temi.descrData.data(), temiData->temi, 188 * sizeof(uint8_t));
+
+        {
+            std::lock_guard<std::mutex> lock(mFilterEventsLock);
+            mFilterEvents.push_back(DemuxFilterEvent::make<DemuxFilterEvent::Tag::temi>(std::move(temi)));
+        }
+        fillDataToDecoder();
+        mFilterOutput.clear();
+   }
     return ::ndk::ScopedAStatus::ok();
 }
 

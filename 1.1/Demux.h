@@ -143,6 +143,10 @@ class Demux : public IDemux {
     int getTsIndexType();
     void setIFrame(int iFrame);
     int getIFrame();
+    int recordTsPacketForTemiData(uint64_t filterId);
+    void closeTemiRecordFilter();
+    int getTemiFid();
+    bool checkSoftDemuxForTemi();
 
     uint8_t *base_ptr = NULL;
     uint8_t *last_pusi_ptr = NULL;
@@ -171,6 +175,7 @@ class Demux : public IDemux {
 
     static void* __threadLoopFrontend(void* user);
     void frontendInputThreadLoop();
+    void TemiRecordThreadLoop();
 
     /**
      * To create a FilterMQ with the next available Filter ID.
@@ -275,6 +280,12 @@ class Demux : public IDemux {
     int  mTsIndexType = -1;
     int  mIFrame     = -1;
     uint64_t mCurOffset = 0;
+
+    std::thread mTemiRecordThread;
+    std::atomic<bool> mTemiRecordThreadRunning;
+    int mTemiFid = -1;
+    int mTemiRecordFid = -1;
+    bool bSupportSoftDemuxForTemi = false;
 };
 
 }  // namespace implementation

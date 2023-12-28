@@ -20,6 +20,8 @@
 #include <fmq/MessageQueue.h>
 #include <math.h>
 #include <set>
+#include <thread>
+#include <atomic>
 #include "Demux.h"
 #include "Frontend.h"
 #include "Tuner.h"

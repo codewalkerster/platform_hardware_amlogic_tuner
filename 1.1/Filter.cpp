@@ -23,6 +23,7 @@
 #include <cutils/properties.h>
 #include "Filter.h"
 #include "Dmabufwrapper.h"
+#include "ParseTEMIData.h"
 
 namespace android {
 namespace hardware {
@@ -542,6 +543,11 @@ Return<Result> Filter::start() {
         return Result::SUCCESS;
     }
 
+    if (mDemux->checkSoftDemuxForTemi() && mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.tsFilterType() == DemuxTsFilterType::TEMI) {
+        bFilterStart = true;
+    }
+
     if (mEnableDmaBuf && mType.mainType == DemuxFilterMainType::TS &&
         mType.subType.tsFilterType() == DemuxTsFilterType::VIDEO) {
         mDemux->getAmDmxDevice()->AM_DMX_GetFilterFd(mFilterId, &mFilterFd);
@@ -610,6 +616,11 @@ Return<Result> Filter::stop() {
         mType.subType.tsFilterType() == DemuxTsFilterType::VIDEO) {
         dmabuf_wrapper_setfilterinfo(mFilterToken, mFilterFd, 1);
         mFilterToken = 0;
+    }
+
+    if (mDemux->checkSoftDemuxForTemi() && mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.tsFilterType() == DemuxTsFilterType::TEMI) {
+        bFilterStart = false;
     }
     mDemux->getAmDmxDevice()->AM_DMX_StopFilter(mFilterId);
     mFilterThreadRunning = false;
@@ -685,6 +696,10 @@ void Filter::clear() {
     }
 
     mCallback = nullptr;
+}
+
+bool Filter::getFilterStatus() {
+    return bFilterStart;
 }
 
 Return<Result> Filter::configureIpCid(uint32_t ipCid) {
@@ -1752,20 +1767,50 @@ Result Filter::startPcrFilterHandler() {
 Result Filter::startTemiFilterHandler() {
     // TODO handle starting TEMI filter
     std::lock_guard<std::mutex> lock(mFilterEventLock);
-    if (!writeDataToFilterMQ(mFilterOutput)) {
-        return Result::UNKNOWN_ERROR;
+    if (mDemux->checkSoftDemuxForTemi()) {
+        for (int i = 0; i < mFilterOutput.size(); i += 188) {
+            if (mFilterOutput[i] != 0x47) {
+                ALOGE("%s/%d the TS packet not start with 0x47", __FUNCTION__, __LINE__);
+                continue;
+            }
+            PES_PACKET_DATA pes_packet             = GetPESHeaderFromTS(mFilterOutput.data() + i, 188);
+            PTS_VALUE ptsValue                     = GetPTSValueFromPESPacket(mFilterOutput.data() + i, pes_packet);
+            ADAPTATION_FIELD_DATA adaptation_filed = GetAdaptationFieldFromTS(mFilterOutput.data() + i, 188);
+            AF_DESC_DATA af_descriptor             = GetAFDescriptorFromAdaptationField(mFilterOutput.data() + i, adaptation_filed);
+            ALOGD("%s/%d af descr exist:%d, pts exist:%d", __FUNCTION__, __LINE__, af_descriptor.af_descr_exist, ptsValue.PTSExist);
+            if (!af_descriptor.af_descr_exist) {
+                continue;
+            }
+            uint64_t pts = ptsValue.PTS_value;
+            uint8_t descrTag = af_descriptor.af_descr_tag;
+            vector<uint8_t> descrData;
+            int length = af_descriptor.af_descr_length;
+            int offset = af_descriptor.flag;
+            ALOGD("%s/%d pts = %llu, length = %d, offset = %d", __FUNCTION__, __LINE__, pts, length, offset);
+            descrData.resize(length);
+            memcpy(descrData.data(), mFilterOutput.data() + i + offset, length * sizeof(uint8_t));
+            int size = mFilterEvent.events.size();
+            mFilterEvent.events.resize(size + 1);
+            mFilterEvent.events[size].temi({.pts = pts, .descrTag = descrTag, .descrData = descrData});
+            fillDataToDecoder();
+        }
+        mFilterOutput.clear();
+    } else {
+        if (!writeDataToFilterMQ(mFilterOutput)) {
+            return Result::UNKNOWN_ERROR;
+        }
+        dmx_temi_data *temiData = (dmx_temi_data *)(mFilterOutput.data());
+        uint64_t pts = temiData->pts;
+        vector<uint8_t> descrData;
+        descrData.resize(188);
+        memcpy(descrData.data(), temiData->temi, 188 * sizeof(uint8_t));
+        uint8_t descrTag = temiData->pts_dts_flag;
+        int size = mFilterEvent.events.size();
+        mFilterEvent.events.resize(size + 1);
+        mFilterEvent.events[size].temi({.pts = pts, .descrTag = descrTag, .descrData = descrData});
+        fillDataToDecoder();
+        mFilterOutput.clear();
     }
-    dmx_temi_data *temiData = (dmx_temi_data *)(mFilterOutput.data());
-    uint64_t pts = temiData->pts;
-    vector<uint8_t> descrData;
-    descrData.resize(188);
-    memcpy(descrData.data(), temiData->temi, 188 * sizeof(uint8_t));
-    uint8_t descrTag = temiData->pts_dts_flag;
-    int size = mFilterEvent.events.size();
-    mFilterEvent.events.resize(size + 1);
-    mFilterEvent.events[size].temi({.pts = pts, .descrTag = descrTag, .descrData = descrData});
-    fillDataToDecoder();
-    mFilterOutput.clear();
     return Result::SUCCESS;
 }
 

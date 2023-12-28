@@ -115,6 +115,7 @@ class Filter : public V1_1::IFilter {
     int getRecordVideoPid();
     int getRecordAudioPid();
     void updateCurrentOffset(uint64_t offset);
+    bool getFilterStatus();
 
   private:
     // Tuner service
@@ -293,6 +294,8 @@ class Filter : public V1_1::IFilter {
     uint64_t mLastOffset = -1;
     int mLastTsIndType = -1;
     int mLastScIndType = -1;
+
+    bool bFilterStart = false;
 };
 
 }  // namespace implementation

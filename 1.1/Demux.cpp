@@ -18,6 +18,7 @@
 
 #include <utils/Log.h>
 #include <cutils/properties.h>
+#include <sys/prctl.h>
 #include "Demux.h"
 #include "FileSystemIo.h"
 
@@ -48,6 +49,7 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define AUDIO_BUFFER_SIZE  "/sys/module/amlogic_dvb_demux/parameters/audio_buf_size"
 #define TUNERHAL_DUMP_TS_DATA "vendor.tf.dump.ts"
 #define TSO_SOURCE    "/sys/class/stb/tso_source"
+#define SUPPORT_SOFTWARE_DEMUX_TEMI "vendor.tunerhal.softwaredemux.temi"
 
 enum {
     INDEX_PUSI      = 0x01,
@@ -89,8 +91,9 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     mKeepFetchingDataFromFrontend = false;
     mFrontendInputThread = 0;
     bSupportSoftDemuxForSubtitle =  property_get_bool(SUPPORT_SOFTWARE_DEMUX_SUBTITLE, true);
+    bSupportSoftDemuxForTemi = property_get_bool(SUPPORT_SOFTWARE_DEMUX_TEMI, true);
     AmDmxDevice[mDemuxId] = new AM_DMX_Device(mDemuxId);
-    ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d", mDemuxId, bSupportSoftDemuxForSubtitle);
+    ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d, bSupportSoftDemuxForTemi = %d", mDemuxId, bSupportSoftDemuxForSubtitle, bSupportSoftDemuxForTemi);
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
     mAmDvrDevice[mDemuxId] = new AmDvr(mDemuxId);
     mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput(), true);
@@ -276,6 +279,7 @@ void Demux::postDvrData(void* demux) {
     }
 
     ALOGD("%s/%d[demuxid = %d] read data from dvr total size = %d, count = %llu", __FUNCTION__, __LINE__, dmxDev->getDemuxId(), cnt, dmxDev->count++);    //dvrData.resize(cnt);
+    int temiFid = dmxDev->getTemiFid();
     int pesFid = dmxDev->getPesFid();
     if (pesFid != -1) {
         int pid = dmxDev->getFilterTpid(pesFid);
@@ -283,6 +287,13 @@ void Demux::postDvrData(void* demux) {
         if (pid != -1 && dmxDev->getAmPesFilter() != NULL) {
             dmxDev->getAmPesFilter()->extractPesDataFromTsPacket(pid, mData, cnt);
         }
+    } else if (temiFid != -1) {
+        ALOGD("%s/%d, temiFid = %d", __FUNCTION__, __LINE__, temiFid);
+        vector<uint8_t> tmpData;
+        tmpData.resize(cnt);
+        memcpy(tmpData.data(), mData, cnt *  sizeof(uint8_t));
+        dmxDev->updateFilterOutput(temiFid, tmpData);
+        dmxDev->startFilterHandler(temiFid);
     } else {
         //uint16_t pid = ((dvrData[1] & 0x1f) << 8) | ((dvrData[2] & 0xff));
         //ALOGD("%s/%d dvr pid:0x%x", __FUNCTION__, __LINE__, pid);
@@ -762,6 +773,11 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::TEMI) {
         mTemiFilterIds.insert(dmxFilterIdx);
         ALOGD("Insert Temi filter");
+        if (bSupportSoftDemuxForTemi) {
+            mTemiRecordThreadRunning = true;
+            mTemiRecordThread = std::thread(&Demux::TemiRecordThreadLoop, this);
+            ALOGD("create Temi Record Thread");
+        }
     }
     bool result = true;
 
@@ -1077,6 +1093,11 @@ Result Demux::removeFilter(uint64_t filterId) {
         ALOGD("remove PES filter mPesFid = %llu", filterId);
         mPesFilterIds.erase(filterId);
     }
+
+    if (bSupportSoftDemuxForTemi && mTemiFid == filterId) {
+        closeTemiRecordFilter();
+    }
+    mTemiFilterIds.erase(filterId);
 
     /*
     if (mAmTsIndexer != NULL) {
@@ -1712,6 +1733,77 @@ void Demux::setIFrame(int iFrame) {
 int Demux::getIFrame() {
     return mIFrame;
 }
+
+void Demux::TemiRecordThreadLoop() {
+    prctl(PR_SET_NAME, "TemiRecordThreadLoop");
+    while (mTemiRecordThreadRunning) {
+        int temiFid = *mTemiFilterIds.begin();
+        if (mFilters[temiFid]->getFilterStatus()) {
+            recordTsPacketForTemiData(temiFid);
+            break;
+        }
+        usleep(10 * 1000);
+    }
+}
+
+int Demux::recordTsPacketForTemiData(uint64_t filterId) {
+    mFilters[filterId]->stop();
+    mTemiFid = filterId;
+    mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
+    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTunerService->getTsInput(), false);
+
+    int pid = getFilterTpid(filterId);
+    ALOGD("%s/%d TEMI pid = %d", __FUNCTION__, __LINE__, pid);
+
+    struct dmx_pes_filter_params pparam;
+    memset(&pparam, 0, sizeof(pparam));
+    pparam.pid = pid;
+    pparam.input = DMX_IN_FRONTEND;
+    pparam.output = DMX_OUT_TS_TAP;
+    pparam.pes_type = DMX_PES_OTHER;
+    AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&mTemiRecordFid);
+
+    if (AmDmxDevice[mDemuxId]->AM_DMX_SetBufferSize(mTemiRecordFid, 10 * 1024 * 1024) != 0) {
+        ALOGE("record AM_DMX_SetBufferSize");
+        return -1;
+    }
+    if (AmDmxDevice[mDemuxId]->AM_DMX_SetPesFilter(mTemiRecordFid, &pparam) != 0) {
+        ALOGE("record AM_DMX_SetPesFilter");
+        return -1;
+    }
+    if (AmDmxDevice[mDemuxId]->AM_DMX_StartFilter(mTemiRecordFid) != 0) {
+        ALOGE("Start filter %d failed!", mTemiRecordFid);
+        return -1;
+    }
+    ALOGD("stream(pid = %d) start recording, filter = %d", pid, mTemiRecordFid);
+
+    return 1;
+}
+
+void Demux::closeTemiRecordFilter() {
+    ALOGD("%s/%d", __FUNCTION__, __LINE__);
+    mTemiRecordThreadRunning = false;
+    if (mTemiRecordThread.joinable()) {
+        mTemiRecordThread.join();
+    }
+
+    if (AmDmxDevice[mDemuxId] != NULL) {
+        AmDmxDevice[mDemuxId]->AM_DMX_StopFilter(mTemiRecordFid);
+        AmDmxDevice[mDemuxId]->AM_DMX_FreeFilter(mTemiRecordFid);
+    }
+
+    mTemiFid = -1;
+    mTemiRecordFid = -1;
+}
+
+int Demux::getTemiFid() {
+    return mTemiFid;
+}
+
+bool Demux::checkSoftDemuxForTemi() {
+    return bSupportSoftDemuxForTemi;
+}
+
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner

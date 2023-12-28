@@ -122,8 +122,10 @@ class Demux : public BnDemux {
     void getSectionData(int64_t filterId);
     void getPesRawData(int64_t filterId);
     bool checkPesFilterId(int64_t filterId);
+    bool checkTemiFilterId(int64_t filterId);
     bool isRawData(int64_t filterId);
     bool checkSoftDemuxForSubtitle();
+    void getTemiData(int64_t filterId);
     int recordTsPacketForPesData(int64_t filterId);
     int64_t findFilterIdByfakeFilterId(int64_t fakefilterId);
     void destroyMediaSync();
@@ -141,6 +143,10 @@ class Demux : public BnDemux {
     int getTsIndexType();
     void setIFrame(int iFrame);
     int getIFrame();
+    int recordTsPacketForTemiData(int64_t filterId);
+    void closeTemiRecordFilter();
+    int getTemiFid();
+    bool checkSoftDemuxForTemi();
 
     uint8_t *base_ptr = NULL;
     uint8_t *last_pusi_ptr = NULL;
@@ -167,6 +173,7 @@ class Demux : public BnDemux {
 
     static void* __threadLoopFrontend(void* user);
     void frontendInputThreadLoop();
+    void TemiRecordThreadLoop();
 
     /**
      * To create a FilterMQ with the next available Filter ID.
@@ -186,6 +193,7 @@ class Demux : public BnDemux {
      * Filter Id starts with 0.
      */
     int64_t mLastUsedFilterId = -1;
+    set<int64_t> mTemiFilterIds;
 
     set<int64_t> mPesFilterIds;
     /**
@@ -271,6 +279,12 @@ class Demux : public BnDemux {
     int  mTsIndexType = -1;
     int  mIFrame     = -1;
     uint64_t mCurOffset = 0;
+
+    std::thread mTemiRecordThread;
+    std::atomic<bool> mTemiRecordThreadRunning;
+    int mTemiFid = -1;
+    int mTemiRecordFid = -1;
+    bool bSupportSoftDemuxForTemi = false;
 };
 
 }  // namespace tuner
