@@ -64,7 +64,7 @@ int FrontendDtmbDevice::getFrontendSettings(FrontendSettings *settings, void * f
         dtmbSetting.bandwidth = FrontendDtmbBandwidth::AUTO;
     }
     p_fe_params->u.ofdm.bandwidth =
-        (fe_bandwidth_t)(getFeDtmbBandwithType(settings->get<FrontendSettings::Tag::dtmb>().bandwidth));
+        (fe_bandwidth_t)(getFeDtmbBandwidthType(settings->get<FrontendSettings::Tag::dtmb>().bandwidth));
 
     //modulation
     if (settings->get<FrontendSettings::Tag::dtmb>().modulation == FrontendDtmbModulation::UNDEFINED) {
@@ -107,7 +107,7 @@ int FrontendDtmbDevice::getFeDeliverySystem(FrontendType type) {
     return (int)(fe_system);
 }
 
-int FrontendDtmbDevice::getFeDtmbBandwithType(const FrontendDtmbBandwidth& dtmbBandWidth) {
+int FrontendDtmbDevice::getFeDtmbBandwidthType(const FrontendDtmbBandwidth& dtmbBandWidth) {
     int fe_bandwidth_type = BANDWIDTH_8_MHZ;
     switch (dtmbBandWidth) {
         case FrontendDtmbBandwidth::BANDWIDTH_8MHZ:

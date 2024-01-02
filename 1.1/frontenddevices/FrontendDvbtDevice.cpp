@@ -56,7 +56,7 @@ int FrontendDvbtDevice::getFrontendSettings(FrontendSettings *settings, void * f
         settings->dvbt().bandwidth = FrontendDvbtBandwidth::AUTO;
     }
     p_fe_params->u.ofdm.bandwidth =
-        (fe_bandwidth_t)(getFeDvbBandwithType(settings->dvbt().bandwidth));
+        (fe_bandwidth_t)(getFeDvbBandwidthType(settings->dvbt().bandwidth));
     if (settings->dvbt().hpCoderate == FrontendDvbtCoderate::UNDEFINED) {
         settings->dvbt().hpCoderate = FrontendDvbtCoderate::AUTO;
     }
@@ -177,7 +177,7 @@ int FrontendDvbtDevice::getFeInnerFecTypeFromCodeRate(const FrontendDvbtCoderate
     return fec_inner_type;
 }
 
-int FrontendDvbtDevice::getFeDvbBandwithType(const FrontendDvbtBandwidth& dvbBandWidth) {
+int FrontendDvbtDevice::getFeDvbBandwidthType(const FrontendDvbtBandwidth& dvbBandWidth) {
     int fe_bandwidth_type = BANDWIDTH_8_MHZ;
     switch (dvbBandWidth) {
         case FrontendDvbtBandwidth::BANDWIDTH_8MHZ:

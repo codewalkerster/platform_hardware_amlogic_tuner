@@ -1,7 +1,7 @@
 package droidlogic_tuner_hal
 
 import (
-    "fmt"
+    //"fmt"
     "android/soong/android"
     "android/soong/cc"
 )
@@ -29,7 +29,7 @@ func globalDefaults(ctx android.BaseContext) ([]string) {
     targetProduct := ctx.AConfig().Getenv("TARGET_PRODUCT")
     switch targetProduct {
         case "ohm", "ohmcas", "ohm_hybrid", "ohm_cbs":
-            fmt.Printf("TARGET_PRODUCT is %s, define SUPPORT_TSD\n", targetProduct)
+            //fmt.Printf("TARGET_PRODUCT is %s, define SUPPORT_TSD\n", targetProduct)
             cppflags = append(cppflags,"-DSUPPORT_TSD")
         default:
     }

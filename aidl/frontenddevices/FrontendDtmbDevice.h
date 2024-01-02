@@ -38,7 +38,7 @@ public:
 
 private:
     ~FrontendDtmbDevice();
-    int getFeDtmbBandwithType(const FrontendDtmbBandwidth& dtmbBandWidth);
+    int getFeDtmbBandwidthType(const FrontendDtmbBandwidth& dtmbBandWidth);
     int getFeModulationType(const FrontendDtmbModulation& modulation);
 };
 
