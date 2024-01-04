@@ -520,21 +520,35 @@ static int ca_release(DVR_RecordContext_t *p_ctx, DVR_RecordStream_t *stream)
   return 0;
 }
 
-#if 0
-int ca_enc_check(DVR_RecordContext_t *p_ctx)
+// Check ca ready status and try to prepare ca resource if needs
+int ca_ready_check(DVR_RecordContext_t *p_ctx)
 {
-  int i;
-
-  if (p_ctx->ca_flags & DVR_CA_USAGE_ENC) {
-    return 0;
-  }
-
   for (int i = 0; i < DVR_MAX_RECORD_PID_CNT; i++) {
+    DVR_RecordStream_t *stream = &p_ctx->streams[i];
+    if (stream->key_token == -1)
+      continue;
+
+    if ((stream->ca.flags & DVR_CA_USAGE_DES) &&
+          (stream->ca.flags & DVR_CA_USAGE_ENC)) {
+      continue;
+    }
+    if (!(stream->ca.flags & DVR_CA_USAGE_DES)) {
+      // Try to prepare ca resource if descrambler not ready
+      ca_prepare(p_ctx, stream, DVR_CA_USAGE_DES);
+    }
+    if (!(stream->ca.flags & DVR_CA_USAGE_ENC)) {
+      // Try to prepare ca resource if encryption channel is not ready
+      ca_prepare(p_ctx, stream, DVR_CA_USAGE_ENC);
+    }
   }
 
-  return 0;
+  if ((p_ctx->ca_flags & DVR_CA_USAGE_DES) &&
+        (p_ctx->ca_flags & DVR_CA_USAGE_ENC)) {
+    return DVR_SUCCESS;
+  }
+
+  return DVR_FAILURE;
 }
-#endif
 
 DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_t *params)
 {
@@ -1529,6 +1543,7 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
       // b. With TEE ts indexer, combine rb0 + rb1 inject-rec, PUSIs are in rb1
     // If the recording is clear, read from rb0, PUSIs are in rb0
     if (p_ctx->is_secure_mode) {
+      ca_ready_check(p_ctx);
       if (p_ctx->sects_sess != -1 & p_ctx->fd[2] >= 0) {
         // TEE ts indexer in secure mode, video is scrambled
         len = secure_pusi_read(p_ctx->sects_sess, p_ctx->fd[2], p_ctx->fd[3], &p_ctx->rb1,

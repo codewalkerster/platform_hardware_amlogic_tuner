@@ -44,6 +44,7 @@ typedef struct {
   uint16_t pid;                     /**< DVR Playback stream pid*/
   uint32_t key_token;               /**< DVR Playback dsm key token*/
   int ca_chan;                      /**< DVR Playback ca channels*/
+  int ca_ready;                     /**< DVR Playback descrabmbler status*/
 } DVR_PlaybackEncryptStream_t;
 
 /**\brief DVR plaback context*/
@@ -85,7 +86,7 @@ static int ca_prepare(
   uint32_t ready = DSM_PROP_SLOT_NOT_READY;
   struct dsm_keyslot_list keyslot_list;
 
-  if (stream->key_token != -1) {
+  if (stream->ca_ready) {
     return DVR_SUCCESS;
   }
 
@@ -144,6 +145,8 @@ static int ca_prepare(
           ca_chan,
           parity,
           slot->id);
+
+    stream->ca_ready = 1;
   }
 
   return 0;
@@ -223,6 +226,7 @@ DVR_Result_t dvr_playback_open(
     p_ctx->streams[i].pid = DVR_INVALID_PID;
     p_ctx->streams[i].key_token = -1;
     p_ctx->streams[i].ca_chan = -1;
+    p_ctx->streams[i].ca_ready = 0;
   }
   p_ctx->dsm_sess = -1;
   p_ctx->fd = -1;
@@ -386,11 +390,11 @@ DVR_Result_t dvr_playback_set_key_token(
   }
   DVR_CHECK_WITH_UNLOCK(i < DVR_MAX_PLAYBACK_ENCRYPT_CNT, &p_ctx->lock);
   p_ctx->streams[i].pid = pid;
+  p_ctx->streams[i].key_token = key_token;
   // Prepare ca
   DVR_CHECK_WITH_UNLOCK(
       ca_prepare(p_ctx, &p_ctx->streams[i]) == 0,
       &p_ctx->lock);
-  p_ctx->streams[i].key_token = key_token;
 
 exit:
   pthread_mutex_unlock(&p_ctx->lock);
@@ -461,6 +465,16 @@ size_t dvr_playback_write(
 
   ssize_t ret = 0;
   len -= (len % 188);
+
+  // Cuz the kte maybe not ready when dvr_playback_set_key_token called, we need
+  // check the ca ready status every time before inject ts. And try to prepare
+  // ca resource if ca channel is not ready
+  for (int i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
+    if (p_ctx->streams[i].key_token != -1 && !p_ctx->streams[i].ca_ready) {
+      ca_prepare(p_ctx, &p_ctx->streams[i]);
+    }
+  }
+
 #ifndef DEBUG_ON_PC
   ret = write(p_ctx->fd, data, len);
   if (ret == -1) {
