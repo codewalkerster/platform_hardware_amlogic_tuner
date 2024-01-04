@@ -43,6 +43,13 @@ int ca_set_key(
 
 int ca_close(
     int devno);
+
+int ca_set_scb(
+    int devno,
+    int ca_index,
+    int ca_scb,
+    int ca_scb_as_is);
+
 #ifdef __cplusplus
  }
 #endif

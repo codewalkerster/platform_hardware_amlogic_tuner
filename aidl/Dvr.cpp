@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "android.hardware.tv.tuner-service.droidlogic-Dvr"
+#define LOG_TAG "tunerhal2.0-Dvr"
 
 #include <aidl/android/hardware/tv/tuner/DemuxQueueNotifyBits.h>
 #include <aidl/android/hardware/tv/tuner/Result.h>
@@ -128,6 +128,7 @@ Dvr::~Dvr() {
 
     mDvrThreadRunning = false;
     if (mDvrThread.joinable()) {
+        mDvrEventFlag->wake(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY));
         mDvrThread.join();
     }
     // thread should always be joinable if it is running,
@@ -139,13 +140,31 @@ Dvr::~Dvr() {
 
 ::ndk::ScopedAStatus Dvr::flush() {
     ALOGD("%s", __FUNCTION__);
-    int size = mDvrMQ->availableToRead();
-    int8_t* buffer = new int8_t[size];
-    mDvrMQ->read(buffer, size);
-    delete[] buffer;
-
+    int flushSize = mDvrSettings.get<DvrSettings::Tag::playback>().packetSize * 100;//188 bytes
+    int left      = 0;
+    char *buffer  = NULL;
+    mFlushing = true;
+    std::lock_guard<std::mutex> lock(mReadLock);
+    if (mDvrMQ.get() != NULL) {
+      left = mDvrMQ->availableToRead();
+      ALOGD("%s/%d mType=%hhu size=%d", __FUNCTION__, __LINE__, mType, left);
+      if (left > 0) {
+        buffer = new char[flushSize];
+        for (int i = 0;  left > 0; i++) {
+            if (left > flushSize) {
+                mDvrMQ->read((signed char *)&buffer[0], flushSize);
+                left -= flushSize;
+            } else {
+                mDvrMQ->read((signed char *)&buffer[0], left);
+                left = 0;
+            }
+            ALOGD("%s/%d flush left=%d", __FUNCTION__, __LINE__, left);
+        }
+        delete[] buffer;
+      }
+    }
     mRecordStatus = RecordStatus::DATA_READY;
-
+    mFlushing = false;
     return ::ndk::ScopedAStatus::ok();
 }
 
@@ -267,22 +286,25 @@ PlaybackStatus Dvr::checkPlaybackStatusChange(uint32_t availableToWrite, uint32_
 }
 
 bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
+    if (mDvrMQ.get() == NULL) {
+        ALOGD("DvrMQ is null");
+        return false;
+    }
     // Read playback data from the input FMQ
+    std::lock_guard<std::mutex> lock(mReadLock);
     size_t size = mDvrMQ->availableToRead();
-    int64_t playbackPacketSize = mDvrSettings.get<DvrSettings::Tag::playback>().packetSize;
+    int64_t playbackPacketSize = mDvrSettings.get<DvrSettings::Tag::playback>().packetSize * 100; //188 bytes
     vector<int8_t> dataOutputBuffer;
     dataOutputBuffer.resize(playbackPacketSize);
     // Dispatch the packet to the PID matching filter output buffer
-    for (int i = 0; i < size / playbackPacketSize; i++) {
+    for (int i = 0; !mFlushing && mDvrThreadRunning && i < size / playbackPacketSize; i++) {
         if (!mDvrMQ->read(dataOutputBuffer.data(), playbackPacketSize)) {
             return false;
         }
+
+        ALOGD("%s isVirtualFrontend:%d isRecording:%d, demuxId = %d", __FUNCTION__, isVirtualFrontend, isRecording, mDemux->getDemuxId());
         if (isVirtualFrontend) {
-            if (isRecording) {
-                mDemux->sendFrontendInputToRecord(dataOutputBuffer);
-            } else {
-                mDemux->startBroadcastTsFilter(dataOutputBuffer);
-            }
+            mDemux->startBroadcastTsFilter(dataOutputBuffer);
         } else {
             startTpidFilter(dataOutputBuffer);
         }
@@ -395,7 +417,7 @@ bool Dvr::processEsDataOnPlayback(bool isVirtualFrontend, bool isRecording) {
                 }
             }
         } else {
-            mDemux->sendFrontendInputToRecord(frameData, pid, static_cast<uint64_t>(esMeta[i].pts));
+            //mDemux->sendFrontendInputToRecord(frameData, pid, static_cast<uint64_t>(esMeta[i].pts));
         }
         startFilterDispatcher(isVirtualFrontend, isRecording);
         frameData.clear();
@@ -426,11 +448,7 @@ void Dvr::startTpidFilter(vector<int8_t> data) {
 
 bool Dvr::startFilterDispatcher(bool isVirtualFrontend, bool isRecording) {
     if (isVirtualFrontend) {
-        if (isRecording) {
-            return mDemux->startRecordFilterDispatcher();
-        } else {
-            return mDemux->startBroadcastFilterDispatcher();
-        }
+        return mDemux->startBroadcastFilterDispatcher();
     }
 
     map<int64_t, std::shared_ptr<IFilter>>::iterator it;
@@ -462,16 +480,20 @@ bool Dvr::writeRecordFMQ(const vector<int8_t>& data) {
 
 void Dvr::maySendRecordStatusCallback() {
     lock_guard<mutex> lock(mRecordStatusLock);
-    int availableToRead = mDvrMQ->availableToRead();
-    int availableToWrite = mDvrMQ->availableToWrite();
+    if (mDvrMQ.get() != NULL) {
+        int availableToRead = mDvrMQ->availableToRead();
+        int availableToWrite = mDvrMQ->availableToWrite();
 
-    RecordStatus newStatus =
-            checkRecordStatusChange(availableToWrite, availableToRead,
-                                    mDvrSettings.get<DvrSettings::Tag::record>().highThreshold,
-                                    mDvrSettings.get<DvrSettings::Tag::record>().lowThreshold);
-    if (mRecordStatus != newStatus) {
-        mCallback->onRecordStatus(newStatus);
-        mRecordStatus = newStatus;
+        RecordStatus newStatus =
+                checkRecordStatusChange(availableToWrite, availableToRead,
+                                        mDvrSettings.get<DvrSettings::Tag::record>().highThreshold,
+                                        mDvrSettings.get<DvrSettings::Tag::record>().lowThreshold);
+        if (mRecordStatus != newStatus) {
+            if (mCallback) {
+                mCallback->onRecordStatus(newStatus);
+                mRecordStatus = newStatus;
+            }
+        }
     }
 }
 

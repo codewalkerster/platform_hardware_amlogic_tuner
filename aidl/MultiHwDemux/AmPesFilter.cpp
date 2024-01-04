@@ -41,6 +41,7 @@ void AmPesFilter::postPesData() {
 
         /*
         len = (p[4] << 8) | p[5];
+        ALOGE("len = %d, pes_len =%d", len, mPesFilter->pes_len);
         if (len && (len + 6 > mPesFilter->pes_len)) {
             ALOGE("PES packet length error");
             return;

@@ -25,7 +25,7 @@ enum AM_DVR_ErrorCode
     AM_DVR_ERROR_BASE=AM_ERROR_BASE(AM_MOD_DVR),
     AM_DVR_ERR_INVALID_ARG,            /**< Invalid argument*/
     AM_DVR_ERR_INVALID_DEV_NO,        /**< Invalid decide number*/
-    AM_DVR_ERR_BUSY,                        /**< The device has already been openned*/
+    AM_DVR_ERR_BUSY,                        /**< The device has already been opened*/
     AM_DVR_ERR_NOT_ALLOCATED,           /**< The device has not been allocated*/
     AM_DVR_ERR_CANNOT_CREATE_THREAD,    /**< Cannot create a new thread*/
     AM_DVR_ERR_CANNOT_OPEN_DEV,         /**< Cannot open the device*/

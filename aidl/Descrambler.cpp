@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "android.hardware.tv.tuner-service.droidlogic-Descrambler"
+#define LOG_TAG "tunerhal2.0-Descrambler"
 
 #include <aidl/android/hardware/tv/tuner/IFrontendCallback.h>
 #include <aidl/android/hardware/tv/tuner/Result.h>

@@ -21,10 +21,11 @@
 #include <aidl/android/hardware/tv/tuner/FrontendType.h>
 
 #define CONFIG_AMLOGIC_DVB_COMPAT
-#include "linux/dvb/frontend.h"
 #include <semaphore.h>
 #include <utils/Thread.h>
 #include <utils/Errors.h>
+#include "utils/frontend.h"
+#include "utils/stbtrace.h"
 
 using namespace std;
 using ::android::sp;
@@ -67,18 +68,22 @@ public:
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
     void setHwFe(const sp<HwFeState>& hwFe);
     int getFrontendId();
+    stbtrace_info mStbTrace_info;
+    struct timeval tune_start_time;
+    struct timeval tune_end_time;
+    struct timeval tune_elapsed_time;
     FrontendSettings* getFeSetting();
 
     typedef struct {
-        uint32_t                  id;
-        sp<HwFeState>             mHw;
-        int                       devFd;
-        int                       deliverySys;
-        FrontendType              type;
-        FrontendSettings*         feSettings;
-        uint32_t                  blindFreq;
-        uint32_t                  tuneFreq;
-        bool                      islocked;
+        uint32_t          id;
+        sp<HwFeState>     mHw;
+        int               devFd;
+        int               deliverySys;
+        FrontendType      type;
+        FrontendSettings* feSettings;
+        uint32_t          blindFreq;
+        uint32_t          tuneFreq;
+        bool              islocked;
     }fe_dev_t;
 
     typedef enum {
@@ -112,6 +117,8 @@ private:
     bool             unsupportSystem;
     bool             mRequestTuningStop;
     int32_t          mPlpId;
+    FrontendScanType mScanType = FrontendScanType::SCAN_UNDEFINED;
+    FrontendSettings userFeSettings;
 
     virtual bool     threadLoop(void);
     virtual status_t readyToRun(void);
@@ -126,6 +133,10 @@ private:
     int setFeSystem();
     int internalTune(const FrontendSettings & settings);
     int blindTune(const FrontendSettings& settings);
+    timeval tuneStartTime();
+    int dvb_wait_event (dvb_frontend_event *evt, int timeout);
+    int dvbsx_blindscan_getscanevent(dvbsx_blindscanevent *pbsevent);
+    int setDvbsBlindScanParams(bool start);
 };
 
 

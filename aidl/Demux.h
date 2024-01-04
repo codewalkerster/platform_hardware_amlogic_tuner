@@ -34,6 +34,8 @@
 #include "AmDvr.h"
 #include "AmPesFilter.h"
 #include "Descrambler.h"
+#include "HwDemuxSCWrap.h"
+#include "AmTsIndexer.h"
 
 using namespace std;
 
@@ -105,10 +107,13 @@ class Demux : public BnDemux {
 
     void sendFrontendInputToRecord(vector<int8_t> data);
     void sendFrontendInputToRecord(vector<int8_t> data, uint16_t pid, uint64_t pts);
+    void sendFrontendInputToRecord(vector<int8_t> data, uint16_t pid, uint64_t offset, uint64_t pts = 0, int type =
+    -1, int tsIndexType = -1);
     bool startRecordFilterDispatcher();
     static void postData(void* demux, int fid, bool esOutput, bool passthrough);
     static void postDvrData(void* demux);
     static void pesDataCallback(void* demux, int fid, uint8_t *pes, int len);
+    static void TsIndexerCallback(TS_Indexer_t *ts_indexer, TS_Indexer_Event_t *event);
     sp<AM_DMX_Device> getAmDmxDevice();
     sp<AmDvr> getAmDvrDevice();
     sp<AmPesFilter> getAmPesFilter();
@@ -123,7 +128,29 @@ class Demux : public BnDemux {
     int64_t findFilterIdByfakeFilterId(int64_t fakefilterId);
     void destroyMediaSync();
     void closePesRecordFilter();
-    void mapPassthroughMediaFilter(int64_t fakefilterId, int64_t filterId);
+    int32_t getDemuxId();
+    uint64_t getVideoFid();
+    sp<AmTsIndexer> getAmTsIndexer();
+    TS_Indexer_StreamFormat_t convertVideoFormatToTsIndexFormat(int vf);
+    void setCurrentPts(uint64_t pts);
+    uint64_t getCurrentPts();
+    int getRecordVideoPid();
+    int getRecordAudioPid();
+    int getScIndexTypeForVideoFormat();
+    void setTsIndexType(int tsIndexType);
+    int getTsIndexType();
+    void setIFrame(int iFrame);
+    int getIFrame();
+
+    uint8_t *base_ptr = NULL;
+    uint8_t *last_pusi_ptr = NULL;
+    uint64_t last_pusi_offset = 0;;
+    uint64_t cache_len = 0;
+    uint8_t *cache_data = NULL;
+    uint64_t cnt = 0;
+    uint64_t count = 0;
+    bool     bUseTsIndexer = false;
+    uint32_t flags = 0;
 
   private:
     // Tuner service
@@ -183,6 +210,7 @@ class Demux : public BnDemux {
      */
     std::map<int32_t, std::shared_ptr<Descrambler>> mDescramblers;
     vector<uint8_t> mScrambledCache;
+    vector<uint8_t> mClearCache;
 
     /**
      * Local reference to the opened Timer Filter instance.
@@ -225,12 +253,24 @@ class Demux : public BnDemux {
     sp<AM_DMX_Device> AmDmxDevice[DMX_COUNT] = { NULL };
     sp<AmDvr> mAmDvrDevice[DMX_COUNT]        = { NULL };
     sp<AmPesFilter> mAmPesFilter             = NULL;
+    sp<AmTsIndexer> mAmTsIndexer[DMX_COUNT]  = { NULL };
     sp<MediaSyncWrap> mMediaSync             = nullptr;
     int mPesFid = -1;
     int mPesRecordFid = -1;
-    bool bCheckVts = true;
-    std::map<int64_t, int64_t> mMapFilter;
     int64_t mAvSyncHwId = -1;
+
+    // add stream speed control variable
+    sp<HwDemuxOpsSCWrap> mHwDemuxOps[DMX_COUNT] = { NULL };
+    void* mDemuxHandle[DMX_COUNT] = { NULL };
+    uint64_t mWriteTsSize = 0;
+    int mVidPid = 0x1FFF;
+    int mAudPid = 0x1FFF;
+
+    uint64_t mCurPts = -1;
+    bool bInitTsIndexer = false;
+    int  mTsIndexType = -1;
+    int  mIFrame     = -1;
+    uint64_t mCurOffset = 0;
 };
 
 }  // namespace tuner

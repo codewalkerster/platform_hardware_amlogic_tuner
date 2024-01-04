@@ -17,6 +17,8 @@ extern "C"  {
 extern mediasync_result MediaSync_allocInstance(void* handle, int32_t DemuxId,
                                                                int32_t PcrPid,
                                                                int32_t *SyncInsId);
+extern mediasync_result MediaSync_bindStaticInstance(void* handle, uint32_t SyncInsId,
+                                                             sync_stream_type streamtype);
 extern mediasync_result MediaSync_getTrackMediaTime(void* handle, int64_t *outMediaUs);
 extern mediasync_result MediaSync_bindInstance(void* handle, uint32_t SyncInsId,
                                                              sync_stream_type streamtype);
@@ -33,7 +35,7 @@ public:
     void bindAvSyncId(uint32_t avSyncHwId);
     void destroyMediaSync();
     void setParameter(mediasync_parameter type, void* arg);
-
+    void bindStaticAvSyncId(uint32_t avSyncHwId);
 private:
     void* mMediaSync;
 

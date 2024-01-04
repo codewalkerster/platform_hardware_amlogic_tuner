@@ -38,7 +38,7 @@ enum AM_DMX_ErrorCode
     AM_DMX_ERROR_BASE=AM_ERROR_BASE(AM_MOD_DMX),
     AM_DMX_ERR_INVALID_DEV_NO,          /**< Invalid device number*/
     AM_DMX_ERR_INVALID_ID,              /**< Invalid filer handle*/
-    AM_DMX_ERR_BUSY,                    /**< The device has already been openned*/
+    AM_DMX_ERR_BUSY,                    /**< The device has already been opened*/
     AM_DMX_ERR_NOT_ALLOCATED,           /**< The device has not been allocated*/
     AM_DMX_ERR_CANNOT_CREATE_THREAD,    /**< Cannot create new thread*/
     AM_DMX_ERR_CANNOT_OPEN_DEV,         /**< Cannot open device*/
@@ -117,12 +117,13 @@ public:
     AM_ErrorCode_t AM_DMX_SetCallback(int fhandle, AM_DMX_DataCb cb, void *data);
     AM_ErrorCode_t AM_DMX_GetMenInfo(int fhandle, dmx_mem_info* mDmxMenInfo);
     AM_ErrorCode_t AM_DMX_GetFilterMenInfo(dmx_filter_mem_info* mDmxFilterMemInfo);
-    //AM_ErrorCode_t AM_DMX_SetSource(AM_DMX_Source_t src);
+    AM_ErrorCode_t AM_DMX_SetSource(int id, int input, int source);
     AM_ErrorCode_t AM_DMX_Sync();
     //AM_ErrorCode_t AM_DMX_GetScrambleStatus(AM_Bool_t dev_status[2]);
 
     AM_ErrorCode_t AM_DMX_WriteTs(uint8_t* data,int32_t size,uint64_t timeout);
     AM_ErrorCode_t AM_DMX_SetDecodeInfo(int fhandle, int rp);
+    AM_ErrorCode_t AM_DMX_GetFilterFd(int fhandle, int *fd);
     int dev_no;
     sp<AmLinuxDvb> drv;
     void *drv_data;

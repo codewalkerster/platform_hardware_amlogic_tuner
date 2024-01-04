@@ -61,7 +61,7 @@ AM_ErrorCode_t AM_DMX_Device::dmx_dvr_open(dmx_input_source_t inputSource) {
 }
 
 AM_ErrorCode_t AM_DMX_Device::dmx_get_used_filter(int filter_id, AM_DMX_Filter **pf) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
 
     if ((filter_id < 0) || (filter_id >= DMX_FILTER_COUNT)) {
         ALOGE("invalid filter id, must in %d~%d", 0, DMX_FILTER_COUNT-1);
@@ -81,6 +81,7 @@ AM_ErrorCode_t AM_DMX_Device::dmx_get_used_filter(int filter_id, AM_DMX_Filter *
 
 #if 1
 
+/*
 static AM_ErrorCode_t read_dmx_non_sec_es_data(void *arg, int id, AM_DMX_Filter *filter, uint8_t *sec_buf, int BUF_SIZE) {
     AM_ErrorCode_t ret;
     AM_DMX_Device *dev = (AM_DMX_Device*)arg;
@@ -157,7 +158,7 @@ pthread_mutex_unlock(&dev->lock);
     // ALOGI("dmx_non_sec_es_data out \n");
     return ret;
 }
-
+*/
 
 static AM_ErrorCode_t read_dmx_sec_es_data(void *arg, int id, AM_DMX_Filter *filter, uint8_t *sec_buf, int BUF_SIZE) {
     AM_ErrorCode_t ret;
@@ -312,7 +313,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Open(void) {
     ALOGD("%s/%d demuxId = %d", __FUNCTION__, __LINE__, dev_no);
 
     if (open_count > 0) {
-        ALOGI("demux device %d has already been openned", dev_no);
+        ALOGI("demux device %d has already been opened", dev_no);
         open_count++;
         ret = AM_SUCCESS;
         goto final;
@@ -365,7 +366,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Close(void) {
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_Read(int fhandle, uint8_t* buff, int *size) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     //ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
@@ -390,7 +391,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_AllocateFilter(int *fhandle) {
 
     assert(fhandle);
 
-    //AM_TRY(dmx_get_openned_dev(dev_no, &dev));
+    //AM_TRY(dmx_get_opened_dev(dev_no, &dev));
 
     pthread_mutex_lock(&lock);
 
@@ -423,7 +424,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_AllocateFilter(int *fhandle) {
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSecFilter(int fhandle, const struct dmx_sct_filter_params *params) {
     //AM_DMX_Device_t *dev;
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
@@ -459,7 +460,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSecFilter(int fhandle, const struct dmx_
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetPesFilter(int fhandle, const struct dmx_pes_filter_params *params) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
@@ -487,7 +488,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetPesFilter(int fhandle, const struct dmx_
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetSTC(int fhandle) {
 
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
@@ -509,7 +510,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetSTC(int fhandle) {
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_FreeFilter(int fhandle) {
     ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, dev_no);
 
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     pthread_mutex_lock(&lock);
     ret = dmx_get_used_filter(fhandle, &filter);
@@ -573,7 +574,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_StopFilter(int fhandle) {
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetBufferSize(int fhandle, int size) {
 
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d fhandle:%d", __FUNCTION__, __LINE__, fhandle);
 
@@ -591,7 +592,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetBufferSize(int fhandle, int size) {
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetCallback(int fhandle, AM_DMX_DataCb *cb, void **data) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d fhandle:%d", __FUNCTION__, __LINE__, fhandle);
 
@@ -614,7 +615,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetCallback(int fhandle, AM_DMX_DataCb *cb,
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetCallback(int fhandle, AM_DMX_DataCb cb, void *data) {
 
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
     ALOGD("%s/%d fhandle:%d", __FUNCTION__, __LINE__, fhandle);
 
@@ -633,7 +634,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetCallback(int fhandle, AM_DMX_DataCb cb, 
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetMenInfo(int fhandle, dmx_mem_info* mDmxMenInfo) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
 
     pthread_mutex_lock(&lock);
@@ -680,7 +681,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_WriteTs(uint8_t* data,int32_t size,uint64_t
 }
 
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetDecodeInfo(int fhandle, int rp) {
-    AM_DMX_Filter *filter;
+    AM_DMX_Filter *filter = NULL;
     AM_ErrorCode_t ret = AM_SUCCESS;
 
     pthread_mutex_lock(&lock);
@@ -694,37 +695,36 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetDecodeInfo(int fhandle, int rp) {
     return ret;
 }
 
- #if 0
-AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSource(AM_DMX_Source_t src)
+AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetFilterFd(int fhandle, int *fd) {
+    AM_DMX_Filter *filter = NULL;
+    AM_ErrorCode_t ret = AM_FAILURE;
+
+    pthread_mutex_lock(&lock);
+
+    ret = dmx_get_used_filter(fhandle, &filter);
+
+    if (ret == AM_SUCCESS && fd) {
+        *fd = (int)filter->drv_data;
+        ret = AM_SUCCESS;
+    }
+    pthread_mutex_unlock(&lock);
+    return ret;
+}
+
+AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSource(int id, int input, int source)
 {
-//AM_DMX_Device_t *dev;
-AM_ErrorCode_t ret = AM_SUCCESS;
+    AM_ErrorCode_t ret = AM_SUCCESS;
 
-//  AM_TRY(dmx_get_openned_dev(dev_no, &dev));
+    pthread_mutex_lock(&lock);
 
-pthread_mutex_lock(&lock);
-//if(!dev->drv->set_source)
-//{
-//  printf("do not support set_source");
-//  ret = AM_DMX_ERR_NOT_SUPPORTED;
-//  }
+    if (ret == AM_SUCCESS) {
+        ret = drv->dvb_set_source(id, input, source);
+    }
 
-if (ret == AM_SUCCESS) {
-ret = drv->dvb_set_source(this, src);
+    pthread_mutex_unlock(&lock);
+
+    return ret;
 }
-
-pthread_mutex_unlock(&lock);
-
-if (ret == AM_SUCCESS)
-{
-//      pthread_mutex_lock(&am_gAdpLock);
-src = src;
-//      pthread_mutex_unlock(&am_gAdpLock);
-}
-
-return ret;
-}
-#endif
 
 #if 0
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetScrambleStatus(AM_Bool_t dev_status[2])
@@ -746,7 +746,7 @@ if (!dev_status[0])
 dev_status[0] = vflag ? AM_TRUE : AM_FALSE;
 if (!dev_status[1])
 dev_status[1] = aflag ? AM_TRUE : AM_FALSE;
-//AM_DEBUG(1, "AM_DMX_GetScrambleStatus video scamble %d, audio scamble %d\n", vflag, aflag);
+//AM_DEBUG(1, "AM_DMX_GetScrambleStatus video scramble %d, audio scramble %d\n", vflag, aflag);
 if (dev_status[0] && dev_status[1])
 {
 return AM_SUCCESS;
@@ -755,7 +755,7 @@ usleep(10*1000);
 }
 else
 {
-printf("AM_DMX_GetScrambleStatus read scamble status failed\n");
+printf("AM_DMX_GetScrambleStatus read scramble status failed\n");
 return AM_FAILURE;
 }
 }

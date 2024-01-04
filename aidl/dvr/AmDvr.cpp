@@ -38,14 +38,14 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
         ALOGD("cannot open \"%s\" (%s)", dev_name, strerror(errno));
         return AM_DVR_ERR_CANNOT_OPEN_DEV;
     }
-    int ret = ioctl(fd, DMX_SET_BUFFER_SIZE, 10 * 1024 * 1024);
+    int ret = ioctl(fd, DMX_SET_BUFFER_SIZE, 60 * 188 * 1024);
     if (ret == -1) {
         ALOGE("set buffer size failed (%s)", strerror(errno));
         close(fd);
         return -1;
 
     }
-   //fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
+    //fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
     int ret_0 = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, 0);
     if (ret_0<0) {
         ALOGE("fcntl failed %s\n", strerror(errno));
@@ -141,7 +141,7 @@ static AM_ErrorCode_t dvr_read(AM_DVR_Device_t *dev, uint8_t *buf, int *size)
     {
         if (errno == ETIMEDOUT)
             return AM_DVR_ERR_TIMEOUT;
-        ALOGD("read dvr failed (%s) %d", strerror(errno), errno);
+        //ALOGD("read dvr failed (%s) %d", strerror(errno), errno);
         return AM_DVR_ERR_SYS;
     }
 
@@ -205,7 +205,7 @@ AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_in
 {
     ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, mDvrDevice->dev_no);
     if (opencnt > 0) {
-        ALOGI("dvr device %d has already been openned", mDvrDevice->dev_no);
+        ALOGI("dvr device %d has already been opened", mDvrDevice->dev_no);
         //opencnt++;
         return AM_SUCCESS;
     }
@@ -275,7 +275,7 @@ void* AmDvr::dvr_data_thread(void *arg) {
         ret = dvr_poll(dev->mDvrDevice, 1000);
         if (ret == AM_SUCCESS ) {
             if (dev->mData != NULL && dev->mData->cb != NULL) {
-                dev->mData->cb(dev->mData->user_data);
+                 dev->mData->cb(dev->mData->user_data);
             }
         /*
             ret = dev->drv->dvr_read(buf, &cnt);
@@ -287,6 +287,8 @@ void* AmDvr::dvr_data_thread(void *arg) {
             ALOGE("read from DVR0 return %d bytes\n", cnt);
         }*/
 
+        } else {
+             usleep(10 * 1000);
         }
     }
 

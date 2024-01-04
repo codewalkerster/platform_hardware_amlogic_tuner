@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "android.hardware.tv.tuner-service.droidlogic-Tuner"
+#define LOG_TAG "tunerhal2.0-Tuner"
 
 #include <aidl/android/hardware/tv/tuner/Result.h>
 #include <utils/Log.h>
@@ -34,7 +34,7 @@ namespace hardware {
 namespace tv {
 namespace tuner {
 
-#define NUMDEMUX 4
+#define NUMDEMUX 16
 #define NUMDSC 16
 #define NUMRECORD 4
 #define NUMPLAYBACK 4
@@ -344,7 +344,7 @@ Tuner::~Tuner() {}
     }
 
     if (mLastUsedId == NUMDEMUX)
-        mLastUsedId = 0;
+        mLastUsedId = 1;
 
     //DemuxId demuxId = mLastUsedId;
     mDemuxes[mLastUsedId] = ndk::SharedRefBase::make<Demux>(mLastUsedId, this->ref<Tuner>());
@@ -599,10 +599,12 @@ void Tuner::setTsnSource() {
         return;
     }
     if (!strncmp(dmx_ver, "sc2-d", 5)) {
+        #ifdef SUPPORT_CBS
         if (!strstr(tsn_source, TSN_LOCAL)) {
             ALOGD("set tsn_source to local");
             FileSystem_writeFile(TSN_SOURCE, TSN_LOCAL);
         }
+        #endif
     } else {
         if (!strstr(tsn_source, TSN_DEMOD)) {
             ALOGD("set tsn_source to demod");

@@ -87,6 +87,7 @@ class Dvr : public BnDvr {
     bool startFilterDispatcher(bool isVirtualFrontend, bool isRecording);
     EventFlag* getDvrEventFlag();
     DvrSettings getSettings() { return mDvrSettings; }
+    bool stopInjectTs() { return mFlushing | !mDvrThreadRunning; }
 
   private:
     // Demux service
@@ -143,6 +144,8 @@ class Dvr : public BnDvr {
     std::mutex mRecordStatusLock;
 
     const bool DEBUG_DVR = false;
+    std::mutex mReadLock;
+    bool mFlushing = false;
 };
 
 }  // namespace tuner

@@ -150,6 +150,13 @@ class Filter : public BnFilter {
     DemuxFilterType getFilterType();
     void clear();
     bool postFilteredEmmSection(vector<uint8_t> data);
+    bool fillDataToDecoder();
+    void updateIndexType(int scIndType, int tsIndType);
+    bool checkRecordByVideo();
+    DemuxRecordScIndexType getScIndexType();
+    int getRecordVideoPid();
+    int getRecordAudioPid();
+    void updateCurrentOffset(uint64_t offset);
 
   private:
     // Demux service
@@ -160,6 +167,7 @@ class Filter : public BnFilter {
     FilterCallbackScheduler mCallbackScheduler;
 
     int64_t mFilterId;
+    int64_t mExtendId;
     int32_t mCid = static_cast<int32_t>(Constant::INVALID_IP_FILTER_CONTEXT_ID);
     uint32_t mBufferSize;
     DemuxFilterType mType;
@@ -244,6 +252,9 @@ class Filter : public BnFilter {
     void createTemiEvent(vector<DemuxFilterEvent>&);
     void createMonitorEvent(vector<DemuxFilterEvent>&);
     void createRestartEvent(vector<DemuxFilterEvent>&);
+    uint32_t covertTsIndexerTypeToScIndex(uint32_t type);
+    uint32_t convertTsIndexerTypeToScHevcIndex(uint32_t type);
+    uint32_t convertTsIndexerTypeToTsIndex(uint32_t type);
 
     /**
      * Lock to protect writes to the FMQs
@@ -287,6 +298,19 @@ class Filter : public BnFilter {
     uint8_t mScramblingStatusMonitored = 0;
     uint8_t mIpCidMonitored = 0;
     bool bIsRaw;
+
+    int32_t mTsIndexMask = 0;
+    DemuxRecordScIndexType mScIndexType = DemuxRecordScIndexType::NONE;
+    uint32_t mScIndexMask = -1;
+    int mRecordByVideo = -1;
+    int mRecordVideoPid = -1;
+    int mRecordAudioPid = -1;
+    int mTsIndType = -1;
+    int mScIndType = -1;
+    uint64_t mCurrentOffset = 0;
+    uint64_t mLastOffset = -1;
+    int mLastTsIndType = -1;
+    int mLastScIndType = -1;
 };
 
 }  // namespace tuner

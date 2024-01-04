@@ -46,6 +46,12 @@ void MediaSyncWrap::bindAvSyncId(uint32_t avSyncHwId) {
     }
 }
 
+void MediaSyncWrap::bindStaticAvSyncId(uint32_t avSyncHwId) {
+    if (mMediaSync != nullptr) {
+        MediaSync_bindStaticInstance(mMediaSync, avSyncHwId, MEDIA_COMMON);
+    }
+}
+
 void MediaSyncWrap::destroyMediaSync() {
     if (mMediaSync != nullptr) {
         MediaSync_destroy(mMediaSync);

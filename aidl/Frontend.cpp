@@ -15,7 +15,7 @@
  */
 
 //#define LOG_NDEBUG 0
-#define LOG_TAG "android.hardware.tv.tuner-service.droidlogic-Frontend"
+#define LOG_TAG "tunerhal2.0-Frontend"
 
 #include <aidl/android/hardware/tv/tuner/Result.h>
 #include <utils/Log.h>
@@ -28,6 +28,7 @@
 #include "FrontendDvbsDevice.h"
 #include "FrontendIsdbtDevice.h"
 #include "FrontendDtmbDevice.h"
+#include "FileSystemIo.h"
 
 
 namespace aidl {
@@ -35,6 +36,8 @@ namespace android {
 namespace hardware {
 namespace tv {
 namespace tuner {
+
+#define TSO_SOURCE    "/sys/class/stb/tso_source"
 
 Frontend::Frontend(FrontendType type, int32_t id, std::shared_ptr<Tuner> tuner, const sp<HwFeState>& hwFe) {
     mType = type;
@@ -927,6 +930,12 @@ void Frontend::scanThreadLoop() {
     ALOGV("%s", __FUNCTION__);
 
     mCiCamId = in_ciCamId;
+    FileSystem_create();
+
+    if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
+        ALOGE("set tso_source erro %p\n",this);
+    }
+
     *_aidl_return = 0;
 
     return ::ndk::ScopedAStatus::ok();
@@ -936,6 +945,11 @@ void Frontend::scanThreadLoop() {
     ALOGV("%s", __FUNCTION__);
 
     mCiCamId = -1;
+    FileSystem_create();
+
+    if (FileSystem_writeFile(TSO_SOURCE, "close") != 0) {
+        ALOGE("set tso_source erro %p\n",this);
+    }
 
     return ::ndk::ScopedAStatus::ok();
 }
@@ -1022,9 +1036,17 @@ void Frontend::getFrontendInfo(FrontendInfo* _aidl_return) {
 }
 
 void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
+    ALOGD("%s", __FUNCTION__);
     mIsLocked = isLocked;
     FrontendScanMessage msg;
-    msg.set<FrontendScanMessage::Tag::isLocked>(true);
+    if (freq&0x80000000) {
+        uint32_t percent = freq&0x7FFFFFFF;
+        msg.set<FrontendScanMessage::Tag::progressPercent>(percent);
+        mCallback->onScanMessage(FrontendScanMessageType::PROGRESS_PERCENT, msg);
+        ALOGD("%s %d,PROGRESS_PERCENT ccc:%d", __FUNCTION__,__LINE__,percent);
+        return;
+    }
+    msg.set<FrontendScanMessage::Tag::isLocked>(isLocked);
     mCallback->onScanMessage(FrontendScanMessageType::LOCKED, msg);
     vector<int64_t> frequencies = {freq};
     msg.set<FrontendScanMessage::Tag::frequencies>(frequencies);
@@ -1048,20 +1070,12 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
 }
 
 void Frontend::sendEventCallBack(FrontendEventType locked) {
+    ALOGD("%s", __FUNCTION__);
     mCallback->onEvent(locked);
     if (locked == FrontendEventType::LOCKED) {
       mIsLocked = true;
     } else {
       mIsLocked = false;
-    }
-    FrontendSettings* feSettings = mFeDev->getFeSetting();
-    if (feSettings->getTag() == FrontendSettings::Tag::dvbt &&
-        feSettings->get<FrontendSettings::Tag::dvbt>().standard == FrontendDvbtStandard::T2 && mIsLocked) {
-        FrontendScanMessage msg;
-        msg.set<FrontendScanMessage::Tag::hierarchy>((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());
-        mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
-        msg.set<FrontendScanMessage::Tag::plpIds>(mFeDev->getMPLPIDList());
-        mCallback->onScanMessage(FrontendScanMessageType::PLP_IDS, msg);
     }
 }
 

@@ -208,6 +208,14 @@ bool Lnb::prepareFeSystem(int fd) {
             static_cast<int32_t>(Result::UNAVAILABLE));
     }
 
+    if (mCallback != nullptr) {
+        // The correct implementation should be to return the response from the
+        // device via onDiseqcMessage(). The below implementation is only to enable
+        // testing for LnbCallbacks.
+        ALOGV("[aidl] %s - this is for test purpose only, and must be replaced!", __FUNCTION__);
+        mCallback->onDiseqcMessage(in_diseqcMessage);
+    }
+
     ALOGD("%s ok.", __FUNCTION__);
 
 
