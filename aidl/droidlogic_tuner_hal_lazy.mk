@@ -1,5 +1,5 @@
 
-USE_TH_TEST_SETUP := true
+USE_TH_TEST_SETUP := false
 #$(warning USE TEST TESTUP=$(USE_TH_TEST_SETUP))
 #$(warning TARGET_PRODUCT=$(TARGET_PRODUCT))
 
