@@ -289,7 +289,7 @@ class Filter : public V1_1::IFilter {
     int mRecordAudioPid = -1;
     int mTsIndType = -1;
     int mScIndType = -1;
-    uint64_t mCurrentOffset = -1;
+    uint64_t mCurrentOffset = 0;
     uint64_t mLastOffset = -1;
     int mLastTsIndType = -1;
     int mLastScIndType = -1;

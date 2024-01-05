@@ -1689,10 +1689,12 @@ Result Filter::startRecordFilterHandler() {
     DemuxFilterTsRecordEvent::ScIndexMask mask;
     uint32_t scIndexmask = 0;
     uint32_t tsIndexmask = 0;
+    bool bUserTsIndexer = false;
 
     if (mTsIndType >= 0 && mTsIndType <= 1) {
         tsIndexmask = convertTsIndexerTypeToTsIndex(mTsIndType);
         tsIndexmask = tsIndexmask & mTsIndexMask;
+        bUserTsIndexer = true;
     }
     if (mScIndType >= 2 && mScIndType <= 17) {
         if (mFilterSettings.ts().filterSettings.record().scIndexMask.getDiscriminator()
@@ -1707,6 +1709,7 @@ Result Filter::startRecordFilterHandler() {
         scIndexmask = scIndexmask & mScIndexMask;
         //ALOGD("%s/%d scIndexmask = %d", __FUNCTION__, __LINE__, scIndexmask);
     }
+
     mask.sc(scIndexmask);
     recordEvent = {
             .pid         = demuxPid,
@@ -1729,10 +1732,15 @@ Result Filter::startRecordFilterHandler() {
     mFilterEvent.events.resize(size + 1);
     mFilterEvent.events[size].tsRecord(recordEvent);
     fillDataToDecoder();
+    if (!bUserTsIndexer) {
+        mCurrentOffset += static_cast<uint64_t>(mRecordFilterOutput.size());
+    } else {
+        mCurrentOffset = -1;
+    }
+
     mRecordFilterOutput.clear();
     mTsIndType = -1;
     mScIndType = -1;
-    mCurrentOffset = -1;
     return Result::SUCCESS;
 }
 

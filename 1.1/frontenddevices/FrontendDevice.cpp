@@ -713,7 +713,7 @@ vector<atsc3_plp_list_entry_t> FrontendDevice::getAtsc3MPLPIDList() {
 
     for (int i = 0; i < plp_list_num; i++) {
         ALOGV("%s getAtsc3MPLPIDList pipid[%d] = %d", __FUNCTION__, i, plp_list_entry_t[i].id);
-        ALOGV("%s getAtsc3MPLPIDList plp.lls_flg[%d] is =%d", __FUNCTION__, plp_list_entry_t[i].lls_flg);
+        ALOGV("%s getAtsc3MPLPIDList plp.lls_flg[%d] is =%d", __FUNCTION__, i, plp_list_entry_t[i].lls_flg);
     }
     return plp_list_entry_t;
 }
