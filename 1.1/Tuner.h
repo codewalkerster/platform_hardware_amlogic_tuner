@@ -41,7 +41,7 @@ class Lnb;
 class Descrambler;
 class HwFeState;
 
-#define NUMDEMX 4
+#define NUMDEMUX 16
 #define NUMDSC 16
 #define NUMRECORD 4
 #define NUMPLAYBACK 4

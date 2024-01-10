@@ -469,7 +469,7 @@ Return<void> Tuner::openDemux(openDemux_cb _hidl_cb) {
         it = mDemuxes.find(mLastUsedId);
     }
 
-    if (mLastUsedId == NUMDEMX)
+    if (mLastUsedId == NUMDEMUX)
         mLastUsedId = 1; //match with cbs, dmxid 0 for dtvfs, dmxid 1 for dtvinput
 
     DemuxId demuxId = mLastUsedId;
@@ -484,7 +484,7 @@ Return<void> Tuner::getDemuxCaps(getDemuxCaps_cb _hidl_cb) {
     ALOGV("%s", __FUNCTION__);
 
     DemuxCapabilities caps;
-    caps.numDemux                = NUMDEMX;
+    caps.numDemux                = NUMDEMUX;
     caps.numRecord               = NUMRECORD;
     caps.numPlayback             = NUMPLAYBACK;
     caps.numTsFilter             = NUMTSFILTER;
