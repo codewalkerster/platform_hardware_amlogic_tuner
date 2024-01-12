@@ -94,7 +94,10 @@ static int ca_prepare(
         DSM_GetProperty(p_ctx->dsm_sess,
         DSM_PROP_DEC_SLOT_READY,
         &ready) == 0);
-  DVR_CHECK(ready == DSM_PROP_SLOT_IS_READY);
+  if (ready != DSM_PROP_SLOT_IS_READY) {
+    DVR_INFO("%s slot not ready", __func__);
+    return DVR_SUCCESS;
+  }
 
   memset(&keyslot_list, 0, sizeof(struct dsm_keyslot_list));
   // Get key slot list from DSM
@@ -159,6 +162,9 @@ static int ca_release(
   // Free the ca channel
   ca_free_chan(p_ctx->dmx_dev_id, stream->ca_chan);
   stream->ca_chan = -1;
+  stream->ca_ready = 0;
+  stream->pid = DVR_INVALID_PID;
+  stream->key_token = -1;
 
   return 0;
 }
@@ -238,6 +244,8 @@ DVR_Result_t dvr_playback_open(
         DVB_DEMUX_SOURCE_DMA0 + params->dmx_dev_id
   );
 
+  ca_open(params->dmx_dev_id);
+
   // Open dmx_dev_id[2] for inject and recording the re-encrypted ts
   if (p_ctx->fd == -1) {
     // DVR write fd
@@ -292,18 +300,19 @@ DVR_Result_t dvr_playback_close(DVR_PlaybackHandle_t handle)
   close(p_ctx->recfd);
 #endif
 
-  if (p_ctx->dsm_sess != -1) {
-    DSM_CloseSession(p_ctx->dsm_sess);
-    p_ctx->dsm_sess = -1;
-  }
   // We should release decryption ca channels if the pid stream is secure
   for (int i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
     if (p_ctx->streams[i].key_token != -1) {
       ca_release(p_ctx, &p_ctx->streams[i]);
-      p_ctx->streams[i].key_token = -1;
     }
   }
 
+  if (p_ctx->dsm_sess != -1) {
+    DSM_CloseSession(p_ctx->dsm_sess);
+    p_ctx->dsm_sess = -1;
+  }
+
+  ca_close(p_ctx->dmx_dev_id);
   p_ctx->state = DVR_PLAYBACK_STATE_CLOSED;
   pthread_mutex_unlock(&p_ctx->lock);
 
@@ -358,26 +367,32 @@ DVR_Result_t dvr_playback_set_key_token(
   DVR_PlaybackContext_t *p_ctx = (DVR_PlaybackContext_t *)handle;
   DVR_CHECK(p_ctx != NULL);
   DVR_CHECK(pid != DVR_INVALID_PID);
-  DVR_CHECK(key_token != -1);
   pthread_mutex_lock(&p_ctx->lock);
   DVR_CHECK_WITH_UNLOCK(
         p_ctx->state != DVR_PLAYBACK_STATE_CLOSED,
         &p_ctx->lock);
 
-  if (p_ctx->dsm_sess == -1) {
+  if (key_token == -1) {
+    if (p_ctx->dsm_sess != -1) {
+      DSM_CloseSession(p_ctx->dsm_sess);
+      p_ctx->dsm_sess = -1;
+      DVR_INFO("%s close dsm session", __func__);
+    }
+  } else if (p_ctx->dsm_sess == -1) {
     p_ctx->dsm_sess = DSM_OpenSession(0);
     DVR_CHECK_WITH_UNLOCK(p_ctx->dsm_sess != -1, &p_ctx->lock);
     DVR_CHECK_WITH_UNLOCK(
             DSM_BindToken(p_ctx->dsm_sess, key_token) == 0,
             &p_ctx->lock);
-    DVR_CHECK_WITH_UNLOCK(ca_open(p_ctx->dmx_dev_id) == 0,
-            &p_ctx->lock);
   }
 
   for (i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
-    // Return directly if the pid had been set key token already
     if (p_ctx->streams[i].pid == pid &&
         p_ctx->streams[i].key_token != -1) {
+      // Release ca resource if set invalid key token
+      if (key_token == -1) {
+        ca_release(p_ctx, &p_ctx->streams[i]);
+      }
       goto exit;
     }
   }
