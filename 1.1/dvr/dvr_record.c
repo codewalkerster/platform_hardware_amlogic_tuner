@@ -71,6 +71,7 @@ typedef struct {
 typedef struct {
   int fd;                               /**< DVR record filter's fd*/
   uint16_t pid;                         /**< DVR record stream PID*/
+  int started;                          /**< DVR record filter state*/
   DVR_StreamType_t type;                /**< DVR record stream type*/
   DVR_VideoFormat_t vfmt;               /**< DVR record video format*/
   uint32_t key_token;                   /**< DVR record key token for re-encryption*/
@@ -575,6 +576,7 @@ DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_
     int j;
     p_ctx->streams[i].fd = -1;
     p_ctx->streams[i].pid = DVR_INVALID_PID;
+    p_ctx->streams[i].started = 0;
     p_ctx->streams[i].type = DVR_STREAM_INVALID_TYPE;
     p_ctx->streams[i].vfmt = DVR_VIDEO_FORMAT_INVALID;
     p_ctx->streams[i].key_token = -1;
@@ -852,8 +854,9 @@ DVR_Result_t dvr_record_start_filter(DVR_RecordHandle_t handle, int filter_idx)
     return DVR_FAILURE;
   }
 #endif
+  p_ctx->streams[filter_idx].started = 1;
   pthread_mutex_unlock(&p_ctx->lock);
-  DVR_INFO("start filter fd: %d", fd);
+  DVR_INFO("start filter fd: %d, pid: %#x", fd, p_ctx->streams[filter_idx].pid);
   return DVR_SUCCESS;
 }
 
@@ -882,7 +885,8 @@ DVR_Result_t dvr_record_stop_filter(DVR_RecordHandle_t handle, int filter_idx)
   }
 #endif
 
-  DVR_INFO("stop filter fd:%d", fd);
+  DVR_INFO("stop filter fd:%d, pid: %#x", fd, p_ctx->streams[filter_idx].pid);
+  p_ctx->streams[filter_idx].started = 0;
   pthread_mutex_unlock(&p_ctx->lock);
   return DVR_SUCCESS;
 }
@@ -914,6 +918,7 @@ DVR_Result_t dvr_record_close_filter(DVR_RecordHandle_t handle, int filter_idx)
 #endif
 
   p_ctx->streams[i].pid = DVR_INVALID_PID;
+  p_ctx->streams[i].started = 0;
 
   pthread_mutex_unlock(&p_ctx->lock);
   return DVR_SUCCESS;
@@ -972,6 +977,16 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
                 __func__,
                 p_ctx->dmx_dev_id[1],
                 pid);
+        }
+        if (stream->started) {
+          int ret = ioctl(stream->fd, DMX_START, 0);
+          if (ret == -1) {
+            DVR_ERROR("%s start PES filter failed:(%s), fd: %d",
+                __func__, strerror(errno), stream->fd);
+          } else {
+            DVR_INFO("%s start filter pid: %#x, fd: %d",
+                __func__, stream->pid, stream->fd);
+          }
         }
 
         // Switch to secure ts indexer
