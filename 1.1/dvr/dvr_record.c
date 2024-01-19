@@ -365,13 +365,18 @@ static int ca_prepare(
   }
 
   if (usage == DVR_CA_USAGE_DES) {
+    dmx_dev_id = p_ctx->dmx_dev_id[1];
+    dsc_type = CA_DSC_COMMON_TYPE;
+
     // Check if descrambling slot is ready
     DVR_CHECK(
         DSM_GetProperty(p_ctx->dsm_sess, DSM_PROP_DEC_SLOT_READY,
         &ready) == 0);
-    DVR_CHECK(ready == DSM_PROP_SLOT_IS_READY);
-    dmx_dev_id = p_ctx->dmx_dev_id[1];
-    dsc_type = CA_DSC_COMMON_TYPE;
+    if (ready != DSM_PROP_SLOT_IS_READY) {
+      DVR_INFO("%s dmx%d, pid: %#x slot not ready",
+            __func__, dmx_dev_id, stream->pid);
+      return 0;
+    }
   } else if (usage == DVR_CA_USAGE_ENC) {
     // Check if re-encryption slot is ready
     DVR_CHECK(
@@ -988,7 +993,7 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
                 __func__, stream->pid, stream->fd);
           }
         }
-
+#if 0
         // Switch to secure ts indexer
         if ((stream->type == DVR_STREAM_VIDEO_TYPE ||
             stream->type == DVR_STREAM_AUDIO_TYPE) &&
@@ -996,6 +1001,7 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
           SECTS_OpenSession_Func(&p_ctx->sects_sess);
           DVR_CHECK_WITH_UNLOCK(p_ctx->sects_sess != -1, &p_ctx->lock);
         }
+#endif
         if (stream->type == DVR_STREAM_VIDEO_TYPE &&
             stream->vfmt != DVR_VIDEO_FORMAT_INVALID) {
           SECTS_SetVideoParams_Func(p_ctx->sects_sess, pid, stream->vfmt);
@@ -1548,6 +1554,11 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
     goto exit;
   }
 
+  if (p_ctx->is_secure_mode) {
+    DVR_CHECK_WITH_UNLOCK(
+                ca_ready_check(p_ctx) == 0,
+                &p_ctx->lock);
+  }
   // Get a DONE pusi and then retrieves the data from the ringbuffer
   // based on that pusi
   pusi = pusi_get(p_ctx);
@@ -1558,7 +1569,6 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
       // b. With TEE ts indexer, combine rb0 + rb1 inject-rec, PUSIs are in rb1
     // If the recording is clear, read from rb0, PUSIs are in rb0
     if (p_ctx->is_secure_mode) {
-      ca_ready_check(p_ctx);
       if (p_ctx->sects_sess != -1 & p_ctx->fd[2] >= 0) {
         // TEE ts indexer in secure mode, video is scrambled
         len = secure_pusi_read(p_ctx->sects_sess, p_ctx->fd[2], p_ctx->fd[3], &p_ctx->rb1,
