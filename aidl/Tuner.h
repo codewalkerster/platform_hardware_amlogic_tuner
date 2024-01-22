@@ -82,6 +82,7 @@ class Tuner : public BnTuner {
     uint32_t getTsInput();
     void setTsnSource();
     uint32_t getDscMode();
+    vector<FrontendStatusType> getstatusCaps(int32_t frontendId);
     typedef struct {
         int id;
         uint32_t minFreq;

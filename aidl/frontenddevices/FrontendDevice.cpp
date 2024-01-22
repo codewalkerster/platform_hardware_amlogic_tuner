@@ -227,10 +227,14 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    if (mDev.type == FrontendType::DVBS)
+    if (mDev.type == FrontendType::DVBS) {
         mDev.tuneFreq = adjustFrequencyOffSet(tuneSettings.get<FrontendSettings::Tag::dvbs>().frequency);
-    else
+    } else if (mDev.type == FrontendType::DVBT && mScanType == FrontendScanType::SCAN_BLIND) {
+        mScanType = FrontendScanType::SCAN_AUTO;
+        mDev.tuneFreq = adjustFrequencyOffSet(tuneSettings.get<FrontendSettings::Tag::dvbt>().frequency);
+    } else {
         mDev.tuneFreq = fe_params.frequency;
+    }
 
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
@@ -460,12 +464,12 @@ int FrontendDevice::blindTune(const FrontendSettings & settings) {
         }
         mDev.blindFreq = fe_info.frequency_min;
     }
+    FrontendSettings tuneSettings = settings;
     requestTuneStop();
     updateThreadState(FrontendDevice::STATE_SCAN_START);
 
     dvb_frontend_parameters fe_params;
 
-    FrontendSettings tuneSettings = settings;
     //int frequency = adjustFrequencyOffSet(tuneSettings.get<FrontendSettings::Tag::dvbs>().frequency);
     mDev.feSettings = &tuneSettings;
     if (getFrontendSettings(&tuneSettings, &fe_params) <0) {
@@ -504,20 +508,17 @@ int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType typ
     int ret = 0;
 
     if (!checkOpen(true)) return UNAVAILABLE;
-    mScanType = type;
-
-    if (type == FrontendScanType::SCAN_AUTO) {
+    if (type == FrontendScanType::SCAN_BLIND && settings.getTag() == FrontendSettings::Tag::dvbs) {
+        mScanType = FrontendScanType::SCAN_BLIND;
+        ret = blindTune(settings);
+    } else {
+        mScanType = type;
         mDev.blindFreq = 0;
         requestTuneStop();
         updateThreadState(FrontendDevice::STATE_SCAN_START);
         userFeSettings = settings;
         mDev.feSettings = &userFeSettings;
         ret = internalTune(settings);
-    } else if (type == FrontendScanType::SCAN_BLIND) {
-        ret = blindTune(settings);
-    } else {
-        mDev.blindFreq = 0;
-        ret = INVALID_ARGUMENT;
     }
     return ret;
 }

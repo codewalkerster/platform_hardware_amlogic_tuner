@@ -67,6 +67,7 @@ Frontend::Frontend(FrontendType type, int32_t id, std::shared_ptr<Tuner> tuner, 
         mFeDev = new FrontendDevice(id, type, this);
     }
     mFeDev->setHwFe(hwFe);
+    if (mTuner != nullptr) mFrontendStatusCaps = mTuner->getstatusCaps(mId);
     /*
     switch (mType) {
         case FrontendType::ISDBS: {
@@ -981,7 +982,7 @@ binder_status_t Frontend::dump(int fd, const char** /* args */, uint32_t /* numA
 ::ndk::ScopedAStatus Frontend::getFrontendStatusReadiness(
         const std::vector<FrontendStatusType>& in_statusTypes,
         std::vector<FrontendStatusReadiness>* _aidl_return) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
     _aidl_return->resize(in_statusTypes.size());
     for (int i = 0; i < in_statusTypes.size(); i++) {
@@ -990,6 +991,8 @@ binder_status_t Frontend::dump(int fd, const char** /* args */, uint32_t /* numA
             if (in_statusTypes[i] == mFrontendStatusCaps[j]) {
                 (*_aidl_return)[i] = FrontendStatusReadiness::STABLE;
                 break;
+            } else {
+                (*_aidl_return)[i] = FrontendStatusReadiness::UNSTABLE;
             }
             j++;
         }

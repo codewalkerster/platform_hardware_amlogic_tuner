@@ -110,11 +110,11 @@ void Tuner::init() {
                             hwCaps.statusCap = arrayHwFes[hwId]["statusCap"].asUInt();
                         }
                         vector<FrontendStatusType> statusCaps;
-                        for (int s = 0; s < static_cast<int>(FrontendStatusType::ATSC3_PLP_INFO); s ++) {
+                        /*for (int s = 0; s < static_cast<int>(FrontendStatusType::ATSC3_PLP_INFO); s ++) {
                             if ((hwCaps.statusCap & (1 << s)) == (1 << s)) {
                                 statusCaps.push_back(static_cast<FrontendStatusType>(s));
                             }
-                        }
+                        }*/
                         FrontendInfo info;
                         FrontendCapabilities caps = FrontendCapabilities();
                         switch (frontType)
@@ -125,6 +125,13 @@ void Tuner::init() {
                                     .sifStandardCap = arrayFronts[i]["sifCap"].asInt(),
                                 };
                                 caps.set<FrontendCapabilities::Tag::analogCaps> (analogCaps);
+                                mMaxUsableFrontends[FrontendType::ANALOG] = 1;
+                                statusCaps = {
+                                    FrontendStatusType::LAYER_ERROR,
+                                    FrontendStatusType::MER,
+                                    FrontendStatusType::UEC,
+                                    FrontendStatusType::TS_DATA_RATES,
+                                };
                             }
                             break;
                             case static_cast<int>(FrontendType::ATSC): {
@@ -132,6 +139,13 @@ void Tuner::init() {
                                     .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
                                 };
                                 caps.set<FrontendCapabilities::Tag::atscCaps>(atscCaps);
+                                mMaxUsableFrontends[FrontendType::ATSC] = 1;
+                                statusCaps = {
+                                    FrontendStatusType::FREQ_OFFSET,
+                                    FrontendStatusType::RF_LOCK,
+                                    FrontendStatusType::MODULATIONS,
+                                    FrontendStatusType::IS_LINEAR,
+                                };
                             }
                             break;
                             case static_cast<int>(FrontendType::ATSC3): {
@@ -144,6 +158,17 @@ void Tuner::init() {
                                     .demodOutputFormatCap = static_cast<int8_t>(arrayFronts[i]["demodOutputFormatCap"].asInt()),
                                 };
                                 caps.set<FrontendCapabilities::Tag::atsc3Caps>(atsc3Caps);
+                                mMaxUsableFrontends[FrontendType::ATSC3] = 1;
+                                statusCaps = {
+                                    FrontendStatusType::BER,
+                                    FrontendStatusType::PER,
+                                    FrontendStatusType::ATSC3_PLP_INFO,
+                                    FrontendStatusType::MODULATIONS,
+                                    FrontendStatusType::BERS,
+                                    FrontendStatusType::INTERLEAVINGS,
+                                    FrontendStatusType::BANDWIDTH,
+                                    FrontendStatusType::ATSC3_ALL_PLP_INFO,
+                                };
                             }
                             break;
                             case static_cast<int>(FrontendType::DVBC): {
@@ -153,6 +178,17 @@ void Tuner::init() {
                                     .annexCap =  static_cast<int8_t>(arrayFronts[i]["annexCap"].asInt()),
                                 };
                                 caps.set<FrontendCapabilities::Tag::dvbcCaps>(dvbcCaps);
+                                mMaxUsableFrontends[FrontendType::DVBC] = 1;
+                                statusCaps = {
+                                    FrontendStatusType::PRE_BER,
+                                    FrontendStatusType::SIGNAL_QUALITY,
+                                    FrontendStatusType::MODULATION,
+                                    FrontendStatusType::SPECTRAL,
+                                    FrontendStatusType::MODULATIONS,
+                                    FrontendStatusType::CODERATES,
+                                    FrontendStatusType::INTERLEAVINGS,
+                                    FrontendStatusType::BANDWIDTH,
+                                };
                             }
                             break;
                             case static_cast<int>(FrontendType::DVBS): {
@@ -162,6 +198,15 @@ void Tuner::init() {
                                     .standard =  static_cast<int8_t>(arrayFronts[i]["stdCap"].asInt()),
                                 };
                                 caps.set<FrontendCapabilities::Tag::dvbsCaps>(dvbsCaps);
+                                mMaxUsableFrontends[FrontendType::DVBS] = 1;
+                                statusCaps = {
+                                    FrontendStatusType::SIGNAL_STRENGTH,
+                                    FrontendStatusType::SYMBOL_RATE,
+                                    FrontendStatusType::MODULATION,
+                                    FrontendStatusType::MODULATIONS,
+                                    FrontendStatusType::ROLL_OFF,
+                                    FrontendStatusType::IS_MISO,
+                               };
                             }
                             break;
                             case static_cast<int>(FrontendType::DVBT): {
@@ -176,6 +221,18 @@ void Tuner::init() {
                                     .isMisoSupported = arrayFronts[i]["constellationCap"].asBool(),
                                 };
                                 caps.set<FrontendCapabilities::Tag::dvbtCaps>(dvbtCaps);
+                                mMaxUsableFrontends[FrontendType::DVBT] = 1;
+                                statusCaps = {
+                                    FrontendStatusType::EWBS,
+                                    FrontendStatusType::PLP_ID,
+                                    FrontendStatusType::HIERARCHY,
+                                    FrontendStatusType::MODULATIONS,
+                                    FrontendStatusType::BANDWIDTH,
+                                    FrontendStatusType::GUARD_INTERVAL,
+                                    FrontendStatusType::TRANSMISSION_MODE,
+                                    FrontendStatusType::T2_SYSTEM_ID,
+                                    FrontendStatusType::DVBT_CELL_IDS,
+                                };
                             }
                             break;
                             case static_cast<int>(FrontendType::ISDBT): {
@@ -187,6 +244,17 @@ void Tuner::init() {
                                     .guardIntervalCap = arrayFronts[i]["guardIntervalCap"].asInt(),
                                 };
                                 caps.set<FrontendCapabilities::Tag::isdbtCaps>(isdbtCaps);
+                                mMaxUsableFrontends[FrontendType::ISDBT] = 1;
+                                statusCaps = {
+                                    FrontendStatusType::AGC,
+                                    FrontendStatusType::LNA,
+                                    FrontendStatusType::MODULATION,
+                                    FrontendStatusType::MODULATIONS,
+                                    FrontendStatusType::BANDWIDTH,
+                                    FrontendStatusType::GUARD_INTERVAL,
+                                    FrontendStatusType::TRANSMISSION_MODE,
+                                    FrontendStatusType::ISDBT_SEGMENTS,
+                                };
                             }
                             break;
                             case static_cast<int>(FrontendType::DTMB): {
@@ -199,6 +267,14 @@ void Tuner::init() {
                                     .interleaveModeCap = arrayFronts[i]["interleaveModeCap"].asInt(),
                                 };
                                 caps.set<FrontendCapabilities::Tag::dtmbCaps>(dtmbCaps);
+                                mMaxUsableFrontends[FrontendType::DTMB] = 1;
+                                statusCaps = {
+                                    FrontendStatusType::MODULATIONS,
+                                    FrontendStatusType::INTERLEAVINGS,
+                                    FrontendStatusType::BANDWIDTH,
+                                    FrontendStatusType::GUARD_INTERVAL,
+                                    FrontendStatusType::TRANSMISSION_MODE,
+                                };
                             }
                             break;
                             default:
@@ -321,7 +397,7 @@ Tuner::~Tuner() {}
 
 ::ndk::ScopedAStatus Tuner::openFrontendById(int32_t in_frontendId,
                                              std::shared_ptr<IFrontend>* _aidl_return) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGV("%s/%d", __FUNCTION__, __LINE__);
 
     if (in_frontendId >= mFrontendSize || in_frontendId < 0) {
         ALOGW("[   WARN   ] Frontend with id %d isn't available", in_frontendId);
@@ -487,6 +563,7 @@ std::shared_ptr<Frontend> Tuner::getFrontendById(int32_t frontendId) {
 
 ::ndk::ScopedAStatus Tuner::getMaxNumberOfFrontends(FrontendType in_frontendType,
                                                     int32_t* _aidl_return) {
+    ALOGV("%s", __FUNCTION__);
     *_aidl_return = mMaxUsableFrontends[in_frontendType];
     return ::ndk::ScopedAStatus::ok();
 }
@@ -626,6 +703,10 @@ void Tuner::setTsnSource() {
 
 uint32_t Tuner::getDscMode() {
     return mDscMode;
+}
+
+vector<FrontendStatusType> Tuner::getstatusCaps(int32_t frontendId) {
+    return mFrontendInfos[frontendId].mInfo.statusCaps;
 }
 
 std::shared_ptr<Demux> Tuner::getDemuxById(uint32_t demuxId) {

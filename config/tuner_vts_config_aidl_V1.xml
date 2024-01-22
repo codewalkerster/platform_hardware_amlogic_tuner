@@ -54,14 +54,40 @@
                     config only to the hal.
         -->
         <frontends>
-            <frontend id="FE_DEFAULT" type="DVBT" isSoftwareFrontend="true"
+            <!--
+            <frontend id="FE_DEFAULT" type="ISDBS" isSoftwareFrontend="false"
                       connectToCicamId="0" removeOutputPid="10" frequency="578000000"
                       endFrequency="800000000">
-                <dvbtFrontendSettings bandwidth="8" transmissionMode="128" isHighPriority="1"/>
+              <isdbsFrontendSettings streamId="0" symbolRate="0" streamIdType="0" modulation="0" coderate="0" rolloff="0"/>
             </frontend>
-            <frontend id="FE_DVBS_0" type="DVBS" isSoftwareFrontend="true"
+            <frontend id="FE_ATSC_0" type="ATSC" isSoftwareFrontend="false"
                       connectToCicamId="0" removeOutputPid="10" frequency="578000000"
                       endFrequency="800000000">
+              <atscFrontendSettings inversion="0" modulation="0"/>
+            </frontend>
+            <frontend id="FE_ISDBT_0" type="ISDBT" isSoftwareFrontend="false"
+                      connectToCicamId="0" removeOutputPid="10" frequency="578000000"
+                      endFrequency="800000000">
+              <isdbtFrontendSettings serviceAreaId="0" inversion="0" bandwidth="0" mode="0" guardInterval="0" partialReceptionFlag="0">
+                <FrontendIsdbtLayerSettings modulation="0" coderate="0" timeInterleave="0" numOfSegment="0"/>
+              </isdbtFrontendSettings>
+            </frontend>
+            -->
+            <!--
+            <frontend id="FE_DVBS_0" type="DVBS" isSoftwareFrontend="false"
+                      connectToCicamId="0" removeOutputPid="10" frequency="1000000000"
+                      endFrequency="800000000">
+              <dvbsFrontendSettings inputStreamId="0" symbolRate="27500" inversion="0" modulation="0" coderate="0"
+                                    rolloff="0" pilot="0" standard="0" vcmMode="0" scanType="0" isDiseqcRxMessage="true"/>
+            </frontend>
+            -->
+            <frontend id="FE_DVBT_0" type="DVBT" isSoftwareFrontend="false"
+                      connectToCicamId="0" removeOutputPid="10" frequency="578000000"
+                      endFrequency="800000000">
+              <dvbtFrontendSettings bandwidth="8" transmissionMode="128" isHighPriority="1"
+                                    constellation="1" hierarchy="1" hpCoderate="1" lpCoderate="1"
+                                    guardInterval="1" standard="1" isMiso="0" plpMode="1"
+                                    plpId="0" plpGroupId="0"/>
             </frontend>
         </frontends>
         <!-- Filter section:
@@ -89,6 +115,9 @@
                     only to the hal.
         -->
         <filters>
+            <filter id="FILTER_SECTION_DEFAULT" mainType="TS" subType="SECTION"
+              bufferSize="16777216" pid="257" useFMQ="true" monitorEventTypes="3">
+          </filter>
             <filter id="FILTER_AUDIO_DEFAULT" mainType="TS" subType="AUDIO"
                     bufferSize="16777216" pid="257" useFMQ="false" monitorEventTypes="3">
                 <avFilterSettings isPassthrough="false" isSecureMemory="false">
@@ -102,7 +131,7 @@
                 </avFilterSettings>
             </filter>
             <filter id="FILTER_TS_RECORD_0" mainType="TS" subType="RECORD"
-                    bufferSize="16777216" pid="257" useFMQ="false">
+                    bufferSize="16777216" pid="257" useFMQ="true">
                 <recordFilterSettings tsIndexMask="1" scIndexType="NONE"/>
             </filter>
             <filter id="FILTER_IP_IP_0" mainType="IP" subType="IP" bufferSize="16777216" useFMQ="false" timeDelayInMs="5000">
@@ -110,6 +139,9 @@
                     <srcIpAddress isIpV4="true" ip="192 168 1 1"/>
                     <destIpAddress isIpV4="true" ip="192 168 1 1"/>
                 </ipFilterConfig>
+            </filter>
+            <filter id="FILTER_TS_PCR_0" mainType="TS" subType="PCR"
+                    bufferSize="16777216" pid="256" useFMQ="false">
             </filter>
         </filters>
         <!-- Dvr section:
@@ -140,24 +172,72 @@
                  statusMask="15" lowThreshold="4096" highThreshold="32767"
                  dataFormat="ES" packetSize="188" inputFilePath="/data/local/tmp/test.es"/>
         </dvrs>
+        <timeFilters>
+            <timeFilter id="TIME_FILTER_0" timeStamp="1"/>
+        </timeFilters>
+        <descramblers>
+            <descrambler id="DESCRAMBLER_0" casSystemId="63192"/>
+        </descramblers>
+        <!--
+        <timeFilters>
+            <timeFilter id="TIME_FILTER_0" timeStamp="1"/>
+        </timeFilters>
+        <diseqcMessages>
+            <diseqcMessage msgName="DISEQC_POWER_ON" msgBody="14 0 0 0 0 3"/>
+        </diseqcMessages>
+        <lnbs>
+            <lnb id="LNB_0" voltage="VOLTAGE_12V" tone="NONE" position="UNDEFINED"/>
+            <lnb id="LNB_1" name="default_lnb_external" voltage="VOLTAGE_5V"
+                            tone="NONE" position="UNDEFINED"/>
+        </lnbs>
+        -->
     </hardwareConfiguration>
-
     <!-- Data flow configuration section connects each data flow under test to the ids of the
         hardwares that would be used during the tests. -->
     <dataFlowConfiguration>
-        <clearLiveBroadcast frontendConnection="FE_DEFAULT"
+        <clearLiveBroadcast frontendConnection="FE_DVBT_0"
+                            sectionFilterConnection="FILTER_SECTION_DEFAULT"
                             audioFilterConnection="FILTER_AUDIO_DEFAULT"
                             videoFilterConnection="FILTER_VIDEO_DEFAULT"
                             ipFilterConnection="FILTER_IP_IP_0"
-                            dvrSoftwareFeConnection="DVR_PLAYBACK_1"/>
-        <scan frontendConnection="FE_DEFAULT"/>
-        <dvrPlayback dvrConnection="DVR_PLAYBACK_1"
-                     audioFilterConnection="FILTER_AUDIO_DEFAULT"
-                     videoFilterConnection="FILTER_VIDEO_DEFAULT"/>
+                            pcrFilterConnection="FILTER_TS_PCR_0"
+                            dvrSoftwareFeConnection="DVR_PLAYBACK_0"/>
+        <scan frontendConnection="FE_DVBT_0"/>
         <dvrRecord hasFrontendConnection="true"
-                   frontendConnection="FE_DEFAULT"
+                   frontendConnection="FE_DVBT_0"
                    recordFilterConnection="FILTER_TS_RECORD_0"
                    dvrRecordConnection="DVR_RECORD_0"
-                   dvrSoftwareFeConnection="DVR_PLAYBACK_1"/>
+                   dvrSoftwareFeConnection="DVR_PLAYBACK_0"/>
+        <dvrPlayback dvrConnection="DVR_PLAYBACK_0"
+                     audioFilterConnection="FILTER_AUDIO_DEFAULT"
+                     videoFilterConnection="FILTER_VIDEO_DEFAULT"
+                     sectionFilterConnection="FILTER_SECTION_DEFAULT"/>
+        <descrambling hasFrontendConnection="true"
+                      frontendConnection="FE_DVBT_0"
+                      descramblerConnection="DESCRAMBLER_0"
+                      audioFilterConnection="FILTER_AUDIO_DEFAULT"
+                      videoFilterConnection="FILTER_VIDEO_DEFAULT"
+                      dvrSoftwareFeConnection="DVR_PLAYBACK_0"
+                      dvrSourceConnection="DVR_PLAYBACK_1">
+        </descrambling>
+        <!--
+        <timeFilter timeFilterConnection="TIME_FILTER_0"/>
+        <lnbLive frontendConnection="FE_DVBS_0"
+                 audioFilterConnection="FILTER_AUDIO_DEFAULT"
+                 videoFilterConnection="FILTER_VIDEO_DEFAULT"
+                 lnbConnection="LNB_1"
+                 diseqcMsgSender="DISEQC_POWER_ON"/>
+        <lnbRecord frontendConnection="FE_DVBS_0"
+                   recordFilterConnection="FILTER_TS_RECORD_0"
+                   dvrRecordConnection="DVR_RECORD_0"
+                   lnbConnection="LNB_0"
+                   diseqcMsgSender="DISEQC_POWER_ON"/>
+        <lnbDescrambling frontendConnection="FE_DVBS_0"
+                        audioFilterConnection="FILTER_AUDIO_DEFAULT"
+                        videoFilterConnection="FILTER_VIDEO_DEFAULT"
+                        lnbConnection="LNB_1"
+                        descramblerConnection="DESCRAMBLER_0"/>
+        -->
+    <timeFilter timeFilterConnection="TIME_FILTER_0"/>
     </dataFlowConfiguration>
 </TunerConfiguration>

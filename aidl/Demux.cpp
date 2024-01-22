@@ -589,6 +589,10 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
                 data_len = headerLen - read_len;
                 readRet = dmxDev->getAmDmxDevice()
                               ->AM_DMX_Read(fid, tmpData.data(), &data_len);
+                if (readRet == AM_FAILURE) {
+                    ALOGD("maybe filter has been closed, readRet = %d", readRet);
+                    return;
+                }
                 if (readRet == 0) {
                     read_len += data_len;
                 }
@@ -604,6 +608,10 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             while (readRet) {
                 readRet = dmxDev->getAmDmxDevice()
                       ->AM_DMX_Read(fid, tmpData.data()/* + headerLen*/, (int*)(&readLen));
+                if (readRet == AM_FAILURE) {
+                    ALOGD("maybe filter has been closed, readRet = %d", readRet);
+                    return;
+                }
                 if (readRet)
                     continue;
                 totalLen += readLen;
@@ -762,7 +770,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 
     if (hasTsFilterType && filter->isPcrFilter()) {
         mPcrFilterIds.insert(dmxFilterIdx);
-        ALOGD("Insert pcr filter");
+        ALOGD("Insert pcr filter  pcrFid = %d", dmxFilterIdx);
     }
 
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::TEMI) {

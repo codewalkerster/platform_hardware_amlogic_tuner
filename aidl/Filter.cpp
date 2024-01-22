@@ -376,6 +376,7 @@ Filter::Filter(DemuxFilterType type, int64_t filterId, uint32_t bufferSize,
             if (mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() ==
                 DemuxTsFilterType::PCR) {
                 mIsPcrFilter = true;
+                mExtendId = mFilterId;
             }
             if (mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() ==
                 DemuxTsFilterType::RECORD) {
@@ -738,6 +739,10 @@ Filter::~Filter() {
         bFilterStart = true;
     }
 
+    if (mType.mainType == DemuxFilterMainType::IP) {
+        ALOGD("start IP Filter");
+        return ::ndk::ScopedAStatus::ok();
+    }
     if (mDemux->getAmDmxDevice()
         ->AM_DMX_StartFilter(mFilterId) != 0) {
         bool isPassthrough =
@@ -1104,12 +1109,12 @@ bool Filter::fillDataToDecoder() {
     }
     // After successfully write, send a callback and wait for the read to be done
     if (mCallbackScheduler.hasCallbackRegistered()) {
-        if (mConfigured) {
+        /*if (mConfigured) {
             auto startEvent =
                 DemuxFilterEvent::make<DemuxFilterEvent::Tag::startId>(mStartId++);
             mCallbackScheduler.onFilterEvent(std::move(startEvent));
             mConfigured =false;
-        }
+        }*/
         // lock is still being held
         for (auto&& event : mFilterEvents) {
             mCallbackScheduler.onFilterEvent(std::move(event));
@@ -1580,6 +1585,12 @@ void Filter::updateRecordOutput(vector<int8_t>& data) {
         return ::ndk::ScopedAStatus::ok();
     }
 
+    if (mConfigured) {
+        mFilterEvents.resize(1);
+        mFilterEvents.push_back(DemuxFilterEvent::make<DemuxFilterEvent::Tag::startId>(mStartId++));
+        fillDataToDecoder();
+        mConfigured = false;
+     }
     ::ndk::ScopedAStatus result;
     if (mPts) {
         result = createMediaFilterEventWithIon(mFilterOutput);
