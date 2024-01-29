@@ -1385,6 +1385,7 @@ static ssize_t secure_pusi_read(
       memcpy(params->buf + pusi_len, src, wanna_len);
       non_pusi_rb->r_offset += wanna_len;
     }
+    non_pusi_rb->r_offset %= non_pusi_rb->len;
     DVR_INFO("%#x bytes non pusi data picked. 0x%02x 0x%02x 0x%02x 0x%02x",
           wanna_len, src[0], src[1], src[2], src[3]);
 
