@@ -5,6 +5,7 @@ import (
     "android/soong/android"
     "android/soong/cc"
     "github.com/google/blueprint/proptools"
+    "strconv"
 )
 
 func init() {
@@ -17,16 +18,26 @@ func tuner_hal_DefaultsFactory() (android.Module) {
         type props struct {
             Cflags []string
             Enabled *bool
+            Shared_libs  []string
         }
         p := &props{}
         p.Cflags = globalDefaults(ctx)
         PlatformVndkVersion := ctx.DeviceConfig().PlatformVndkVersion()
-        if PlatformVndkVersion == "30" || PlatformVndkVersion == "31" {
+        IntPlatformVndkVersion,err := strconv.Atoi(PlatformVndkVersion)
+        if err != nil {
+            //fmt.Printf("%v fail to convert", IntPlatformVndkVersion)
+        }
+        if IntPlatformVndkVersion == 30 || IntPlatformVndkVersion == 31 {
             //fmt.Println("Disable tunerhal aidl")
             p.Enabled = proptools.BoolPtr(false)
         } else {
             //fmt.Println("Enable tunerhal aidl")
             p.Enabled = proptools.BoolPtr(true)
+            if IntPlatformVndkVersion > 33 {
+                p.Shared_libs = append(p.Shared_libs, "android.hardware.tv.tuner-V2-ndk")
+            } else {
+                p.Shared_libs = append(p.Shared_libs, "android.hardware.tv.tuner-V1-ndk")
+            }
         }
         ctx.AppendProperties(p)
     })

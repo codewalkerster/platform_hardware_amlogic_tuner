@@ -49,6 +49,12 @@ class Tuner : public BnTuner {
                                           std::shared_ptr<IFrontend>* _aidl_return) override;
     ::ndk::ScopedAStatus openDemux(std::vector<int32_t>* out_demuxId,
                                    std::shared_ptr<IDemux>* _aidl_return) override;
+#if PLATFORM_SDK_VERSION > 33
+    ::ndk::ScopedAStatus openDemuxById(int32_t in_demuxId,
+                                     std::shared_ptr<IDemux>* _aidl_return) override;
+    ::ndk::ScopedAStatus getDemuxInfo(int32_t in_demuxId, DemuxInfo* _aidl_return) override;
+    ::ndk::ScopedAStatus getDemuxIds(std::vector<int32_t>* _aidl_return) override;
+#endif
     ::ndk::ScopedAStatus getDemuxCaps(DemuxCapabilities* _aidl_return) override;
     ::ndk::ScopedAStatus openDescrambler(std::shared_ptr<IDescrambler>* _aidl_return) override;
     ::ndk::ScopedAStatus getFrontendInfo(int32_t in_frontendId,
@@ -64,7 +70,9 @@ class Tuner : public BnTuner {
                                                  int32_t in_maxNumber) override;
     ::ndk::ScopedAStatus getMaxNumberOfFrontends(FrontendType in_frontendType,
                                                  int32_t* _aidl_return) override;
-
+#if PLATFORM_SDK_VERSION > 33
+    ::ndk::ScopedAStatus isLnaSupported(bool* _aidl_return) override;
+#endif
     binder_status_t dump(int fd, const char** args, uint32_t numArgs) override;
 
     std::shared_ptr<Frontend> getFrontendById(int32_t frontendId);
@@ -105,13 +113,16 @@ class Tuner : public BnTuner {
     // Static mFrontends array to maintain local frontends information
     map<int32_t, std::shared_ptr<Frontend>> mFrontends;
     map<int32_t, int32_t> mFrontendToDemux;
-    map<int32_t, std::shared_ptr<Demux>> mDemuxes;
+    map<int32_t, std::shared_ptr<Demux>> mDemuxes;  // use demuxId as the key in
+                                                    // this sample implementation
     std::map<int32_t, std::shared_ptr<Descrambler>> mDescramblers;
     // To maintain how many Frontends we have
     int mFrontendSize;
+#if PLATFORM_SDK_VERSION < 34
     // The last used demux id. Initial value is -1.
     // First used id will be 0.
     int32_t mLastUsedId = -1;
+#endif
     vector<std::shared_ptr<Lnb>> mLnbs;
     map<FrontendType, int32_t> mMaxUsableFrontends;
     vector<sp<HwFeState>> mHwFes;

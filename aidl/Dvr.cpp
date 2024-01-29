@@ -261,6 +261,16 @@ Dvr::~Dvr() {
     return ::ndk::ScopedAStatus::ok();
 }
 
+#if PLATFORM_SDK_VERSION > 33
+::ndk::ScopedAStatus Dvr::setStatusCheckIntervalHint(int64_t /* in_milliseconds */) {
+    ALOGV("%s", __FUNCTION__);
+
+    // There is no active polling in this default implementation,
+    // so directly return ok here.
+    return ::ndk::ScopedAStatus::ok();
+}
+#endif
+
 bool Dvr::createDvrMQ() {
     ALOGD("%s", __FUNCTION__);
 

@@ -69,7 +69,11 @@ class Descrambler;
 
 class Demux : public BnDemux {
   public:
+#if PLATFORM_SDK_VERSION > 33
+    Demux(int32_t demuxId, uint32_t filterTypes);
+#else
     Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner);
+#endif
     ~Demux();
 
     ::ndk::ScopedAStatus setFrontendDataSource(int32_t in_frontendId) override;
@@ -118,6 +122,13 @@ class Demux : public BnDemux {
     void sendFrontendInputToRecord(vector<int8_t> data, uint16_t pid, uint64_t offset, uint64_t pts = 0, int iFrameIndex =
     0, int pusiIndex = 0);
     bool startRecordFilterDispatcher();
+#if PLATFORM_SDK_VERSION > 33
+    void getDemuxInfo(DemuxInfo* demuxInfo);
+    bool isInUse();
+    void setInUse(bool inUse);
+    void setTunerService(std::shared_ptr<Tuner> tuner);
+#endif
+
     static void postData(void* demux, int fid, bool esOutput, bool passthrough);
     static void postDvrData(void* demux);
     static void pesDataCallback(void* demux, int fid, uint8_t *pes, int len);
@@ -273,6 +284,10 @@ class Demux : public BnDemux {
     vector<uint8_t> mPesOutput;
 
     const bool DEBUG_DEMUX = false;
+#if PLATFORM_SDK_VERSION > 33
+    int32_t mFilterTypes;
+    bool mInUse = false;
+#endif
     bool bSupportSoftDemuxForSubtitle = false;
     sp<AM_DMX_Device> AmDmxDevice[DMX_COUNT] = { NULL };
     //sp<AmDvr> mAmDvrDevice[DMX_COUNT]        = { NULL };

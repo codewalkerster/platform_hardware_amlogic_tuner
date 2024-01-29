@@ -84,6 +84,40 @@ static vector<int8_t> uint8DataToInt8Data(vector<uint8_t> uInt8Data) {
     return int8Data;
 }
 
+#if PLATFORM_SDK_VERSION > 33
+Demux::Demux(int32_t demuxId, uint32_t filterTypes) {
+    FileSystem_create();
+
+    if (FileSystem_writeFile(VIDEO_BUFFER_SIZE,"15728640") != 0) {
+        ALOGE("set video_buf_size erro %p\n",this);
+    }
+    if (FileSystem_writeFile(AUDIO_BUFFER_SIZE,"3145728") != 0) {
+        ALOGE("set audio_buf_size erro %p\n",this);
+    }
+    mDemuxId = demuxId;
+    mFilterTypes = filterTypes;
+    mCiCamId = 0;
+    mFrontendInputThreadRunning = false;
+    mKeepFetchingDataFromFrontend = false;
+}
+
+void Demux::setTunerService(std::shared_ptr<Tuner> tuner) {
+    ALOGD("setTunerService");
+    mTuner = tuner;
+    bSupportSoftDemuxForSubtitle =  property_get_bool(SUPPORT_SOFTWARE_DEMUX_SUBTITLE, true);
+    bSupportSoftDemuxForTemi = property_get_bool(SUPPORT_SOFTWARE_DEMUX_TEMI, true);
+    ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d, bSupportSoftDemuxForTemi = %d", mDemuxId, bSupportSoftDemuxForSubtitle, bSupportSoftDemuxForTemi);
+    AmDmxDevice[mDemuxId] = new AM_DMX_Device(mDemuxId);
+    AmDmxDevice[mDemuxId]->AM_DMX_Open();
+
+    AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTuner->getTsInput());
+
+    mHwDemuxOps[mDemuxId] = new HwDemuxOpsSCWrap();
+    if (mHwDemuxOps[mDemuxId] != nullptr) {
+        mDemuxHandle[mDemuxId] = mHwDemuxOps[mDemuxId]->AmHwDemux_Create(0, NULL);
+    }
+}
+#else
 Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
     FileSystem_create();
 
@@ -114,6 +148,7 @@ Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
     }
 
 }
+#endif
 
 Demux::~Demux() {
     ALOGD("~Demux");
@@ -683,7 +718,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 }
 
 ::ndk::ScopedAStatus Demux::setFrontendDataSource(int32_t in_frontendId) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGD("%s", __FUNCTION__);
 
     if (mTuner == nullptr) {
         return ::ndk::ScopedAStatus::fromServiceSpecificError(
@@ -991,6 +1026,9 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     mDvrPlayback = nullptr;
     mDvrRecord   = nullptr;
     destroyMediaSync();
+
+    bDemuxUsePlayback = false;
+    bDemuxUseRecord   = false;
 
     if (mHwDemuxOps[mDemuxId] != nullptr) {
         if (mDemuxHandle[mDemuxId]) {
@@ -1435,6 +1473,20 @@ uint16_t Demux::getFilterTpid(int64_t filterId) {
         return -1;
     }
 }
+
+#if PLATFORM_SDK_VERSION > 33
+bool Demux::isInUse() {
+    return mInUse;
+}
+
+void Demux::setInUse(bool inUse) {
+    mInUse = inUse;
+}
+
+void Demux::getDemuxInfo(DemuxInfo* demuxInfo) {
+    *demuxInfo = {.filterTypes = mFilterTypes};
+}
+#endif
 
 void Demux::startFrontendInputLoop() {
     ALOGD("[Demux] start frontend on demux");
