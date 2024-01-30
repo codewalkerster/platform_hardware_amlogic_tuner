@@ -134,6 +134,18 @@ void Tuner::init() {
                                 caps.set<FrontendCapabilities::Tag::atscCaps>(atscCaps);
                             }
                             break;
+                            case static_cast<int>(FrontendType::ATSC3): {
+                                FrontendAtsc3Capabilities atsc3Caps{
+                                    .modulationCap = arrayFronts[i]["modulationCap"].asInt(),
+                                    .bandwidthCap = arrayFronts[i]["bandwidthCap"].asInt(),
+                                    .timeInterleaveModeCap = arrayFronts[i]["timeInterleaveModeCap"].asInt(),
+                                    .codeRateCap = arrayFronts[i]["codeRateCap"].asInt(),
+                                    .fecCap = arrayFronts[i]["fecCap"].asInt(),
+                                    .demodOutputFormatCap = static_cast<int8_t>(arrayFronts[i]["demodOutputFormatCap"].asInt()),
+                                };
+                                caps.set<FrontendCapabilities::Tag::atsc3Caps>(atsc3Caps);
+                            }
+                            break;
                             case static_cast<int>(FrontendType::DVBC): {
                                 FrontendDvbcCapabilities dvbcCaps {
                                     .modulationCap = arrayFronts[i]["modulationCap"].asInt(),

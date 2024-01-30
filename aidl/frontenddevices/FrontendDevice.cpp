@@ -37,6 +37,7 @@
 #define M_BS_STOP_FREQ              (2150)              /*The stop RF frequency, 2150MHz*/
 #define M_BS_MAX_SYMB               (45)
 #define M_BS_MIN_SYMB               (2)
+#define PLP_SIZE (sizeof(atsc3_plp_list_entry_t) * (MAX_PLP_NUMBER) + sizeof(atsc3_l1basic_t) + sizeof(atsc3_l1detail_raw_t))
 
 namespace aidl {
 namespace android {
@@ -70,8 +71,7 @@ FrontendDevice::FrontendDevice(uint32_t thId, FrontendType type, const sp<Fronte
     mRequestTuningStop = false;
     mThreadState = STATE_INITIAL_IDLE;
     mPlpId = 0;
-    if (type == FrontendType::ATSC3
-        || type == FrontendType::ISDBS
+    if (type == FrontendType::ISDBS
         || type == FrontendType::ISDBS3) {
         unsupportSystem = true;
     } else {
@@ -260,6 +260,32 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         cmd->u.data = fe_params.u.vsb.modulation;
         cmd ++;
         ncmd ++;
+        break;
+    case FrontendType::ATSC3:
+    {
+        // set plp for atsc3
+        uint8_t plp_ids[MAX_PLP_NUMBER];
+        int plp_num = settings.get<FrontendSettings::Tag::atsc3>().plpSettings.size();
+        //int plp_num = settings.atsc3().plpSettings.size();
+        cmd->cmd = DTV_BANDWIDTH_HZ;
+        cmd->u.data = bandwidth_hz(fe_params.u.ofdm.bandwidth);
+        cmd ++;
+        ncmd ++;
+
+        cmd->cmd = DTV_DVBT2_PLP_ID;
+        cmd->u.data = plp_num;
+        cmd ++;
+        ncmd ++;
+
+        cmd->cmd = DTV_STREAM_ID;
+        for (int i = 0; i < plp_num; i++) {
+            plp_ids[i] = settings.get<FrontendSettings::Tag::atsc3>().plpSettings[i].plpId;
+            //plp_ids[i] = settings.atsc3().plpSettings[i].plpId;
+            cmd->u.data |= plp_ids[i] << i * 8;
+        }
+        cmd ++;
+        ncmd ++;
+    }
         break;
     case FrontendType::DVBC:
         cmd->cmd = DTV_MODULATION;
@@ -656,6 +682,44 @@ vector<int32_t> FrontendDevice::getMPLPIDList() {
         }
     }
     return plpIds;
+}
+
+vector<atsc3_plp_list_entry_t> FrontendDevice::getAtsc3MPLPIDList() {
+    ALOGV("%s/%d getAtsc3MPLPIDList", __FUNCTION__, __LINE__);
+    unsigned char buffer[PLP_SIZE];
+    int plp_list_num =0;
+    int L1Basic_len = sizeof(atsc3_l1basic_t);
+    int L1Detail_len = sizeof(atsc3_l1detail_raw_t);
+    vector<atsc3_plp_list_entry_t> plp_list_entry_t;
+    uint8_t l1basic[L1Basic_len];
+    uint8_t l1detail_raw_t[L1Detail_len];
+    struct dtv_property cmd;
+    struct dtv_properties props;
+
+    cmd.cmd = DTV_STREAM_ID;
+    cmd.u.buffer.reserved1[0] = 0;
+    cmd.u.buffer.reserved2 = buffer;
+    props.num = 1;
+    props.props = &cmd;
+
+    if (getFeProp(&props) != SUCCESS) {
+        return plp_list_entry_t;
+    }
+
+    plp_list_num = cmd.u.buffer.reserved1[0];
+    ALOGV("%s plp_list_num = %d", __FUNCTION__, plp_list_num);
+    if (plp_list_num != 0) {
+        plp_list_entry_t.resize(plp_list_num);
+        memcpy(plp_list_entry_t.data(), buffer, plp_list_num * sizeof(atsc3_plp_list_entry_t));
+        memcpy(&l1basic, buffer + plp_list_num * sizeof(atsc3_plp_list_entry_t), sizeof(l1basic));
+        memcpy(&l1detail_raw_t, buffer + plp_list_num * sizeof(atsc3_plp_list_entry_t) + sizeof(l1basic), sizeof(l1detail_raw_t));
+    }
+
+    for (int i = 0; i < plp_list_num; i++) {
+        ALOGV("%s getAtsc3MPLPIDList pipid[%d] = %d", __FUNCTION__, i, plp_list_entry_t[i].id);
+        ALOGV("%s getAtsc3MPLPIDList plp.lls_flg[%d] is =%d", __FUNCTION__, i, plp_list_entry_t[i].lls_flg);
+    }
+    return plp_list_entry_t;
 }
 
 int32_t FrontendDevice::getCurrentMPlpId() {

@@ -86,6 +86,7 @@ cc_defaults {
         "frontenddevices/FrontendDevice.cpp",
         "frontenddevices/FrontendAnalogDevice.cpp",
         "frontenddevices/FrontendAtscDevice.cpp",
+        "frontenddevices/FrontendAtsc3Device.cpp",
         "frontenddevices/FrontendDvbcDevice.cpp",
         "frontenddevices/FrontendDvbsDevice.cpp",
         "frontenddevices/FrontendIsdbtDevice.cpp",
