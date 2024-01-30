@@ -63,6 +63,7 @@ public:
     vector<uint8_t> getMPLPIDList();
     vector<atsc3_plp_list_entry_t> getAtsc3MPLPIDList();
     uint8_t getCurrentMPlpId();
+    uint32_t getFeSystem();
     virtual int getFrontendSettings(FrontendSettings *settings, void* fe_params) {return -1;};
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
     virtual int getFrontendSettingsExt(V1_1::FrontendSettingsExt1_1 *settingsExt, void* fe_params) {return -1;};

@@ -516,10 +516,7 @@ void Frontend::scanThreadLoop() {
                         break;
                     }
                     case FrontendType::DVBC: {
-                        FrontendModulationStatus modulationStatus;
-                        modulationStatus.set<FrontendModulationStatus::Tag::dvbc>(
-                                FrontendDvbcModulation::MOD_16QAM);  // value = 1 << 1
-                        status.set<FrontendStatus::modulationStatus>(modulationStatus);
+                        status.set<FrontendStatus::modulationStatus>(mFeDev->getFeModulationStatus());
                         break;
                     }
                     case FrontendType::DVBS: {

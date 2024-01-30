@@ -37,12 +37,35 @@ FrontendDvbcDevice::FrontendDvbcDevice(uint32_t hwId, FrontendType type, const s
 FrontendDvbcDevice::~FrontendDvbcDevice() {
 }
 
+static FrontendDvbcModulation feSystemToModulationStatus(uint32_t system) {
+    switch (system)
+    {
+        case QAM_16:
+            return FrontendDvbcModulation::MOD_16QAM;
+        case QAM_32:
+            return FrontendDvbcModulation::MOD_32QAM;
+        case QAM_64:
+            return FrontendDvbcModulation::MOD_64QAM;
+        case QAM_128:
+            return FrontendDvbcModulation::MOD_128QAM;
+        case QAM_256:
+            return FrontendDvbcModulation::MOD_256QAM;
+        case QAM_AUTO:
+            return FrontendDvbcModulation::AUTO;
+    }
+    return FrontendDvbcModulation::UNDEFINED;
+}
+
 FrontendModulationStatus FrontendDvbcDevice::getFeModulationStatus() {
     FrontendModulationStatus modulationStatus;
     if (getFeDevice()->feSettings->getDiscriminator() != FrontendSettings::hidl_discriminator::dvbc) {
         modulationStatus.dvbc(FrontendDvbcModulation::MOD_16QAM);
     } else {
-        modulationStatus.dvbc(getFeDevice()->feSettings->dvbc().modulation);
+        uint32_t feSystem = getFeSystem();
+        if (feSystem < QAM_16 || feSystem > QAM_AUTO)
+            modulationStatus.dvbc(getFeDevice()->feSettings->dvbc().modulation);
+        else
+            modulationStatus.dvbc(feSystemToModulationStatus(feSystem));
     }
     return modulationStatus;
 }

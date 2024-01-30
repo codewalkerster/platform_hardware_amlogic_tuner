@@ -356,6 +356,7 @@ uint16_t FrontendDevice::getFeSnr() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
+    ALOGD("%s:%u", __FUNCTION__, snr);
     return snr;
 }
 
@@ -370,6 +371,7 @@ uint32_t FrontendDevice::getFeBer() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
+    ALOGD("%s:%u", __FUNCTION__, ber);
     return ber;
 }
 
@@ -384,6 +386,7 @@ uint16_t FrontendDevice::getSignalStrength() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
+    ALOGD("%s:%u", __FUNCTION__, strength);
     return strength;
 }
 
@@ -582,19 +585,25 @@ LnbVoltage FrontendDevice::getLnbVoltage() {
 }
 
 uint32_t FrontendDevice::getSymbolRate() {
-    struct dtv_property p = {.cmd = DTV_SYMBOL_RATE, .u.data = 0};
-    struct dtv_properties props = {.num = 1, .props = &p};
+    uint32_t ret = 0;
+    struct dtv_property cmd;
+    struct dtv_properties props;
 
     if (mDev.type != FrontendType::DVBC && mDev.type != FrontendType::DVBS) {
         return 0;
     }
 
-    if (getFeProp(&props) != SUCCESS) {
-        return 0;
+    memset(&cmd, 0, sizeof(struct dtv_property));
+    cmd.cmd = DTV_DELIVERY_SYSTEM;
+    props.num = 1;
+    props.props = &cmd;
+
+    if (getFeProp(&props) == SUCCESS) {
+        ret = cmd.reserved[1];
     }
 
-    ALOGD("getSymbolRate: %u", p.u.data);
-    return (p.u.data);
+    ALOGD("%s:[0] %u, [1] %u", __FUNCTION__, cmd.reserved[0], ret);
+    return ret;
 }
 
 uint32_t FrontendDevice::getActualTerrHierarchy() {
@@ -651,6 +660,24 @@ vector<int32_t> FrontendDevice::getMPLPIDList() {
 
 int32_t FrontendDevice::getCurrentMPlpId() {
     return mPlpId;
+}
+
+uint32_t FrontendDevice::getFeSystem() {
+    uint32_t ret = 0xffff;
+    struct dtv_property cmd;
+    struct dtv_properties props;
+
+    memset(&cmd, 0, sizeof(struct dtv_property));
+    cmd.cmd = DTV_DELIVERY_SYSTEM;
+    props.num = 1;
+    props.props = &cmd;
+
+    if (getFeProp(&props) == SUCCESS) {
+        ret = cmd.reserved[0];
+    }
+
+    ALOGD("%s:[0] %u, [1] %u", __FUNCTION__, ret, cmd.reserved[1]);
+    return ret;
 }
 
 status_t FrontendDevice::readyToRun() {

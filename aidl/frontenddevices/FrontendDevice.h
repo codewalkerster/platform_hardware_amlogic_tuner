@@ -63,7 +63,7 @@ public:
     uint32_t  getActualTerrHierarchy();
     vector<int32_t> getMPLPIDList();
     int32_t getCurrentMPlpId();
-
+    uint32_t getFeSystem();
     virtual int getFrontendSettings(FrontendSettings *settings, void* fe_params) {return -1;};
     virtual int getFeDeliverySystem(FrontendType type) {return SYS_UNDEFINED;};
     void setHwFe(const sp<HwFeState>& hwFe);

@@ -163,7 +163,7 @@ void FrontendDevice::stopByHw() {
 }
 
 bool FrontendDevice::checkOpen(bool autoOpen) {
-    ALOGD("%s-(id:%d)", __FUNCTION__, mDev.id);
+    ALOGV("%s-(id:%d)", __FUNCTION__, mDev.id);
     bool ret=  true;
 
     if (unsupportSystem) return false;
@@ -183,6 +183,7 @@ bool FrontendDevice::checkOpen(bool autoOpen) {
 }
 
 int FrontendDevice::tune(const FrontendSettings & settings, const V1_1::FrontendSettingsExt1_1 &settingsExt) {
+    ALOGD("%s, id(%d), type = %d", __FUNCTION__, mDev.id, (int)mDev.type);
     requestTuneStop();
     updateThreadState(FrontendDevice::STATE_TUNE_START);
     userFeSettings = settings;
@@ -384,6 +385,7 @@ uint16_t FrontendDevice::getFeSnr() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
+    ALOGD("%s:%u", __FUNCTION__, snr);
     return snr;
 }
 
@@ -398,6 +400,7 @@ uint32_t FrontendDevice::getFeBer() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
+    ALOGD("%s:%u", __FUNCTION__, ber);
     return ber;
 }
 
@@ -412,6 +415,7 @@ uint16_t FrontendDevice::getSignalStrength() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
+    ALOGD("%s:%u", __FUNCTION__, strength);
     return strength;
 }
 
@@ -491,6 +495,7 @@ int FrontendDevice::blindTune(const FrontendSettings & settings) {
 int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType type, const V1_1::FrontendSettingsExt1_1 &settingsExt) {
     int ret = 0;
 
+    ALOGD("%s, id(%d), type = %d", __FUNCTION__, mDev.id, (int)mDev.type);
     if (!checkOpen(true)) return UNAVAILABLE;
     mScanType = type;
 
@@ -523,11 +528,13 @@ void FrontendDevice::clearTuner() {
 }
 
 int FrontendDevice::stopTune() {
+    ALOGD("%s, id(%d), type = %d", __FUNCTION__, mDev.id, (int)mDev.type);
     stop();
     return 0;
 }
 
 int FrontendDevice::stopScan() {
+    ALOGD("%s, id(%d), type = %d", __FUNCTION__, mDev.id, (int)mDev.type);
     stop();
     //mContext->sendScanCallBack(mDev.tuneFreq, false, true);
     return 0;
@@ -612,19 +619,25 @@ uint32_t FrontendDevice::getLnbVoltage() {
 }
 
 uint32_t FrontendDevice::getSymbolRate() {
-    struct dtv_property p = {.cmd = DTV_SYMBOL_RATE, .u.data = 0};
-    struct dtv_properties props = {.num = 1, .props = &p};
+    uint32_t ret = 0;
+    struct dtv_property cmd;
+    struct dtv_properties props;
 
     if (mDev.type != FrontendType::DVBC && mDev.type != FrontendType::DVBS) {
         return 0;
     }
 
-    if (getFeProp(&props) != SUCCESS) {
-        return 0;
+    memset(&cmd, 0, sizeof(struct dtv_property));
+    cmd.cmd = DTV_DELIVERY_SYSTEM;
+    props.num = 1;
+    props.props = &cmd;
+
+    if (getFeProp(&props) == SUCCESS) {
+        ret = cmd.reserved[1];
     }
 
-    ALOGD("getSymbolRate: %u", p.u.data);
-    return (p.u.data);
+    ALOGD("%s:[0] %u, [1] %u", __FUNCTION__, cmd.reserved[0], ret);
+    return ret;
 }
 
 uint32_t FrontendDevice::getActualTerrHierarchy() {
@@ -721,6 +734,24 @@ vector<atsc3_plp_list_entry_t> FrontendDevice::getAtsc3MPLPIDList() {
 
 uint8_t FrontendDevice::getCurrentMPlpId() {
     return mPlpId;
+}
+
+uint32_t FrontendDevice::getFeSystem() {
+    uint32_t ret = 0xffff;
+    struct dtv_property cmd;
+    struct dtv_properties props;
+
+    memset(&cmd, 0, sizeof(struct dtv_property));
+    cmd.cmd = DTV_DELIVERY_SYSTEM;
+    props.num = 1;
+    props.props = &cmd;
+
+    if (getFeProp(&props) == SUCCESS) {
+        ret = cmd.reserved[0];
+    }
+
+    ALOGD("%s:[0] %u, [1] %u", __FUNCTION__, ret, cmd.reserved[1]);
+    return ret;
 }
 
 status_t FrontendDevice::readyToRun() {
