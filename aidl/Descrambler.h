@@ -60,7 +60,7 @@ namespace tuner {
 class Tuner;
 class Descrambler : public BnDescrambler {
   public:
-    Descrambler(int32_t descramblerId,     std::shared_ptr<Tuner> tuner);
+    Descrambler(int32_t in_dscId,     std::shared_ptr<Tuner> in_tuner);
 
     ::ndk::ScopedAStatus setDemuxSource(int32_t in_demuxId) override;
     ::ndk::ScopedAStatus setKeyToken(const std::vector<uint8_t>& in_keyToken) override;
@@ -71,14 +71,14 @@ class Descrambler : public BnDescrambler {
             const std::shared_ptr<IFilter>& in_optionalSourceFilter) override;
     ::ndk::ScopedAStatus close() override;
 
-  bool isPidSupported(uint16_t pid);
+  bool isPidSupported(uint16_t in_pid);
   bool isDescramblerReady();
   bool allocDscChannels();
   bool clearDscChannels();
-  bool bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle);
+  bool bindDscChannelToKeyTable(uint32_t in_dscDevId, uint32_t in_dscHandle);
   bool allocNskDscChannels();
   bool clearNskDscChannels();
-  bool getTsnSourceStatus(bool *is_local_mode);
+  bool getTsnSourceStatus(bool *out_isLocalMode);
 
   private:
     virtual ~Descrambler();

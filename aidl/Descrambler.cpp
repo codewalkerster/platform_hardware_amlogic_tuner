@@ -50,23 +50,26 @@ namespace hardware {
 namespace tv {
 namespace tuner {
 
-Descrambler::Descrambler(int32_t descramblerId,     std::shared_ptr<Tuner> tuner) {
-  mDescramblerId = descramblerId;
-  mTuner = tuner;
-  mSourceDemuxId = 0;
-  mKeyToken = 0;
-  FileSystem_create();
-  getTsnSourceStatus(&mIsLocalMode);
+Descrambler::Descrambler(int32_t in_dscId,     std::shared_ptr<Tuner> in_tuner) {
+  mDescramblerId = in_dscId;
+  mTuner = in_tuner;
   if (mTuner != nullptr)
       mDscType = mTuner->getDscMode();
+  mSourceDemuxId = 0;
+  mKeyToken = 0;
+
+  FileSystem_create();
+  getTsnSourceStatus(&mIsLocalMode);
+
 #ifdef SUPPORT_TSD
   if (mDscType == CA_DSC_TSD_TYPE) {
     mDscType = FileSystem_getPropertyInt(TUNERHAL_DSC_TYPE_PROP, CA_DSC_COMMON_TYPE);
-    TUNER_DSC_DBG(mDescramblerId, "get dsc type:%d", mDscType);
+    TUNER_DSC_DBG(mDescramblerId, "getProperty mDscType:%d", mDscType);
   }
 #endif
+
   mDsmFd = DSM_OpenSession(0);
-  TUNER_DSC_DBG(descramblerId, "mIsLocalMode: %d mDscType:%d mDsmFd:%d",
+  TUNER_DSC_DBG(mDescramblerId, "mIsLocalMode:%d mDscType:%d mDsmFd:%d", \
       mIsLocalMode, mDscType, mDsmFd);
 }
 
@@ -95,31 +98,55 @@ Descrambler::~Descrambler() {
     }
     mDemuxSet = true;
     mSourceDemuxId = in_demuxId;
-    TUNER_DSC_INFO(mDescramblerId,
-        "mSourceDemuxId: %d mDescramblerId:%d", mSourceDemuxId, mDescramblerId);
   }
   if (mTuner != nullptr)
     mTuner->attachDescramblerToDemux(mDescramblerId, in_demuxId);
+
+  TUNER_DSC_INFO(mDescramblerId, "source dmx id:%d dsc id:%d", mSourceDemuxId, mDescramblerId);
 
   return ::ndk::ScopedAStatus::ok();
 }
 
 ::ndk::ScopedAStatus Descrambler::setKeyToken(const std::vector<uint8_t>&  in_keyToken) {
-  TUNER_DSC_TRACE(mDescramblerId);
   std::lock_guard<std::mutex> lock(mDescrambleLock);
+  TUNER_DSC_TRACE(mDescramblerId);
+
+  uint32_t tempToken = 0;
   uint32_t tokenSize = in_keyToken.size();
+
   if (tokenSize == 0) {
       TUNER_DSC_ERR(mDescramblerId, "tokenSize is 0!");
           return ::ndk::ScopedAStatus::fromServiceSpecificError(
               static_cast<int32_t>(Result::INVALID_ARGUMENT));
   }
+
   for (int tokenIdx = sizeof(mKeyToken) - 1; tokenIdx >= 0; --tokenIdx) {
-      mKeyToken = (mKeyToken << 8) | in_keyToken[tokenIdx];
+      tempToken = (tempToken << 8) | in_keyToken[tokenIdx];
+  }
+
+  if (tempToken == mKeyToken) {
+      TUNER_DSC_DBG(mDescramblerId, "The same keyToken:0x%x", tempToken);
+      return ::ndk::ScopedAStatus::ok();
+  } else {
+      mKeyToken = tempToken;
+      if (mIsReady && mDsmFd >= 0) {
+          TUNER_DSC_DBG(mDescramblerId, "Reset keyToken");
+          DSM_CloseSession(mDsmFd);
+          if (mIsNskDsc) {
+              clearNskDscChannels();
+          } else {
+              clearDscChannels();
+          }
+          mIsReady = false;
+          mDsmFd = DSM_OpenSession(0);
+      }
   }
   TUNER_DSC_DBG(mDescramblerId, "mKeyToken:0x%x", mKeyToken);
+
   int ret = DSM_BindToken(mDsmFd, mKeyToken);
   if (ret)
       TUNER_DSC_WRAN(mDescramblerId, "DSM_BindToken failed! %s", strerror(errno));
+
 #ifdef SUPPORT_TSD
   uint32_t dsmDscType = DSM_PROP_SC2_DSC_TYPE_INVALID;
   if (mDscType == CA_DSC_COMMON_TYPE)
@@ -357,8 +384,11 @@ Descrambler::~Descrambler() {
 ::ndk::ScopedAStatus Descrambler::close() {
   TUNER_DSC_TRACE(mDescramblerId);
 
-  if (mTuner != nullptr)
-      mTuner->detachDescramblerFromDemux(mDescramblerId, mSourceDemuxId);
+  if (mTuner != nullptr) {
+    mTuner->detachDescramblerFromDemux(mDescramblerId, mSourceDemuxId);
+    mTuner->removeDescrambler(mDescramblerId);
+  }
+
   {
     std::lock_guard<std::mutex> lock(mDescrambleLock);
 
@@ -383,15 +413,15 @@ Descrambler::~Descrambler() {
   return ::ndk::ScopedAStatus::ok();
 }
 
-bool Descrambler::isPidSupported(uint16_t pid) {
+bool Descrambler::isPidSupported(uint16_t in_pid) {
   std::lock_guard<std::mutex> lock(mDescrambleLock);
 
-  TUNER_DSC_VERB(mDescramblerId, "pid: 0x%x", pid);
+  TUNER_DSC_VERB(mDescramblerId, "pid: 0x%x", in_pid);
 
-  return mAddedPid.find(pid) != mAddedPid.end();
+  return mAddedPid.find(in_pid) != mAddedPid.end();
 }
 
-bool Descrambler::bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle) {
+bool Descrambler::bindDscChannelToKeyTable(uint32_t in_dscDevId, uint32_t in_dscHandle) {
   for (int i = 0; i < mKeyslotList.count; i++) {
     uint32_t kt_parity = mKeyslotList.keyslots[i].parity;
     uint32_t kt_is_iv = mKeyslotList.keyslots[i].is_iv;
@@ -406,8 +436,8 @@ bool Descrambler::bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_han
       return false;
     kt_id = mKeyslotList.keyslots[i].id;
 
-    if (ca_set_key(dsc_dev_id, dsc_handle, kt_type, kt_id)) {
-      TUNER_DSC_ERR(mDescramblerId, "ca_set_key(%d %d %d) failed!", dsc_handle, kt_type, kt_id);
+    if (ca_set_key(in_dscDevId, in_dscHandle, kt_type, kt_id)) {
+      TUNER_DSC_ERR(mDescramblerId, "ca_set_key(%d %d %d) failed!", in_dscHandle, kt_type, kt_id);
       return false;
     }
   }
@@ -694,16 +724,18 @@ bool Descrambler::isDescramblerReady() {
   return mIsReady;
 }
 
-bool Descrambler::getTsnSourceStatus(bool *is_local_mode) {
+bool Descrambler::getTsnSourceStatus(bool *out_isLocalMode) {
   TUNER_DSC_TRACE(mDescramblerId);
   char tsnSource[32] = {0};
-  if (!is_local_mode)
+
+  if (!out_isLocalMode)
     return false;
+
   if (!FileSystem_readFile(TSN_SOURCE, tsnSource, sizeof(tsnSource))) {
       if (strstr(tsnSource, TSN_LOCAL)) {
-          *is_local_mode = true;
+          *out_isLocalMode = true;
       } else if (strstr(tsnSource, TSN_DEMOD)) {
-          *is_local_mode = false;
+          *out_isLocalMode = false;
       } else {
           TUNER_DSC_WRAN(mDescramblerId, "unknown tsn source %s!", tsnSource);
           return false;

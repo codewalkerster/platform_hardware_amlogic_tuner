@@ -73,9 +73,10 @@ class Tuner : public BnTuner {
     void frontendStopTune(int32_t frontendId);
     void removeDemux(int32_t demuxId);
     void removeFrontend(int32_t frontendId);
+    void removeDescrambler(int32_t dscId);
     void init();
-    void attachDescramblerToDemux(int32_t descramblerId, int32_t demuxId);
-    void detachDescramblerFromDemux(int32_t descramblerId, int32_t demuxId);
+    void attachDescramblerToDemux(int32_t dscId, int32_t demuxId);
+    void detachDescramblerFromDemux(int32_t dscId, int32_t demuxId);
     uint32_t getTsInput();
     void setTsnSource();
     uint32_t getDscMode();
@@ -108,7 +109,6 @@ class Tuner : public BnTuner {
     // The last used demux id. Initial value is -1.
     // First used id will be 0.
     int32_t mLastUsedId = -1;
-    int32_t mLastUsedDescramblerId = -1;
     vector<std::shared_ptr<Lnb>> mLnbs;
     map<FrontendType, int32_t> mMaxUsableFrontends;
     vector<sp<HwFeState>> mHwFes;
