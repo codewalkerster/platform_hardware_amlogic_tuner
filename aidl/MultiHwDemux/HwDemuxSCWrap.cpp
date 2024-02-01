@@ -17,12 +17,14 @@ typedef int (*AmHwDemux_Destroy_func)(void* handle);
 typedef int (*AmHwDemux_Init_func)(void* handle,int mode,void* arg);
 typedef int (*AmHwDemux_ResetStatus_func)(void* handle);
 typedef int (*AmHwDemux_GetStreamControlStatus_func)(void* handle,void* arg,int64_t WriteTsSize,int vPid,int aPid);
+typedef int (*AmHwDemux_Flush_func)(void* handle);
 
 static AmHwDemux_Create_func gAmHwDemux_Create = NULL;
 static AmHwDemux_Destroy_func gAmHwDemux_Destroy = NULL;
 static AmHwDemux_Init_func gAmHwDemux_Init = NULL;
 static AmHwDemux_ResetStatus_func gAmHwDemux_ResetStatus = NULL;
 static AmHwDemux_GetStreamControlStatus_func gAmHwDemux_GetStreamControlStatus = NULL;
+static AmHwDemux_Flush_func gAmHwDemux_Flush = NULL;
 
 HwDemuxOpsSCWrap::HwDemuxOpsSCWrap() {
     DmxLibInit();
@@ -90,6 +92,14 @@ bool HwDemuxOpsSCWrap::DmxLibInit()
         return err;
     }
 
+    typedef int (*flush)(void *handle);
+    gAmHwDemux_Flush =
+        (flush)dlsym(libHandle, "AmHwDemux_Flush");
+    if (gAmHwDemux_Flush == NULL) {
+        ALOGE("dlsym AmHwDemux_Flush failed, error=%s \n", dlerror());
+        return err;
+    }
+
     ALOGI( "demxLibInit ok\n");
 
     isInit = true;
@@ -119,43 +129,47 @@ void* HwDemuxOpsSCWrap::AmHwDemux_Create(int mode, void* arg) {
 }
 
 int HwDemuxOpsSCWrap::AmHwDemux_Destroy(void* handle) {
-     if (handle != NULL || gAmHwDemux_Destroy)  {
+     if (handle != NULL && gAmHwDemux_Destroy)  {
          return gAmHwDemux_Destroy(handle);
      } else {
         ALOGE("[%s] no handle\n", __func__);
+        return -1;
      }
-
-     return false;
 }
 
 int HwDemuxOpsSCWrap::AmHwDemux_Init(void* handle, int mode, void* arg) {
-    if (handle != NULL || gAmHwDemux_Init)  {
+    if (handle != NULL && gAmHwDemux_Init)  {
         return gAmHwDemux_Init(handle, mode, arg);
     } else {
        ALOGE("[%s] no handle\n", __func__);
+       return -1;
     }
-
-    return false;
 }
 
 int HwDemuxOpsSCWrap::AmHwDemux_ResetStatus(void* handle) {
-    if (handle != NULL || gAmHwDemux_ResetStatus)  {
+    if (handle != NULL && gAmHwDemux_ResetStatus)  {
         return gAmHwDemux_ResetStatus(handle);
     } else {
        ALOGE("[%s] no handle\n", __func__);
+       return -1;
     }
-
-    return false;
 }
 
 int HwDemuxOpsSCWrap::AmHwDemux_GetStreamControlStatus(void* handle, void* arg,
         int64_t WriteTsSize, int vPid, int aPid) {
-    if (handle != NULL || gAmHwDemux_GetStreamControlStatus)  {
+    if (handle != NULL && gAmHwDemux_GetStreamControlStatus)  {
         return gAmHwDemux_GetStreamControlStatus(handle, arg, WriteTsSize, vPid, aPid);
     } else {
        ALOGE("[%s] no handle\n", __func__);
+       return -1;
     }
-
-    return false;
 }
 
+int HwDemuxOpsSCWrap::AmHwDemux_Flush(void *handle) {
+    if (handle != NULL && gAmHwDemux_Flush) {
+        return gAmHwDemux_Flush(handle);
+    } else {
+        ALOGE("[%s] no handle\n", __func__);
+        return -1;
+    }
+}

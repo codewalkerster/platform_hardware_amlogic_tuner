@@ -111,6 +111,7 @@ class Demux : public BnDemux {
      */
     bool startBroadcastFilterDispatcher();
     void startBroadcastTsFilter(vector<int8_t> data);
+    void notifyDvrFlushed();
 
     void sendFrontendInputToRecord(vector<int8_t> data);
     void sendFrontendInputToRecord(vector<int8_t> data, uint16_t pid, uint64_t pts);

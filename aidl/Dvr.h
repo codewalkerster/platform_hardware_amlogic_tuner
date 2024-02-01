@@ -165,6 +165,7 @@ class Dvr : public BnDvr {
     const bool DEBUG_DVR = false;
     std::mutex mReadLock;
     bool mFlushing = false;
+    bool mNotifyFlushToDemux = false;
 
     DVR_RecordHandle_t mRecordhandle = NULL;
     DVR_PlaybackHandle_t mPlaybackhandle = NULL;

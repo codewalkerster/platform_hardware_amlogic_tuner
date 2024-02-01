@@ -231,6 +231,7 @@ Dvr::~Dvr() {
       }
     }
     mRecordStatus = RecordStatus::DATA_READY;
+    mNotifyFlushToDemux = true;
     mFlushing = false;
     return ::ndk::ScopedAStatus::ok();
 }
@@ -376,6 +377,14 @@ void Dvr::playbackThreadLoop() {
             }
             maySendPlaybackStatusCallback();
             continue;
+        }
+
+        if (mNotifyFlushToDemux) {
+            if (isVirtualFrontend) {
+                mDemux->notifyDvrFlushed();
+            }
+
+            mNotifyFlushToDemux = false;
         }
 
         // Our current implementation filter the data and write it into the filter FMQ immediately

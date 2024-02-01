@@ -1275,6 +1275,13 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
     }
 }
 
+void Demux::notifyDvrFlushed() {
+    ALOGD("notifyDvrFlushed, demuxId: %d", mDemuxId);
+    if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId]) {
+        mHwDemuxOps[mDemuxId]->AmHwDemux_Flush(mDemuxHandle[mDemuxId]);
+    }
+}
+
 void Demux::sendFrontendInputToRecord(vector<int8_t> data) {
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (mRecordFilterIds.size() == 0) {

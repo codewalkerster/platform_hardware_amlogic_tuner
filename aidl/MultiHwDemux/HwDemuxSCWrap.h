@@ -25,6 +25,7 @@ public:
     int AmHwDemux_Init(void* handle, int mode, void* arg);
     int AmHwDemux_ResetStatus(void* handle);
     int AmHwDemux_GetStreamControlStatus(void* handle, void* arg, int64_t WriteTsSize, int vPid, int aPid);
+    int AmHwDemux_Flush(void* handle);
 
 private:
     bool  isInit{false};
