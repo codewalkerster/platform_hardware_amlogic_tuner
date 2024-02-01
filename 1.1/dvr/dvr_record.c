@@ -57,7 +57,7 @@ enum {
 
 /**\brief DVR record CA info*/
 typedef struct {
-  int dev_id;                           /**< DVR record dmx/dsc dev id*/
+  int dev_id[DVR_MAX_CA_CHAN_CNT];      /**< DVR record dmx/dsc dev id*/
   int chans[DVR_MAX_CA_CHAN_CNT];       /**< DVR record ca channels. 0: des, 1: enc*/
   int even_key_kte;                     /**< DVR record encryption even kte*/
   int even_iv_kte;                      /**< DVR record encryption even kte*/
@@ -309,14 +309,11 @@ static int secure_resource_release(DVR_RecordContext_t *p_ctx)
 
   p_ctx->rb1.buffer = NULL;
 
-  if (p_ctx->fd[1] >= 0) {
-    close(p_ctx->fd[1]);
-    p_ctx->fd[1] = -1;
-  }
-
-  if (p_ctx->fd[2] >= 0) {
-    close(p_ctx->fd[2]);
-    p_ctx->fd[2] = -1;
+  for (int i = 1; i < 4; i++) {
+    if (p_ctx->fd[i] >= 0) {
+      close(p_ctx->fd[i]);
+      p_ctx->fd[i] = -1;
+    }
   }
 
   if (p_ctx->recfd >= 0) {
@@ -477,6 +474,7 @@ static int ca_prepare(
     // Record the ca channel
     if (usage == DVR_CA_USAGE_ENC) {
       stream->ca.chans[1] = ca_chan;
+      stream->ca.dev_id[1] = dmx_dev_id;
       if (slot->is_iv) {
         stream->ca.flags |= DVR_CA_ENC_IV;
       } else {
@@ -484,6 +482,7 @@ static int ca_prepare(
       }
     } else {
       stream->ca.chans[0] = ca_chan;
+      stream->ca.dev_id[0] = dmx_dev_id;
     }
 
     // Set KTE to ca dsc channel
@@ -499,7 +498,6 @@ static int ca_prepare(
     // This is a flag used to indicate whether the current pid stream's
     // descrambling key and re-encryption key are ready.
     stream->ca.flags |= usage;
-    stream->ca.dev_id = dmx_dev_id;
   }
 
   // This is a global flag that indicates whether the descrambling and
@@ -516,7 +514,7 @@ static int ca_release(DVR_RecordContext_t *p_ctx, DVR_RecordStream_t *stream)
   // Free the ca channel
   for (i = 0; i < DVR_MAX_CA_CHAN_CNT; i++) {
     if (stream->ca.chans[i] >= 0) {
-        ca_free_chan(stream->ca.dev_id, stream->ca.chans[i]);
+        ca_free_chan(stream->ca.dev_id[i], stream->ca.chans[i]);
         stream->ca.chans[i] = -1;
     }
   }
@@ -587,14 +585,14 @@ DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_
     p_ctx->streams[i].key_token = -1;
     for (j = 0; j < DVR_MAX_CA_CHAN_CNT; j++) {
       p_ctx->streams[i].ca.chans[j] = -1;
+      p_ctx->streams[i].ca.dev_id[j] = -1;
     }
-    p_ctx->streams[j].ca.flags = 0;
-    p_ctx->streams[j].ca.even_key_kte = -1;
-    p_ctx->streams[j].ca.even_iv_kte = -1;
-    p_ctx->streams[j].ca.odd_key_kte = -1;
-    p_ctx->streams[j].ca.odd_iv_kte = -1;
-    p_ctx->streams[j].ca.parity = -1;
-    p_ctx->streams[j].ca.dev_id = -1;
+    p_ctx->streams[i].ca.flags = 0;
+    p_ctx->streams[i].ca.even_key_kte = -1;
+    p_ctx->streams[i].ca.even_iv_kte = -1;
+    p_ctx->streams[i].ca.odd_key_kte = -1;
+    p_ctx->streams[i].ca.odd_iv_kte = -1;
+    p_ctx->streams[i].ca.parity = -1;
   }
 
   memcpy(p_ctx->dmx_dev_id, params->dmx_dev_id, sizeof(params->dmx_dev_id));
