@@ -786,8 +786,6 @@ int dvr_record_open_filter(DVR_RecordHandle_t handle, DVR_RecordFilterParams_t *
       SECTS_SetAudioParams_Func(p_ctx->sects_sess, params->pid);
     }
   } else if (params->type == DVR_STREAM_VIDEO_TYPE) {
-    // Should not open sects session before if video stream is clear
-    DVR_CHECK_WITH_UNLOCK(p_ctx->sects_sess == -1, &p_ctx->lock);
     ts_indexer_set_video_pid(&p_ctx->ts_indexer, params->pid);
     ts_indexer_set_video_format(&p_ctx->ts_indexer, params->vfmt);
   } else if (params->type == DVR_STREAM_AUDIO_TYPE) {
