@@ -23,6 +23,8 @@ extern mediasync_result MediaSync_getTrackMediaTime(void* handle, int64_t *outMe
 extern mediasync_result MediaSync_bindInstance(void* handle, uint32_t SyncInsId,
                                                              sync_stream_type streamtype);
 extern mediasync_result mediasync_setParameter(void* handle, mediasync_parameter type, void* arg);
+extern mediasync_result MediaSync_setPcrAndDmxId(void* handle, int32_t DemuxId, int32_t PcrPid);
+extern mediasync_result MediaSync_setSyncMode(void* handle, sync_mode mode);
 extern void MediaSync_destroy(void* handle);
 }
 
@@ -36,6 +38,8 @@ public:
     void destroyMediaSync();
     void setParameter(mediasync_parameter type, void* arg);
     void bindStaticAvSyncId(uint32_t avSyncHwId);
+    void setPcrAndDmxId(int32_t DemuxId, int32_t PcrPid);
+    void setSyncMode(sync_mode mode);
 private:
     void* mMediaSync;
 

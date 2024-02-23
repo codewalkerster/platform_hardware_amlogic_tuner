@@ -67,3 +67,15 @@ void MediaSyncWrap::setParameter(mediasync_parameter type, void* arg) {
     }
 }
 
+void MediaSyncWrap::setPcrAndDmxId(int32_t DemuxId, int32_t PcrPid) {
+    if (mMediaSync != nullptr) {
+        MediaSync_setPcrAndDmxId(mMediaSync, DemuxId, PcrPid);
+    }
+}
+
+void MediaSyncWrap::setSyncMode(sync_mode mode) {
+    if (mMediaSync != nullptr) {
+        MediaSync_setSyncMode(mMediaSync, mode);
+    }
+}
+

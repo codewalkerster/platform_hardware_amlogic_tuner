@@ -494,15 +494,24 @@ void Demux::getSectionData(int64_t filterId) {
         return;
     } else {
         ALOGV("fid =%lld section data size:%d", filterId, sectionSize);
+        sectionData.resize(sectionSize);
         /* for debug
         uint16_t tableId = sectionData[0];
         if (tableId == 0x0) {
-            ALOGD("received PAT table tableId = %d, fid = %d", tableId, filterId);
+            ALOGD("received PAT table tableId = %d, fid = %lld", tableId, filterId);
         }
         if (tableId == 0x2) {
-            ALOGD("received PMT table tableId = %d, fid = %d", tableId, filterId);
+            ALOGD("received PMT table tableId = %d, fid = %lld", tableId, filterId);
+            int i;
+            string strData;
+            char ch[3];
+            for (i = 0; i < sectionData.size(); i++)
+            {
+                snprintf(ch, 3, "%02x", sectionData[i]);
+                strData += ch;
+            }
+            ALOGD("dump PMT data bytes: %s", strData.c_str());
         }*/
-        sectionData.resize(sectionSize);
         updateFilterOutput(filterId, uint8DataToInt8Data(sectionData));
         startFilterHandler(filterId);
     }
@@ -850,9 +859,12 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
                     mAvSyncHwId = *mPcrFilterIds.begin();
                     ALOGD("%s/%d mAvSyncHwId = %llu", __FUNCTION__, __LINE__, *mPcrFilterIds.begin());
                     mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
-                    //mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
+                    mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
+                    uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
+                    mMediaSync->setPcrAndDmxId(mDemuxId, pcrPid);
+                    mMediaSync->setSyncMode(MEDIA_SYNC_PCRMASTER);
                  } else {
-                    mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, avPid);
+                    mAvSyncHwId = mMediaSync->getAvSyncHwId(mDemuxId, -1);
                     mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
                     mMediaSync->bindAvSyncId(mAvSyncHwId);
                 }
@@ -879,7 +891,10 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             if (mAvSyncHwId == -1) {
                 mAvSyncHwId = *mPcrFilterIds.begin();//mMediaSync->getAvSyncHwId(mDemuxId, pcrPid);
                 mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
-                //mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
+                mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
+                uint16_t pcrPid = getFilterTpid(*mPcrFilterIds.begin());
+                mMediaSync->setPcrAndDmxId(mDemuxId, pcrPid);
+                mMediaSync->setSyncMode(MEDIA_SYNC_PCRMASTER);
             }
         }
         ALOGD("[Demux] mPcrFilterId:%lld pcrPid:0x%x avSyncHwId:%lld", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
