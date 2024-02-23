@@ -239,7 +239,6 @@ Frontend::~Frontend() {
     }
     mFeDev->tune(in_settings);
 
-    mTuner->frontendStartTune(mId);
     if (mId != mExistId) {
         mTuner->frontendStartTune(mId);
         mExistId = mId;

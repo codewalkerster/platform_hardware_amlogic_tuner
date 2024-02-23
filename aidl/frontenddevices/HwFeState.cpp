@@ -66,11 +66,18 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
     } else {
         snprintf(fe_name, sizeof(fe_name),
                  "/dev/dvb0.frontend%d", hwId);
-        if ((fd = open(fe_name, O_RDWR | O_NONBLOCK)) != -1) {
-            ALOGD("[HWFE(%d)]:open hw tuner with fd(%d)", this->hwId, fd);
-            owner = device;
-        } else {
-            ALOGW("[HWFE(%d)]:open %s failed: %s", this->hwId, fe_name, strerror(errno));
+        int retry = 10;
+        int count = 0;
+        while (count < retry) {
+            if ((fd = open(fe_name, O_RDWR | O_NONBLOCK)) != -1) {
+                ALOGD("[HWFE(%d)]:open hw tuner with fd(%d)", this->hwId, fd);
+                owner = device;
+                break;
+            } else {
+                ALOGW("[HWFE(%d)]:open %s failed: %s", this->hwId, fe_name, strerror(errno));
+            }
+            count++;
+            usleep(50 * 1000);
         }
     }
     return fd;
