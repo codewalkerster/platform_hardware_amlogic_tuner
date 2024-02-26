@@ -201,7 +201,7 @@ AmDvr::~AmDvr() {
     }
 }
 
-AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_input, bool bsetInput)
+AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source inputSource, uint32_t ts_input, bool bsetInput)
 {
     ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, mDvrDevice->dev_no);
     if (opencnt > 0) {

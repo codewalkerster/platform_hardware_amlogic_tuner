@@ -56,8 +56,22 @@ namespace tuner {
 
 #define TUNERHAL_DSC_TYPE_PROP "vendor.media.tunerhal.dsc_type"
 #define MAX_SCRAMBLED_CACHE_SIZE (30 * 1024 * 1024) //30MB
+extern "C" {
+#include "dvr_record.h"
+#include "dvr_playback.h"
+extern DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32_t key_token);
+extern DVR_Result_t dvr_playback_set_key_token(DVR_PlaybackHandle_t handle, int pid, uint32_t key_token);
+}
+
+typedef enum PlayType {
+    INVALID = 0,
+    DEMOD_LIVE,
+    DVR_RECORD,
+    DVR_PLAYBACK
+} PLAY_TYPE_t;
 
 class Tuner;
+class Demux;
 class Descrambler : public BnDescrambler {
   public:
     Descrambler(int32_t in_dscId,     std::shared_ptr<Tuner> in_tuner);
@@ -70,18 +84,21 @@ class Descrambler : public BnDescrambler {
             const DemuxPid& in_pid,
             const std::shared_ptr<IFilter>& in_optionalSourceFilter) override;
     ::ndk::ScopedAStatus close() override;
-
-  bool isPidSupported(uint16_t in_pid);
-  bool isDescramblerReady();
-  bool allocDscChannels();
-  bool clearDscChannels();
-  bool bindDscChannelToKeyTable(uint32_t in_dscDevId, uint32_t in_dscHandle);
-  bool allocNskDscChannels();
-  bool clearNskDscChannels();
-  bool getTsnSourceStatus(bool *out_isLocalMode);
+    bool isPidSupported(uint16_t in_pid);
+    bool isDescramblerReady();
 
   private:
     virtual ~Descrambler();
+
+    bool allocDscChannels();
+    bool clearDscChannels();
+    bool bindDscChannelToKeyTable(uint32_t in_dscDevId, uint32_t in_dscHandle);
+    bool allocNskDscChannels();
+    bool clearNskDscChannels();
+    bool getTsnSourceStatus(bool *out_isLocalMode);
+    DVR_Result_t setKeyToken(PlayType type, int pid, int token);
+    PlayType checkPlayType();
+
     int32_t mSourceDemuxId;
     bool mDemuxSet = false;
 
@@ -99,6 +116,11 @@ class Descrambler : public BnDescrambler {
     struct dsm_keyslot_list mKeyslotList;
     std::map<uint16_t, uint32_t> mPidToDscChannel;
     uint32_t mIsNskDsc = 0;
+
+    std::shared_ptr<Demux> mDemux = nullptr;
+    DVR_RecordHandle_t mRecordHandle = NULL;
+    DVR_PlaybackHandle_t mPlaybackhandle = NULL;
+    PlayType mType = INVALID;
 };
 
 }  // namespace tuner

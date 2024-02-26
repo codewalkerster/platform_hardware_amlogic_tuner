@@ -384,7 +384,7 @@ int AmLinuxDvb::getDmaByDemuxId(int demuxId) {
     return -1;
 }
 
-AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, dmx_input_source_t inputSource) {
+AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, dmx_input_source inputSource) {
     DVBDmx_t *dmx = (DVBDmx_t*)dev->drv_data;
     int ret = 0;
     ALOGI("%s/%d", __FUNCTION__, __LINE__);
@@ -411,7 +411,7 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, dmx_input_source_t
     return AM_SUCCESS;
 }
 
-AM_ErrorCode_t AmLinuxDvb::dvr_open(AM_DMX_Device *dev, dmx_input_source_t inputSource) {
+AM_ErrorCode_t AmLinuxDvb::dvr_open(AM_DMX_Device *dev, dmx_input_source inputSource) {
     //int ret = 0;
     char name[32];
     ALOGI("%s/%d", __FUNCTION__, __LINE__);

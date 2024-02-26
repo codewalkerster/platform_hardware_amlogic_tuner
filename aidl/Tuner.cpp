@@ -628,6 +628,14 @@ uint32_t Tuner::getDscMode() {
     return mDscMode;
 }
 
+std::shared_ptr<Demux> Tuner::getDemuxById(uint32_t demuxId) {
+    if (mDemuxes.find(demuxId) != mDemuxes.end()) {
+        return mDemuxes.at(demuxId);
+    } else {
+        return nullptr;
+    }
+}
+
 }  // namespace tuner
 }  // namespace tv
 }  // namespace hardware

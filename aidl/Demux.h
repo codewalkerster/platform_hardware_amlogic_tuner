@@ -24,6 +24,7 @@
 #include <set>
 #include <thread>
 
+#include "Descrambler.h"
 #include "Dvr.h"
 #include "Filter.h"
 #include "Frontend.h"
@@ -33,9 +34,8 @@
 #include "MediaSyncWrap.h"
 #include "AmDvr.h"
 #include "AmPesFilter.h"
-#include "Descrambler.h"
 #include "HwDemuxSCWrap.h"
-#include "AmTsIndexer.h"
+//#include "AmTsIndexer.h"
 
 using namespace std;
 
@@ -52,6 +52,13 @@ using ::android::hardware::EventFlag;
 
 using FilterMQ = AidlMessageQueue<int8_t, SynchronizedReadWrite>;
 #define DMX_COUNT (6)
+#define DVR_BUFFER_LEN    (20*188*1024)
+#define DVR_MAX_PUSI_LEN  (3*188*1024)
+
+extern "C" {
+#include "dvr_playback.h"
+extern size_t dvr_playback_write(DVR_PlaybackHandle_t handle, uint8_t *data, size_t len);
+}
 
 class Dvr;
 class Filter;
@@ -107,15 +114,15 @@ class Demux : public BnDemux {
 
     void sendFrontendInputToRecord(vector<int8_t> data);
     void sendFrontendInputToRecord(vector<int8_t> data, uint16_t pid, uint64_t pts);
-    void sendFrontendInputToRecord(vector<int8_t> data, uint16_t pid, uint64_t offset, uint64_t pts = 0, int type =
-    -1, int tsIndexType = -1);
+    void sendFrontendInputToRecord(vector<int8_t> data, uint16_t pid, uint64_t offset, uint64_t pts = 0, int iFrameIndex =
+    0, int pusiIndex = 0);
     bool startRecordFilterDispatcher();
     static void postData(void* demux, int fid, bool esOutput, bool passthrough);
     static void postDvrData(void* demux);
     static void pesDataCallback(void* demux, int fid, uint8_t *pes, int len);
-    static void TsIndexerCallback(TS_Indexer_t *ts_indexer, TS_Indexer_Event_t *event);
+    //static void TsIndexerCallback(TS_Indexer_t *ts_indexer, TS_Indexer_Event_t *event);
     sp<AM_DMX_Device> getAmDmxDevice();
-    sp<AmDvr> getAmDvrDevice();
+    //sp<AmDvr> getAmDvrDevice();
     sp<AmPesFilter> getAmPesFilter();
     int getPesFid();
     void combinePesData(int64_t filterId);
@@ -132,8 +139,8 @@ class Demux : public BnDemux {
     void closePesRecordFilter();
     int32_t getDemuxId();
     uint64_t getVideoFid();
-    sp<AmTsIndexer> getAmTsIndexer();
-    TS_Indexer_StreamFormat_t convertVideoFormatToTsIndexFormat(int vf);
+    //sp<AmTsIndexer> getAmTsIndexer();
+    //TS_Indexer_StreamFormat_t convertVideoFormatToTsIndexFormat(int vf);
     void setCurrentPts(uint64_t pts);
     uint64_t getCurrentPts();
     int getRecordVideoPid();
@@ -147,6 +154,7 @@ class Demux : public BnDemux {
     void closeTemiRecordFilter();
     int getTemiFid();
     bool checkSoftDemuxForTemi();
+    int getTsInput();
 
     uint8_t *base_ptr = NULL;
     uint8_t *last_pusi_ptr = NULL;
@@ -155,8 +163,14 @@ class Demux : public BnDemux {
     uint8_t *cache_data = NULL;
     uint64_t cnt = 0;
     uint64_t count = 0;
-    bool     bUseTsIndexer = false;
     uint32_t flags = 0;
+
+    void setRecordHandle(DVR_RecordHandle_t handle) { mRecordHandle = handle; }
+    DVR_RecordHandle_t getRecordHandle() { return mRecordHandle; }
+    void setPlaybackHandle (DVR_PlaybackHandle_t handle) { mPlaybackhandle = handle; }
+    DVR_PlaybackHandle_t getPlaybackHandle() { return mPlaybackhandle; }
+    bool checkDemuxPlayback() { return bDemuxUsePlayback; }
+    bool checkDemuxRecord() { return bDemuxUseRecord; }
 
   private:
     // Tuner service
@@ -173,6 +187,7 @@ class Demux : public BnDemux {
 
     static void* __threadLoopFrontend(void* user);
     void frontendInputThreadLoop();
+    void subtitleRecordThreadLoop();
     void TemiRecordThreadLoop();
 
     /**
@@ -259,9 +274,9 @@ class Demux : public BnDemux {
     const bool DEBUG_DEMUX = false;
     bool bSupportSoftDemuxForSubtitle = false;
     sp<AM_DMX_Device> AmDmxDevice[DMX_COUNT] = { NULL };
-    sp<AmDvr> mAmDvrDevice[DMX_COUNT]        = { NULL };
+    //sp<AmDvr> mAmDvrDevice[DMX_COUNT]        = { NULL };
     sp<AmPesFilter> mAmPesFilter             = NULL;
-    sp<AmTsIndexer> mAmTsIndexer[DMX_COUNT]  = { NULL };
+    //sp<AmTsIndexer> mAmTsIndexer[DMX_COUNT]  = { NULL };
     sp<MediaSyncWrap> mMediaSync             = nullptr;
     int mPesFid = -1;
     int mPesRecordFid = -1;
@@ -285,6 +300,16 @@ class Demux : public BnDemux {
     int mTemiFid = -1;
     int mTemiRecordFid = -1;
     bool bSupportSoftDemuxForTemi = false;
+
+    DVR_RecordHandle_t mRecordHandle = NULL;
+    DVR_PlaybackHandle_t mPlaybackhandle = NULL;
+    DVR_RecordHandle_t mSubtitleRecHandle = NULL;
+    std::atomic<bool> mSubtitleRecordThreadRunning;
+    DVR_RecordReceiveParams_t mSubReceiveParam;
+    std::thread mSubtitleRecordThread;
+
+    bool bDemuxUsePlayback = false;
+    bool bDemuxUseRecord   = false;
 };
 
 }  // namespace tuner

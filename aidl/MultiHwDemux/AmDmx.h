@@ -96,7 +96,7 @@ class AM_DMX_Device : public RefBase{
 public:
     AM_DMX_Device(int demuxId);
     ~AM_DMX_Device();
-    AM_ErrorCode_t dmx_dvr_open(dmx_input_source_t inputSource);
+    AM_ErrorCode_t dmx_dvr_open(dmx_input_source inputSource);
     AM_ErrorCode_t dmx_get_used_filter(int filter_id, AM_DMX_Filter **pf);
     static void* dmx_data_thread(void *arg);
     AM_ErrorCode_t dmx_wait_cb(void);

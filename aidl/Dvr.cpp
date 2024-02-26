@@ -38,6 +38,37 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>&
     mBufferSize = bufferSize;
     mCallback = cb;
     mDemux = demux;
+
+    if (mType == DvrType::PLAYBACK) {
+        ALOGD("%s/%d dvr_playback_open dmxid = %d", __FUNCTION__, __LINE__, mDemux->getDemuxId());
+        mPlaybackParams.dmx_dev_id = mDemux->getDemuxId();
+        DVR_Result_t ret = dvr_playback_open(&mPlaybackhandle, &mPlaybackParams);
+        if (ret != DVR_SUCCESS) {
+            ALOGD("open dvr playback failed!\n");
+        }
+        mDemux->setPlaybackHandle(mPlaybackhandle);
+    } else if (mType == DvrType::RECORD) {
+        ALOGD("%s/%d dvr_record_open dmxid = %d", __FUNCTION__, __LINE__, mDemux->getDemuxId());
+        memset(&mOpenParams, 0, sizeof(DVR_RecordOpenParams_t));
+        bool bPlayback = mDemux->checkDemuxPlayback();
+        ALOGD("%s/%d  dmxid = %d, bPlayback = %d", __FUNCTION__, __LINE__, mDemux->getDemuxId(), bPlayback);
+        if (bPlayback) {
+            mOpenParams.src = static_cast<DVB_DemuxSource_t>(DVB_DEMUX_SOURCE_DMA0 + mDemux->getDemuxId());
+        } else {
+            mOpenParams.src = getDemuxSourceByTsInput(mDemux->getTsInput());
+        }
+        mOpenParams.dmx_dev_id[0] = mDemux->getDemuxId();
+        mOpenParams.dmx_dev_id[1] = 4; //keep demux4 is idle(unused)
+        mOpenParams.dmx_dev_id[2] = 5; //keep demux5 is idle(unused)
+        mOpenParams.non_sec_ringbuf_size = DVR_BUFFER_LEN;
+        mOpenParams.sec_buf_size         = DVR_BUFFER_LEN;
+        DVR_Result_t ret = dvr_record_open(&mRecordhandle, &mOpenParams);
+        if (ret != DVR_SUCCESS) {
+            ALOGD("open dvr record failed!\n");
+        }
+        mDemux->setRecordHandle(mRecordhandle);
+    }
+
 }
 
 Dvr::~Dvr() {
@@ -95,7 +126,7 @@ Dvr::~Dvr() {
 }
 
 ::ndk::ScopedAStatus Dvr::start() {
-    ALOGD("%s", __FUNCTION__);
+    ALOGD("%s/%d[demuxId = %d] mType = %hhu", __FUNCTION__, __LINE__, mDemux->getDemuxId(), mType);
     if (mDvrThreadRunning) {
         return ::ndk::ScopedAStatus::ok();
     }
@@ -113,7 +144,21 @@ Dvr::~Dvr() {
     if (mType == DvrType::PLAYBACK) {
         mDvrThreadRunning = true;
         mDvrThread = std::thread(&Dvr::playbackThreadLoop, this);
+        DVR_Result_t ret = dvr_playback_start(mPlaybackhandle);
+        if (ret != DVR_SUCCESS) {
+            ALOGD("start dvr playback failed!\n");
+        }
     } else if (mType == DvrType::RECORD) {
+        memset(&mReceiveParams, 0, sizeof(DVR_RecordReceiveParams_t));
+        mReceiveParams.buf = (uint8_t *)malloc(DVR_MAX_PUSI_LEN);
+        mReceiveParams.len = DVR_MAX_PUSI_LEN;
+        mReceiveParams.mode = DVR_DIRECT_RECORD_MODE;
+        mDvrRecordThreadRunning = true;
+        mDvrRecordThread = std::thread(&Dvr::DvrRecordThreadLoop, this);
+        DVR_Result_t ret = dvr_record_start(mRecordhandle);
+        if (ret != DVR_SUCCESS) {
+            ALOGD("start dvr record failed!\n");
+        }
         mRecordStatus = RecordStatus::DATA_READY;
         mDemux->setIsRecording(mType == DvrType::RECORD);
     }
@@ -124,22 +169,44 @@ Dvr::~Dvr() {
 }
 
 ::ndk::ScopedAStatus Dvr::stop() {
-    ALOGD("%s", __FUNCTION__);
-
-    mDvrThreadRunning = false;
-    if (mDvrThread.joinable()) {
-        mDvrEventFlag->wake(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY));
-        mDvrThread.join();
-    }
+    ALOGD("%s/%d[demuxId = %d] mType = %hhu", __FUNCTION__, __LINE__, mDemux->getDemuxId(), mType);
     // thread should always be joinable if it is running,
     // so it should be safe to assume recording stopped.
     mDemux->setIsRecording(false);
-
+    if (mType == DvrType::PLAYBACK) {
+        DVR_Result_t ret = dvr_playback_stop(mPlaybackhandle);
+        if (ret != DVR_SUCCESS) {
+            ALOGD("stop dvr playback failed!\n");
+        }
+        mDvrThreadRunning = false;
+        if (mDvrThread.joinable()) {
+            mDvrEventFlag->wake(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY));
+            mDvrThread.join();
+        }
+    } else if (mType == DvrType::RECORD) {
+        DVR_Result_t ret = dvr_record_stop(mRecordhandle);
+        if (ret != DVR_SUCCESS) {
+            ALOGD("stop dvr record failed!\n");
+        }
+        mDvrRecordThreadRunning = false;
+        if (mDvrRecordThread.joinable()) {
+            mDvrRecordThread.join();
+        }
+        if (mReceiveParams.buf) {
+            free(mReceiveParams.buf);
+            mReceiveParams.buf = NULL;
+        }
+        if (recordFile != NULL) {
+            fflush(recordFile);
+            fclose(recordFile);
+            recordFile = NULL;
+        }
+    }
     return ::ndk::ScopedAStatus::ok();
 }
 
 ::ndk::ScopedAStatus Dvr::flush() {
-    ALOGD("%s", __FUNCTION__);
+    ALOGD("%s/%d", __FUNCTION__, __LINE__);
     int flushSize = mDvrSettings.get<DvrSettings::Tag::playback>().packetSize * 100;//188 bytes
     int left      = 0;
     char *buffer  = NULL;
@@ -169,14 +236,25 @@ Dvr::~Dvr() {
 }
 
 ::ndk::ScopedAStatus Dvr::close() {
-    ALOGD("%s", __FUNCTION__);
-
+    ALOGD("%s/%d  mType = %hhu", __FUNCTION__, __LINE__, mType);
     if (mDvrMQ.get() != NULL)
        mDvrMQ.reset();
 
     if (mDvrEventFlag != nullptr) {
         EventFlag::deleteEventFlag(&mDvrEventFlag);
         mDvrEventFlag = nullptr;
+    }
+
+    if (mType == DvrType::PLAYBACK) {
+        DVR_Result_t ret = dvr_playback_close(mPlaybackhandle);
+        if (ret != DVR_SUCCESS) {
+            ALOGD("close dvr playback failed!\n");
+        }
+    } else if (mType == DvrType::RECORD) {
+        DVR_Result_t ret = dvr_record_close(mRecordhandle);
+        if (ret != DVR_SUCCESS) {
+            ALOGD("close dvr record failed!\n");
+        }
     }
 
     return ::ndk::ScopedAStatus::ok();
@@ -199,6 +277,66 @@ bool Dvr::createDvrMQ() {
     }
 
     return true;
+}
+
+void Dvr::DvrRecordThreadLoop() {
+    prctl(PR_SET_NAME, "DvrRecordThread");
+    while (mDvrRecordThreadRunning) {
+        ssize_t len = 0;
+        if (mDemux != NULL && mDemux->getRecordVideoPid() != -1) {
+            videoPid = mDemux->getRecordVideoPid();
+            mReceiveParams.mode = DVR_PUSI_RECORD_MODE;
+        } else {
+            if (mDemux != NULL && mDemux->getRecordAudioPid() != -1) {
+                audioPid = mDemux->getRecordAudioPid();
+                mReceiveParams.mode = DVR_PUSI_RECORD_MODE;
+            } else {
+                mReceiveParams.mode = DVR_DIRECT_RECORD_MODE;
+            }
+        }
+        len = dvr_record_read(mRecordhandle, &mReceiveParams);
+        //ALOGD("[Dvr] len = %d", len);
+        if (len <= 0) {
+            usleep(10*1000);
+            ALOGE("dvr no data\n");
+            continue;
+        }
+
+        vector<int8_t> data;
+        data.resize(len);
+        memcpy(data.data(), mReceiveParams.buf, len * sizeof(uint8_t));
+
+        if (mReceiveParams.mode == DVR_DIRECT_RECORD_MODE) {
+            //ALOGD("[Dvr][demuxId = %d] read dvr data size = %d flag = %d, pts = %llu", mDemux->getDemuxId(), mReceiveParams.len, mReceiveParams.flags, mReceiveParams.pts);
+            mDemux->sendFrontendInputToRecord(data);
+            mDemux->startRecordFilterDispatcher();
+        } else if (mReceiveParams.mode == DVR_PUSI_RECORD_MODE) {
+            mPusiIndex  = mReceiveParams.flags & DVR_INDEX_PUSI;
+            mIframeIndex = mReceiveParams.flags & DVR_INDEX_IFRAME;
+            mPts         = mReceiveParams.pts;
+            if (videoPid != -1) {
+                ALOGD("[Dvr][demuxId = %d] offset = %llu, read pid = %d, dvr data size = %d, flag = %d, pts = %llu", mDemux->getDemuxId(), mOffset, videoPid, len, mReceiveParams.flags, mReceiveParams.pts);
+                if (mDemux->getDemuxId() == 3) {
+                    if (recordFile == NULL) {
+                        recordFile = fopen("/data/local/tmp/recordData.ts", "wb+");
+                    }
+                    if (recordFile != NULL ) {
+                        fwrite(data.data(), 1, data.size(), recordFile);
+                    }
+                }
+                mDemux->sendFrontendInputToRecord(data, videoPid, mOffset, mPts, mIframeIndex, mPusiIndex);
+                mDemux->startRecordFilterDispatcher();
+            } else {
+                if (audioPid != -1) {
+                    ALOGD("[Dvr][demuxId = %d] read pid = %d dvr data size = %d flag = %d, pts = %llu",  mDemux->getDemuxId(), audioPid, len, mReceiveParams.flags, mReceiveParams.pts);
+                    mDemux->sendFrontendInputToRecord(data, audioPid, mOffset, mPts, mIframeIndex, mPusiIndex);
+                    mDemux->startRecordFilterDispatcher();
+                }
+            }
+            mOffset += len;
+        }
+    }
+    ALOGD("[Dvr] Dvr Record thread ended.");
 }
 
 EventFlag* Dvr::getDvrEventFlag() {
@@ -520,6 +658,26 @@ bool Dvr::removePlaybackFilter(int64_t filterId) {
     return true;
 }
 
+DVB_DemuxSource_t Dvr::getDemuxSourceByTsInput(int tsInput) {
+    ALOGD("%s/%d tsInput = %d", __FUNCTION__, __LINE__, tsInput);
+    switch (tsInput) {
+        case FRONTEND_TS0:
+            return DVB_DEMUX_SOURCE_TS0;
+        case FRONTEND_TS1:
+            return DVB_DEMUX_SOURCE_TS1;
+        case FRONTEND_TS2:
+            return DVB_DEMUX_SOURCE_TS2;
+        case FRONTEND_TS3:
+            return DVB_DEMUX_SOURCE_TS3;
+        case FRONTEND_TS4:
+            return DVB_DEMUX_SOURCE_TS4;
+        case FRONTEND_TS5:
+            return DVB_DEMUX_SOURCE_TS5;
+        default:
+            ALOGD("%s/%d tsInput = %d", __FUNCTION__, __LINE__, tsInput);
+    }
+    return DVB_DEMUX_SOURCE_TS0;
+}
 }  // namespace tuner
 }  // namespace tv
 }  // namespace hardware

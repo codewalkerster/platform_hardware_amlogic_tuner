@@ -77,6 +77,8 @@ class Tuner : public BnTuner {
     void init();
     void attachDescramblerToDemux(int32_t dscId, int32_t demuxId);
     void detachDescramblerFromDemux(int32_t dscId, int32_t demuxId);
+    std::shared_ptr<Demux> getDemuxById(uint32_t demuxId);
+
     uint32_t getTsInput();
     void setTsnSource();
     uint32_t getDscMode();

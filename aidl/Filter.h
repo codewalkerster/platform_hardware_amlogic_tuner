@@ -52,6 +52,14 @@ using ::android::hardware::EventFlag;
 using FilterMQ = AidlMessageQueue<int8_t, SynchronizedReadWrite>;
 const uint32_t BUFFER_SIZE_16M = 0x1000000;
 
+extern "C"  {
+#include "dvr_record.h"
+extern int dvr_record_open_filter(DVR_RecordHandle_t handle, DVR_RecordFilterParams_t *params);
+extern DVR_Result_t dvr_record_start_filter(DVR_RecordHandle_t handle, int filter_idx);
+extern DVR_Result_t dvr_record_stop_filter(DVR_RecordHandle_t handle, int filter_idx);
+extern DVR_Result_t dvr_record_close_filter(DVR_RecordHandle_t handle, int filter_idx);
+}
+
 class Demux;
 class Dvr;
 
@@ -151,7 +159,7 @@ class Filter : public BnFilter {
     void clear();
     bool postFilteredEmmSection(vector<uint8_t> data);
     bool fillDataToDecoder();
-    void updateIndexType(int scIndType, int tsIndType);
+    void updateIndexType(int iframeIndex, int pusiIndex);
     bool checkRecordByVideo();
     DemuxRecordScIndexType getScIndexType();
     int getRecordVideoPid();
@@ -314,6 +322,14 @@ class Filter : public BnFilter {
     int mLastScIndType = -1;
 
     bool bFilterStart = false;
+
+    // PVR parameters
+    DVR_RecordFilterParams_t mFilterParams;
+    int recFilerId = -1;
+    DVR_RecordHandle_t mRecordhandle = NULL;
+    int mPusiIndex = 0;
+    int mIframeIndex = 0;
+    FILE *iFrameFile = NULL;
 };
 
 }  // namespace tuner

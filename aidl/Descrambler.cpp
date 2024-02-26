@@ -67,23 +67,14 @@ Descrambler::Descrambler(int32_t in_dscId,     std::shared_ptr<Tuner> in_tuner) 
     TUNER_DSC_DBG(mDescramblerId, "getProperty mDscType:%d", mDscType);
   }
 #endif
-
-  mDsmFd = DSM_OpenSession(0);
-  TUNER_DSC_DBG(mDescramblerId, "mIsLocalMode:%d mDscType:%d mDsmFd:%d", \
-      mIsLocalMode, mDscType, mDsmFd);
 }
 
 Descrambler::~Descrambler() {
-  TUNER_DSC_TRACE(mDescramblerId);
-  if (mDsmFd >= 0)
-    DSM_CloseSession(mDsmFd);
-  if (mDemuxSet)
-    ca_close(mSourceDemuxId);
+    TUNER_DSC_TRACE(mDescramblerId);
 }
 
 ::ndk::ScopedAStatus Descrambler::setDemuxSource(int32_t in_demuxId) {
-  TUNER_DSC_TRACE(mDescramblerId);
-  {
+    TUNER_DSC_TRACE(mDescramblerId);
     std::lock_guard<std::mutex> lock(mDescrambleLock);
     if (mDemuxSet) {
       TUNER_DSC_WRAN(mDescramblerId,
@@ -91,18 +82,30 @@ Descrambler::~Descrambler() {
       return ::ndk::ScopedAStatus::fromServiceSpecificError(
           static_cast<int32_t>(Result::INVALID_STATE));
     }
-    if (ca_open(in_demuxId) != CA_DSC_OK) {
-      TUNER_DSC_ERR(mDescramblerId, "ca_open ca%d failed!", in_demuxId);
-      return ::ndk::ScopedAStatus::fromServiceSpecificError(
-          static_cast<int32_t>(Result::INVALID_STATE));
-    }
     mDemuxSet = true;
     mSourceDemuxId = in_demuxId;
-  }
-  if (mTuner != nullptr)
-    mTuner->attachDescramblerToDemux(mDescramblerId, in_demuxId);
+    if (mTuner != nullptr)
+        mTuner->attachDescramblerToDemux(mDescramblerId, in_demuxId);
 
-  TUNER_DSC_INFO(mDescramblerId, "source dmx id:%d dsc id:%d", mSourceDemuxId, mDescramblerId);
+    TUNER_DSC_INFO(mDescramblerId, "source dmx id:%d dsc id:%d", mSourceDemuxId, mDescramblerId);
+    mDemux = mTuner->getDemuxById(in_demuxId);
+    mType = checkPlayType();
+    TUNER_DSC_INFO(mDescramblerId, "type = %d", mType);
+    if (mType == DEMOD_LIVE) {
+        TUNER_DSC_INFO(mDescramblerId, "playback type is demod live");
+    } else {
+        TUNER_DSC_INFO(mDescramblerId, "type is playback or record");
+        ::ndk::ScopedAStatus::ok();
+    }
+    mDsmFd = DSM_OpenSession(0);
+    TUNER_DSC_DBG(mDescramblerId, "mIsLocalMode:%d mDscType:%d mDsmFd:%d", \
+      mIsLocalMode, mDscType, mDsmFd);
+
+    if (ca_open(in_demuxId) != CA_DSC_OK) {
+        TUNER_DSC_ERR(mDescramblerId, "ca_open ca%d failed!", in_demuxId);
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(
+            static_cast<int32_t>(Result::INVALID_STATE));
+    }
 
   return ::ndk::ScopedAStatus::ok();
 }
@@ -129,7 +132,7 @@ Descrambler::~Descrambler() {
       return ::ndk::ScopedAStatus::ok();
   } else {
       mKeyToken = tempToken;
-      if (mIsReady && mDsmFd >= 0) {
+      if (mIsReady && mDsmFd >= 0 && mType == DEMOD_LIVE) {
           TUNER_DSC_DBG(mDescramblerId, "Reset keyToken");
           DSM_CloseSession(mDsmFd);
           if (mIsNskDsc) {
@@ -142,6 +145,21 @@ Descrambler::~Descrambler() {
       }
   }
   TUNER_DSC_DBG(mDescramblerId, "mKeyToken:0x%x", mKeyToken);
+    if (mType == DEMOD_LIVE) {
+        TUNER_DSC_INFO(mDescramblerId, "playback type is demod live");
+    } else {
+        set<uint16_t>::iterator it;
+        for (it = mAddedPid.begin(); it != mAddedPid.end(); it++) {
+            uint16_t mPid = *it;
+            if (mPid != -1 && mKeyToken != 0) {
+                DVR_Result_t ret = setKeyToken(mType, mPid, mKeyToken);
+                if (ret != DVR_SUCCESS) {
+                    TUNER_DSC_ERR(mDescramblerId, "set key token fail");
+                }
+            }
+        }
+        return ::ndk::ScopedAStatus::ok();
+    }
 
   int ret = DSM_BindToken(mDsmFd, mKeyToken);
   if (ret)
@@ -176,6 +194,25 @@ Descrambler::~Descrambler() {
   TUNER_DSC_INFO(mDescramblerId, "mPid: 0x%x", mPid);
   // Assume transport stream pid only.
   mAddedPid.insert(mPid);
+
+  if (mType == DEMOD_LIVE) {
+      TUNER_DSC_INFO(mDescramblerId, "playback type is demod live");
+  } else {
+      if (mPid != -1 && mKeyToken != 0) {
+          DVR_Result_t ret = setKeyToken(mType, mPid, mKeyToken);
+          if (ret != DVR_SUCCESS) {
+              TUNER_DSC_ERR(mDescramblerId, "set key token fail");
+              return ::ndk::ScopedAStatus::fromServiceSpecificError(
+                  static_cast<int32_t>(Result::INVALID_STATE));
+          }
+          return ::ndk::ScopedAStatus::ok();
+      } else {
+          TUNER_DSC_ERR(mDescramblerId, "pid = %d or mCasSessionToken = %d is not ready", mPid, mKeyToken);
+          return ::ndk::ScopedAStatus::fromServiceSpecificError(
+              static_cast<int32_t>(Result::INVALID_STATE));
+      }
+  }
+
   if (mIsNskDsc) {
     bool isChannelFound = false;
 
@@ -344,6 +381,24 @@ Descrambler::~Descrambler() {
 
   TUNER_DSC_INFO(mDescramblerId, "mPid:0x%x", mPid);
 
+   if (mType == DEMOD_LIVE) {
+        TUNER_DSC_INFO(mDescramblerId, "playback type is demod live");
+   } else {
+       if (mType == DVR_PLAYBACK) {
+            if (mPlaybackhandle) {
+                DVR_Result_t result = DVR_FAILURE;
+                result = dvr_playback_set_key_token(mPlaybackhandle, mPid, -1);
+                if (result != DVR_SUCCESS) {
+                    TUNER_DSC_ERR(mDescramblerId, "unset playback key token fail");
+                }
+            } else {
+                TUNER_DSC_ERR(mDescramblerId, "mPlaybackhandle is null");
+            }
+       } else if (mType == DVR_RECORD) {
+           TUNER_DSC_INFO(mDescramblerId, "to do unset record key token");
+       }
+       return ::ndk::ScopedAStatus::ok();
+   }
   if (mIsNskDsc) {
     if (mPidToDscChannel.find(ADD_DSC_TYPE_FLAG_WITH_PID(
           CA_DSC_COMMON_TYPE, mPid)) != mPidToDscChannel.end()) {
@@ -391,6 +446,29 @@ Descrambler::~Descrambler() {
 
   {
     std::lock_guard<std::mutex> lock(mDescrambleLock);
+      TUNER_DSC_INFO(mDescramblerId, "type = %d", mType);
+      if (mType == DEMOD_LIVE) {
+          TUNER_DSC_INFO(mDescramblerId, "playback type is demod live");
+      } else {
+          if (mType == DVR_PLAYBACK) {
+              if (mPlaybackhandle) {
+                  DVR_Result_t result = DVR_FAILURE;
+                  set<uint16_t>::iterator it;
+                  for (it = mAddedPid.begin(); it != mAddedPid.end(); it++) {
+                      result = dvr_playback_set_key_token(mPlaybackhandle, *it, -1);
+                      if (result != DVR_SUCCESS) {
+                          TUNER_DSC_ERR(mDescramblerId, "unset playback pid = %d key token fail", *it);
+                      }
+                  }
+              } else {
+                  TUNER_DSC_ERR(mDescramblerId, "mPlaybackhandle is null");
+              }
+          } else if (mType == DVR_RECORD) {
+              TUNER_DSC_ERR(mDescramblerId, "to do unset record key token");
+          }
+        mAddedPid.clear();
+        return ::ndk::ScopedAStatus::ok();
+      }
 
     if (mIsNskDsc) {
       clearNskDscChannels();
@@ -746,6 +824,49 @@ bool Descrambler::getTsnSourceStatus(bool *out_isLocalMode) {
   }
 
   return true;
+}
+
+DVR_Result_t Descrambler::setKeyToken(PlayType type, int pid, int token) {
+    DVR_Result_t result = DVR_FAILURE;
+    TUNER_DSC_ERR(mDescramblerId, "start to set pid = %d key token", pid);
+
+    if (type == DVR_PLAYBACK) {
+        mPlaybackhandle = mDemux->getPlaybackHandle();
+        if (mPlaybackhandle) {
+            result = dvr_playback_set_key_token(mPlaybackhandle, pid, token);
+            if (result != DVR_SUCCESS) {
+                TUNER_DSC_ERR(mDescramblerId, "set playback key token fail");
+            }
+        } else {
+            TUNER_DSC_ERR(mDescramblerId, "mPlaybackhandle is null");
+        }
+    } else if (type == DVR_RECORD) {
+        mRecordHandle = mDemux->getRecordHandle();
+        if (mRecordHandle) {
+            result = dvr_record_set_key_token(mRecordHandle, pid, token);
+            if (result != DVR_SUCCESS) {
+                TUNER_DSC_ERR(mDescramblerId, "set record key token fail");
+            }
+        } else {
+            TUNER_DSC_ERR(mDescramblerId, "mPlaybackhandle is null");
+        }
+    }
+    return result;
+}
+
+PlayType Descrambler::checkPlayType() {
+    bool bRecord   = mDemux->checkDemuxRecord();
+    bool bPlayback = mDemux->checkDemuxPlayback();
+    TUNER_DSC_DBG(mDescramblerId, "[demuxId = %d]demux use for record = %d and playback = %d", mSourceDemuxId, bRecord, bPlayback);
+    //in the same demux, both record and playback, set key token by record
+    if (bRecord) {
+        return DVR_RECORD;
+    } else if (bPlayback) {
+        return DVR_PLAYBACK;
+    } else {
+        TUNER_DSC_DBG(mDescramblerId, "Live, data from demod");
+        return DEMOD_LIVE;
+    }
 }
 
 }  // namespace tuner

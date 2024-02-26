@@ -57,7 +57,7 @@ enum {
 
 /**\brief DVR record CA info*/
 typedef struct {
-  int dev_id;                           /**< DVR record dmx/dsc dev id*/
+  int dev_id[DVR_MAX_CA_CHAN_CNT];      /**< DVR record dmx/dsc dev id*/
   int chans[DVR_MAX_CA_CHAN_CNT];       /**< DVR record ca channels. 0: des, 1: enc*/
   int even_key_kte;                     /**< DVR record encryption even kte*/
   int even_iv_kte;                      /**< DVR record encryption even kte*/
@@ -71,6 +71,7 @@ typedef struct {
 typedef struct {
   int fd;                               /**< DVR record filter's fd*/
   uint16_t pid;                         /**< DVR record stream PID*/
+  int started;                          /**< DVR record filter state*/
   DVR_StreamType_t type;                /**< DVR record stream type*/
   DVR_VideoFormat_t vfmt;               /**< DVR record video format*/
   uint32_t key_token;                   /**< DVR record key token for re-encryption*/
@@ -308,14 +309,11 @@ static int secure_resource_release(DVR_RecordContext_t *p_ctx)
 
   p_ctx->rb1.buffer = NULL;
 
-  if (p_ctx->fd[1] >= 0) {
-    close(p_ctx->fd[1]);
-    p_ctx->fd[1] = -1;
-  }
-
-  if (p_ctx->fd[2] >= 0) {
-    close(p_ctx->fd[2]);
-    p_ctx->fd[2] = -1;
+  for (int i = 1; i < 4; i++) {
+    if (p_ctx->fd[i] >= 0) {
+      close(p_ctx->fd[i]);
+      p_ctx->fd[i] = -1;
+    }
   }
 
   if (p_ctx->recfd >= 0) {
@@ -364,13 +362,18 @@ static int ca_prepare(
   }
 
   if (usage == DVR_CA_USAGE_DES) {
+    dmx_dev_id = p_ctx->dmx_dev_id[1];
+    dsc_type = CA_DSC_COMMON_TYPE;
+
     // Check if descrambling slot is ready
     DVR_CHECK(
         DSM_GetProperty(p_ctx->dsm_sess, DSM_PROP_DEC_SLOT_READY,
         &ready) == 0);
-    DVR_CHECK(ready == DSM_PROP_SLOT_IS_READY);
-    dmx_dev_id = p_ctx->dmx_dev_id[1];
-    dsc_type = CA_DSC_COMMON_TYPE;
+    if (ready != DSM_PROP_SLOT_IS_READY) {
+      DVR_INFO("%s dmx%d, pid: %#x slot not ready",
+            __func__, dmx_dev_id, stream->pid);
+      return 0;
+    }
   } else if (usage == DVR_CA_USAGE_ENC) {
     // Check if re-encryption slot is ready
     DVR_CHECK(
@@ -471,6 +474,7 @@ static int ca_prepare(
     // Record the ca channel
     if (usage == DVR_CA_USAGE_ENC) {
       stream->ca.chans[1] = ca_chan;
+      stream->ca.dev_id[1] = dmx_dev_id;
       if (slot->is_iv) {
         stream->ca.flags |= DVR_CA_ENC_IV;
       } else {
@@ -478,6 +482,7 @@ static int ca_prepare(
       }
     } else {
       stream->ca.chans[0] = ca_chan;
+      stream->ca.dev_id[0] = dmx_dev_id;
     }
 
     // Set KTE to ca dsc channel
@@ -493,7 +498,6 @@ static int ca_prepare(
     // This is a flag used to indicate whether the current pid stream's
     // descrambling key and re-encryption key are ready.
     stream->ca.flags |= usage;
-    stream->ca.dev_id = dmx_dev_id;
   }
 
   // This is a global flag that indicates whether the descrambling and
@@ -510,7 +514,7 @@ static int ca_release(DVR_RecordContext_t *p_ctx, DVR_RecordStream_t *stream)
   // Free the ca channel
   for (i = 0; i < DVR_MAX_CA_CHAN_CNT; i++) {
     if (stream->ca.chans[i] >= 0) {
-        ca_free_chan(stream->ca.dev_id, stream->ca.chans[i]);
+        ca_free_chan(stream->ca.dev_id[i], stream->ca.chans[i]);
         stream->ca.chans[i] = -1;
     }
   }
@@ -520,21 +524,35 @@ static int ca_release(DVR_RecordContext_t *p_ctx, DVR_RecordStream_t *stream)
   return 0;
 }
 
-#if 0
-int ca_enc_check(DVR_RecordContext_t *p_ctx)
+// Check ca ready status and try to prepare ca resource if needs
+int ca_ready_check(DVR_RecordContext_t *p_ctx)
 {
-  int i;
-
-  if (p_ctx->ca_flags & DVR_CA_USAGE_ENC) {
-    return 0;
-  }
-
   for (int i = 0; i < DVR_MAX_RECORD_PID_CNT; i++) {
+    DVR_RecordStream_t *stream = &p_ctx->streams[i];
+    if (stream->key_token == -1)
+      continue;
+
+    if ((stream->ca.flags & DVR_CA_USAGE_DES) &&
+          (stream->ca.flags & DVR_CA_USAGE_ENC)) {
+      continue;
+    }
+    if (!(stream->ca.flags & DVR_CA_USAGE_DES)) {
+      // Try to prepare ca resource if descrambler not ready
+      ca_prepare(p_ctx, stream, DVR_CA_USAGE_DES);
+    }
+    if (!(stream->ca.flags & DVR_CA_USAGE_ENC)) {
+      // Try to prepare ca resource if encryption channel is not ready
+      ca_prepare(p_ctx, stream, DVR_CA_USAGE_ENC);
+    }
   }
 
-  return 0;
+  if ((p_ctx->ca_flags & DVR_CA_USAGE_DES) &&
+        (p_ctx->ca_flags & DVR_CA_USAGE_ENC)) {
+    return DVR_SUCCESS;
+  }
+
+  return DVR_FAILURE;
 }
-#endif
 
 DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_t *params)
 {
@@ -561,19 +579,20 @@ DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_
     int j;
     p_ctx->streams[i].fd = -1;
     p_ctx->streams[i].pid = DVR_INVALID_PID;
+    p_ctx->streams[i].started = 0;
     p_ctx->streams[i].type = DVR_STREAM_INVALID_TYPE;
     p_ctx->streams[i].vfmt = DVR_VIDEO_FORMAT_INVALID;
     p_ctx->streams[i].key_token = -1;
     for (j = 0; j < DVR_MAX_CA_CHAN_CNT; j++) {
       p_ctx->streams[i].ca.chans[j] = -1;
+      p_ctx->streams[i].ca.dev_id[j] = -1;
     }
-    p_ctx->streams[j].ca.flags = 0;
-    p_ctx->streams[j].ca.even_key_kte = -1;
-    p_ctx->streams[j].ca.even_iv_kte = -1;
-    p_ctx->streams[j].ca.odd_key_kte = -1;
-    p_ctx->streams[j].ca.odd_iv_kte = -1;
-    p_ctx->streams[j].ca.parity = -1;
-    p_ctx->streams[j].ca.dev_id = -1;
+    p_ctx->streams[i].ca.flags = 0;
+    p_ctx->streams[i].ca.even_key_kte = -1;
+    p_ctx->streams[i].ca.even_iv_kte = -1;
+    p_ctx->streams[i].ca.odd_key_kte = -1;
+    p_ctx->streams[i].ca.odd_iv_kte = -1;
+    p_ctx->streams[i].ca.parity = -1;
   }
 
   memcpy(p_ctx->dmx_dev_id, params->dmx_dev_id, sizeof(params->dmx_dev_id));
@@ -767,8 +786,6 @@ int dvr_record_open_filter(DVR_RecordHandle_t handle, DVR_RecordFilterParams_t *
       SECTS_SetAudioParams_Func(p_ctx->sects_sess, params->pid);
     }
   } else if (params->type == DVR_STREAM_VIDEO_TYPE) {
-    // Should not open sects session before if video stream is clear
-    DVR_CHECK_WITH_UNLOCK(p_ctx->sects_sess == -1, &p_ctx->lock);
     ts_indexer_set_video_pid(&p_ctx->ts_indexer, params->pid);
     ts_indexer_set_video_format(&p_ctx->ts_indexer, params->vfmt);
   } else if (params->type == DVR_STREAM_AUDIO_TYPE) {
@@ -838,8 +855,9 @@ DVR_Result_t dvr_record_start_filter(DVR_RecordHandle_t handle, int filter_idx)
     return DVR_FAILURE;
   }
 #endif
+  p_ctx->streams[filter_idx].started = 1;
   pthread_mutex_unlock(&p_ctx->lock);
-  DVR_INFO("start filter fd: %d", fd);
+  DVR_INFO("start filter fd: %d, pid: %#x", fd, p_ctx->streams[filter_idx].pid);
   return DVR_SUCCESS;
 }
 
@@ -868,7 +886,8 @@ DVR_Result_t dvr_record_stop_filter(DVR_RecordHandle_t handle, int filter_idx)
   }
 #endif
 
-  DVR_INFO("stop filter fd:%d", fd);
+  DVR_INFO("stop filter fd:%d, pid: %#x", fd, p_ctx->streams[filter_idx].pid);
+  p_ctx->streams[filter_idx].started = 0;
   pthread_mutex_unlock(&p_ctx->lock);
   return DVR_SUCCESS;
 }
@@ -900,6 +919,7 @@ DVR_Result_t dvr_record_close_filter(DVR_RecordHandle_t handle, int filter_idx)
 #endif
 
   p_ctx->streams[i].pid = DVR_INVALID_PID;
+  p_ctx->streams[i].started = 0;
 
   pthread_mutex_unlock(&p_ctx->lock);
   return DVR_SUCCESS;
@@ -959,7 +979,17 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
                 p_ctx->dmx_dev_id[1],
                 pid);
         }
-
+        if (stream->started) {
+          int ret = ioctl(stream->fd, DMX_START, 0);
+          if (ret == -1) {
+            DVR_ERROR("%s start PES filter failed:(%s), fd: %d",
+                __func__, strerror(errno), stream->fd);
+          } else {
+            DVR_INFO("%s start filter pid: %#x, fd: %d",
+                __func__, stream->pid, stream->fd);
+          }
+        }
+#if 0
         // Switch to secure ts indexer
         if ((stream->type == DVR_STREAM_VIDEO_TYPE ||
             stream->type == DVR_STREAM_AUDIO_TYPE) &&
@@ -967,6 +997,7 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
           SECTS_OpenSession_Func(&p_ctx->sects_sess);
           DVR_CHECK_WITH_UNLOCK(p_ctx->sects_sess != -1, &p_ctx->lock);
         }
+#endif
         if (stream->type == DVR_STREAM_VIDEO_TYPE &&
             stream->vfmt != DVR_VIDEO_FORMAT_INVALID) {
           SECTS_SetVideoParams_Func(p_ctx->sects_sess, pid, stream->vfmt);
@@ -1350,6 +1381,7 @@ static ssize_t secure_pusi_read(
       memcpy(params->buf + pusi_len, src, wanna_len);
       non_pusi_rb->r_offset += wanna_len;
     }
+    non_pusi_rb->r_offset %= non_pusi_rb->len;
     DVR_INFO("%#x bytes non pusi data picked. 0x%02x 0x%02x 0x%02x 0x%02x",
           wanna_len, src[0], src[1], src[2], src[3]);
 
@@ -1519,6 +1551,11 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
     goto exit;
   }
 
+  if (p_ctx->is_secure_mode) {
+    DVR_CHECK_WITH_UNLOCK(
+                ca_ready_check(p_ctx) == 0,
+                &p_ctx->lock);
+  }
   // Get a DONE pusi and then retrieves the data from the ringbuffer
   // based on that pusi
   pusi = pusi_get(p_ctx);

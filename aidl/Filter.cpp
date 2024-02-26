@@ -29,6 +29,7 @@
 #include <aidlcommonsupport/NativeHandle.h>
 #include <inttypes.h>
 #include <utils/Log.h>
+#include <sys/prctl.h>
 #include "Filter.h"
 #include "ParseTEMIData.h"
 
@@ -123,6 +124,7 @@ void FilterCallbackScheduler::stop() {
 }
 
 void FilterCallbackScheduler::threadLoop() {
+    prctl(PR_SET_NAME, "FilterCallbackThreadLoop");
     while (mIsRunning) {
         threadLoopOnce();
     }
@@ -595,18 +597,35 @@ Filter::~Filter() {
                     if ((mTsIndexMask & static_cast<uint32_t>(DemuxTsIndex::MPT_INDEX_AUDIO)) != 0) {
                         mRecordAudioPid = mTpid;
                         ALOGD("%s set mRecordAudioPid pid = %d", __FUNCTION__, mRecordAudioPid);
+                        mFilterParams.type = DVR_STREAM_AUDIO_TYPE;
                     }
                     mScIndexType = recordSettings.scIndexType;
                     if (mScIndexType == DemuxRecordScIndexType::SC || mScIndexType == DemuxRecordScIndexType::SC_HEVC) {
                         mRecordVideoPid = mTpid;
                         ALOGD("%s set mRecordVideoPid pid = %d", __FUNCTION__, mRecordVideoPid);
+                        mFilterParams.type = DVR_STREAM_VIDEO_TYPE;
                     }
                     if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scIndex) {
                         mScIndexMask = recordSettings.scIndexMask.get<DemuxFilterScIndexMask::scIndex>();
+                        if ((mScIndexMask & static_cast<uint32_t>(DemuxScIndex::I_FRAME)) != 0) {
+                            mFilterParams.vfmt = DVR_VIDEO_FORMAT_MPEG2;
+                            ALOGD("video format is MPEG2");
+                        } else if ((mScIndexMask & static_cast<uint32_t>(DemuxScAvcIndex::I_SLICE)) != 0) {
+                            mFilterParams.vfmt = DVR_VIDEO_FORMAT_H264;
+                            ALOGD("video format is H264");// for matching with cbs
+                        }
                     } else if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scHevc) {
                         mScIndexMask = recordSettings.scIndexMask.get<DemuxFilterScIndexMask::scHevc>();
+                        mFilterParams.vfmt = DVR_VIDEO_FORMAT_HEVC;
                     }
 
+                    mFilterParams.pid = mTpid;
+                    mRecordhandle = mDemux->getRecordHandle();
+                    if (mRecordhandle != NULL) {
+                        recFilerId = dvr_record_open_filter(mRecordhandle, &mFilterParams);
+                    }
+
+                    #if 0
                     struct dmx_pes_filter_params pparam;
                     memset(&pparam, 0, sizeof(pparam));
                     pparam.pid = mTpid;
@@ -623,6 +642,7 @@ Filter::~Filter() {
                         return ::ndk::ScopedAStatus::fromServiceSpecificError(
                                     static_cast<int32_t>(Result::UNAVAILABLE));
                     }
+                    #endif
                     ALOGD("stream(pid = %d) start recording, filter = (0x%llx:%lld)", mTpid, mExtendId, mFilterId);
                     break;
                 }
@@ -707,6 +727,11 @@ Filter::~Filter() {
 
 ::ndk::ScopedAStatus Filter::start() {
     ALOGD("%s/%d mFilterId:(0x%llx:%lld)", __FUNCTION__, __LINE__, mExtendId, mFilterId);
+    if (mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::RECORD) {
+        dvr_record_start_filter(mRecordhandle, recFilerId);
+        return ::ndk::ScopedAStatus::ok();
+    }
 
     if (mDemux->checkSoftDemuxForTemi() && mType.mainType == DemuxFilterMainType::TS &&
         mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::TEMI) {
@@ -732,6 +757,11 @@ Filter::~Filter() {
 
 ::ndk::ScopedAStatus Filter::stop() {
     ALOGD("%s/%d mFilterId:(0x%llx:%lld)", __FUNCTION__, __LINE__, mExtendId, mFilterId);
+    if (mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::RECORD) {
+        dvr_record_stop_filter(mRecordhandle, recFilerId);
+    }
+
     if (mDemux->checkSoftDemuxForTemi() && mType.mainType == DemuxFilterMainType::TS &&
         mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::TEMI) {
         bFilterStart = false;
@@ -784,6 +814,11 @@ Filter::~Filter() {
 
 ::ndk::ScopedAStatus Filter::close() {
     ALOGD("%s/%d mFilterId = (0x%llx:%lld)", __FUNCTION__, __LINE__, mExtendId, mFilterId);
+    if (mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::RECORD) {
+        dvr_record_close_filter(mRecordhandle, recFilerId);
+    }
+
     if (mDemux->getAmDmxDevice() != NULL) {
         mDemux->getAmDmxDevice()->AM_DMX_SetCallback(mFilterId, NULL, NULL);
         mDemux->getAmDmxDevice()->AM_DMX_FreeFilter(mFilterId);
@@ -1355,15 +1390,10 @@ void Filter::updatePts(uint64_t pts) {
     //ALOGD("%s/%d mPts = 0x%llx, pts = 0x%llx",  __FUNCTION__, __LINE__, mPts, pts);
 }
 
-void Filter::updateIndexType(int scIndexType, int tsIndexType) {
+void Filter::updateIndexType(int iframeIndex, int pusiIndex) {
     std::lock_guard<std::mutex> lock(mRecordFilterOutputLock);
-    if (scIndexType != -1) {
-        mScIndType = scIndexType;
-    }
-
-    if (tsIndexType != -1) {
-        mTsIndType = tsIndexType;
-    }
+    mIframeIndex = iframeIndex;
+    mPusiIndex = pusiIndex;
     //ALOGD("%s/%d mTsIndexType = %d, mScIndexType = %d",  __FUNCTION__, __LINE__, mTsIndType, mScIndType);
 }
 
@@ -1440,12 +1470,13 @@ void Filter::updateRecordOutput(vector<int8_t>& data) {
     }
     if (!writeSectionsAndCreateEvent(mFilterOutput)) {
         ALOGD("[Filter] filter (0x%llx:%lld) fails to write into FMQ. Ending thread", mExtendId, mFilterId);
+        mFilterOutput.clear();
         return ::ndk::ScopedAStatus::fromServiceSpecificError(
                 static_cast<int32_t>(Result::UNKNOWN_ERROR));
     }
 
-    mFilterOutput.clear();
     fillDataToDecoder();
+    mFilterOutput.clear();
     return ::ndk::ScopedAStatus::ok();
 }
 
@@ -1614,69 +1645,53 @@ void Filter::updateRecordOutput(vector<int8_t>& data) {
     return createIndependentMediaEvents(output);
 }
 
-static FILE *filedump_IFrame = NULL;
 ::ndk::ScopedAStatus Filter::startRecordFilterHandler() {
     std::lock_guard<std::mutex> lock(mRecordFilterOutputLock);
-    //if (mRecordFilterOutput.empty()) {
-    //    return ::ndk::ScopedAStatus::ok();
-    //}
-    if (!mRecordFilterOutput.empty()) {
-        if (mDvr == nullptr || !mDvr->writeRecordFMQ(mRecordFilterOutput)) {
-            ALOGD("[Filter] dvr fails to write into record FMQ.");
-            mRecordFilterOutput.clear();
-            return ::ndk::ScopedAStatus::fromServiceSpecificError(
-                    static_cast<int32_t>(Result::UNKNOWN_ERROR));
-        }
+    if (mRecordFilterOutput.empty()) {
+        return ::ndk::ScopedAStatus::ok();
     }
 
-    if (mTsIndType == 0 && mScIndType == 2) {
-        mLastTsIndType = mTsIndType;
-        mLastScIndType = mScIndType;
-        mLastOffset = mCurrentOffset;
-        if (mDemux->getDemuxId() == 3) {
-            if (filedump_IFrame == NULL)
-                filedump_IFrame = fopen("/data/local/tmp/filedump_IFrame.ts", "wb+");
-            if (filedump_IFrame != NULL) {
-                fwrite(mRecordFilterOutput.data(), 1, mRecordFilterOutput.size(), filedump_IFrame);
-                //fflush(filedump_before);
-                //fclose(filedump);
-                //filedump = NULL;
-            } else {
-               ALOGE("Open filedump_IFrame.ts failed!\n");
-            }
-        }
-        ALOGD("I-Frame offset = %llu, pts = %llu, data size = %d", mCurrentOffset, mPts, mRecordFilterOutput.size());
+    if (mDvr == nullptr || !mDvr->writeRecordFMQ(mRecordFilterOutput)) {
+        ALOGD("[Filter] dvr fails to write into record FMQ.");
+        mRecordFilterOutput.clear();
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(
+                static_cast<int32_t>(Result::UNKNOWN_ERROR));
     }
 
-    if (mLastTsIndType == 0 && mLastScIndType == 2 && mCurrentOffset > mLastOffset) {
-        uint64_t idatalen = mCurrentOffset - mLastOffset;
-        ALOGD("I-Frame data length = %llu, pts = %llu, mCurrentOffset = %llu, mLastOffset = %llu", idatalen, mPts, mCurrentOffset, mLastOffset);
-        mLastTsIndType = -1;
-        mLastScIndType = -1;
-        mLastOffset    = -1;
-    }
     DemuxFilterScIndexMask mask;
     int32_t scIndexmask = 0;
     int32_t tsIndexmask = 0;
-    bool bUserTsIndexer = false;
 
-    if (mTsIndType >= 0 && mTsIndType <= 1) {
-        tsIndexmask = convertTsIndexerTypeToTsIndex(mTsIndType);
+    if (mPusiIndex != 0) {
+        tsIndexmask = static_cast<uint32_t>(DemuxTsIndex::PAYLOAD_UNIT_START_INDICATOR);
         tsIndexmask = tsIndexmask & mTsIndexMask;
-        bUserTsIndexer = true;
     }
-    if (mScIndType >= 2 && mScIndType <= 17) {
+
+    if (mIframeIndex != 0) {
         DemuxFilterRecordSettings recordSettings = mFilterSettings.get<DemuxFilterSettings::Tag::ts>()
                 .filterSettings.get<DemuxTsFilterSettingsFilterSettings::record>();
         if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scIndex) {
-            scIndexmask = covertTsIndexerTypeToScIndex(mScIndType);
-            //ALOGD("%s/%d mScIndType = %d, scIndexmask = %d, mScIndexMask = %d", __FUNCTION__, __LINE__, mScIndType,
-            //scIndexmask, mScIndexMask);
+            if ((mScIndexMask & static_cast<uint32_t>(DemuxScIndex::I_FRAME)) != 0) {
+                scIndexmask = static_cast<uint32_t>(DemuxScIndex::I_FRAME);
+                ALOGD("it is I-Frame scIndexmask = %d", scIndexmask);
+            } else if ((mScIndexMask & static_cast<uint32_t>(DemuxScAvcIndex::I_SLICE)) != 0) {
+                scIndexmask = static_cast<uint32_t>(DemuxScAvcIndex::I_SLICE);
+                ALOGD("it is I-SLICE scIndexmask = %d", scIndexmask);
+            }
         } else if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scHevc) {
-            scIndexmask = convertTsIndexerTypeToScHevcIndex(mScIndType);
+            scIndexmask = static_cast<uint32_t>(DemuxScHevcIndex::SLICE_IDR_W_RADL);
+            scIndexmask = scIndexmask & mScIndexMask;
         }
-        scIndexmask = scIndexmask & mScIndexMask;
-        //ALOGD("%s/%d scIndexmask = %d", __FUNCTION__, __LINE__, scIndexmask);
+
+        ALOGD("I-Frame information: offset = %llu, size = %d, pts = %llu", mCurrentOffset, mRecordFilterOutput.size(), mPts);
+        if (mDemux->getDemuxId() == 3) {
+            if (iFrameFile == NULL) {
+                iFrameFile = fopen("/data/local/tmp/iFrameData.ts", "wb+");
+            }
+            if (iFrameFile != NULL) {
+                fwrite(mRecordFilterOutput.data(), 1, mRecordFilterOutput.size(), iFrameFile);
+            }
+        }
     }
     mask.set<DemuxFilterScIndexMask::Tag::scIndex>(scIndexmask);
 
@@ -1698,14 +1713,10 @@ static FILE *filedump_IFrame = NULL;
                 DemuxFilterEvent::make<DemuxFilterEvent::Tag::tsRecord>(recordEvent));
     }
     fillDataToDecoder();
-    if (!bUserTsIndexer) {
-        mCurrentOffset += static_cast<uint64_t>(mRecordFilterOutput.size());
-    } else {
-        mCurrentOffset = -1;
-    }
+    mCurrentOffset += static_cast<uint64_t>(mRecordFilterOutput.size());
     mRecordFilterOutput.clear();
-    mTsIndType = -1;
-    mScIndType = -1;
+    mPusiIndex = 0;
+    mIframeIndex = 0;
     return ::ndk::ScopedAStatus::ok();
 }
 
