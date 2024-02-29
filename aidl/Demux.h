@@ -301,6 +301,8 @@ class Demux : public BnDemux {
     int mTemiFid = -1;
     int mTemiRecordFid = -1;
     bool bSupportSoftDemuxForTemi = false;
+    DVR_RecordHandle_t mTemiRecHandle = NULL;
+    DVR_RecordReceiveParams_t mTemiReceiveParam;
 
     DVR_RecordHandle_t mRecordHandle = NULL;
     DVR_PlaybackHandle_t mPlaybackhandle = NULL;

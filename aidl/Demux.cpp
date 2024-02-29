@@ -1819,44 +1819,68 @@ int Demux::getIFrame() {
 
 void Demux::TemiRecordThreadLoop() {
     prctl(PR_SET_NAME, "TemiRecordThreadLoop");
+    bool startToRead = false;
     while (mTemiRecordThreadRunning) {
         int temiFid = *mTemiFilterIds.begin();
-        if (mFilters[temiFid]->getFilterStatus()) {
+        if (!startToRead && mFilters[temiFid]->getFilterStatus()) {
             recordTsPacketForTemiData(temiFid);
-            break;
+            startToRead = true;
         }
-        usleep(10 * 1000);
+        if (startToRead) {
+            ssize_t len = 0;
+            len = dvr_record_read(mTemiRecHandle, &mTemiReceiveParam);
+            //ALOGD("[Dvr] len = %d", len);
+            if (len <= 0) {
+              usleep(10*1000);
+              //ALOGE("dvr no data\n");
+              continue;
+            }
+            vector<int8_t> tmpData;
+            tmpData.resize(len);
+            memcpy(tmpData.data(), mTemiReceiveParam.buf, len *  sizeof(uint8_t));
+            updateFilterOutput(temiFid, tmpData);
+            startFilterHandler(temiFid);
+        } else {
+            usleep(10 * 1000);
+        }
     }
 }
 
 int Demux::recordTsPacketForTemiData(int64_t filterId) {
     mFilters[filterId]->stop();
     mTemiFid = filterId;
-    //mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
-    //mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTuner->getTsInput(), false);
 
     int pid = getFilterTpid(filterId);
     ALOGD("%s/%d TEMI pid = %d", __FUNCTION__, __LINE__, pid);
 
-    struct dmx_pes_filter_params pparam;
-    memset(&pparam, 0, sizeof(pparam));
-    pparam.pid = pid;
-    pparam.input = DMX_IN_FRONTEND;
-    pparam.output = DMX_OUT_TS_TAP;
-    pparam.pes_type = DMX_PES_OTHER;
-    AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&mTemiRecordFid);
+    DVR_RecordOpenParams_t openParams;
+    memset(&openParams, 0, sizeof(DVR_RecordOpenParams_t));
+    openParams.src = static_cast<DVB_DemuxSource_t>(DVB_DEMUX_SOURCE_TS0 + mDemuxId);
+    openParams.dmx_dev_id[0] = mDemuxId;
+    openParams.non_sec_ringbuf_size = DVR_BUFFER_LEN;
+    DVR_Result_t ret = dvr_record_open(&mTemiRecHandle, &openParams);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("open dvr record failed!\n");
+    }
+    memset(&mTemiReceiveParam, 0, sizeof(DVR_RecordReceiveParams_t));
+    mTemiReceiveParam.buf = (uint8_t *)malloc(DVR_MAX_PUSI_LEN);
+    mTemiReceiveParam.len = DVR_MAX_PUSI_LEN;
+    mTemiReceiveParam.mode = DVR_DIRECT_RECORD_MODE;
+    ret = dvr_record_start(mTemiRecHandle);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("start dvr record failed!\n");
+    }
 
-    if (AmDmxDevice[mDemuxId]->AM_DMX_SetBufferSize(mTemiRecordFid, 10 * 1024 * 1024) != 0) {
-        ALOGE("record AM_DMX_SetBufferSize");
-        return -1;
+    DVR_RecordFilterParams_t filterParams;
+    filterParams.pid = pid;//0x2000;
+    mTemiRecordFid = dvr_record_open_filter(mTemiRecHandle, &filterParams);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record open filter failed!\n");
     }
-    if (AmDmxDevice[mDemuxId]->AM_DMX_SetPesFilter(mTemiRecordFid, &pparam) != 0) {
-        ALOGE("record AM_DMX_SetPesFilter");
-        return -1;
-    }
-    if (AmDmxDevice[mDemuxId]->AM_DMX_StartFilter(mTemiRecordFid) != 0) {
-        ALOGE("Start filter %d failed!", mTemiRecordFid);
-        return -1;
+
+    ret = dvr_record_start_filter(mTemiRecHandle, mTemiRecordFid);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record start filter failed!\n");
     }
     ALOGD("stream(pid = %d) start recording, filter = %d", pid, mTemiRecordFid);
 
@@ -1865,14 +1889,35 @@ int Demux::recordTsPacketForTemiData(int64_t filterId) {
 
 void Demux::closeTemiRecordFilter() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
+
+    DVR_Result_t ret = dvr_record_stop_filter(mTemiRecHandle, mTemiRecordFid);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record stop filter failed!\n");
+    }
+
     mTemiRecordThreadRunning = false;
     if (mTemiRecordThread.joinable()) {
         mTemiRecordThread.join();
     }
 
-    if (AmDmxDevice[mDemuxId] != NULL) {
-        AmDmxDevice[mDemuxId]->AM_DMX_StopFilter(mTemiRecordFid);
-        AmDmxDevice[mDemuxId]->AM_DMX_FreeFilter(mTemiRecordFid);
+    if (mTemiReceiveParam.buf) {
+        free(mTemiReceiveParam.buf);
+        mTemiReceiveParam.buf = NULL;
+    }
+
+    ret = dvr_record_close_filter(mTemiRecHandle, mTemiRecordFid);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record close filter failed!\n");
+    }
+
+    ret = dvr_record_stop(mTemiRecHandle);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record stop failed!\n");
+    }
+
+    ret = dvr_record_close(mTemiRecHandle);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record close failed!\n");
     }
 
     mTemiFid = -1;

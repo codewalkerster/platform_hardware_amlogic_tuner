@@ -746,9 +746,10 @@ Filter::~Filter() {
     }
     if (mDemux->getAmDmxDevice()
         ->AM_DMX_StartFilter(mFilterId) != 0) {
-        bool isPassthrough =
-        mFilterSettings.get<DemuxFilterSettings::Tag::ts>().filterSettings.get<DemuxTsFilterSettingsFilterSettings::av>().isPassthrough;
-        if (mIsMediaFilter && isPassthrough) {
+        bool isPassthrough = false;
+        if (mIsMediaFilter)
+            isPassthrough = mFilterSettings.get<DemuxFilterSettings::Tag::ts>().filterSettings.get<DemuxTsFilterSettingsFilterSettings::av>().isPassthrough;
+        if (isPassthrough) {
             ALOGD("av filter will start in mediahal");
             return ::ndk::ScopedAStatus::ok();
         } else {
@@ -1765,10 +1766,10 @@ void Filter::updateRecordOutput(vector<int8_t>& data) {
             int length = af_descriptor.af_descr_length;
             int offset = af_descriptor.flag;
             ALOGD("%s/%d pts = %llu, length = %d, offset = %d", __FUNCTION__, __LINE__, pts, length, offset);
-
             DemuxFilterTemiEvent temi;
             temi.pts = pts;
             temi.descrTag = descrTag;
+            temi.descrData.resize(length);
             memcpy(temi.descrData.data(), filterOutput.data() + i + offset, length * sizeof(uint8_t));
             {
                 std::lock_guard<std::mutex> lock(mFilterEventsLock);
