@@ -235,7 +235,11 @@ int FrontendDevice::internalTune(const FrontendSettings & settings, const V1_1::
         }
     }
 
-    mDev.tuneFreq = fe_params.frequency;
+    if (mDev.type == FrontendType::DVBS)
+        mDev.tuneFreq = adjustFrequencyOffSet(settings.dvbs().frequency);
+    else
+        mDev.tuneFreq = fe_params.frequency;
+
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);
@@ -466,7 +470,6 @@ int FrontendDevice::blindTune(const FrontendSettings & settings) {
     dvb_frontend_parameters fe_params;
 
     FrontendSettings tuneSettings = settings;
-    tuneSettings.dvbs().frequency = adjustFrequencyOffSet(tuneSettings.dvbs().frequency);
     mDev.feSettings = &tuneSettings;
     if (getFrontendSettings(&tuneSettings, &fe_params) <0) {
         ALOGE("[id:%d] Wrong delivery system in FrontendSettings, or not support it.", mDev.id);
@@ -474,7 +477,11 @@ int FrontendDevice::blindTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    mDev.tuneFreq = fe_params.frequency;
+    if (mDev.type == FrontendType::DVBS)
+        mDev.tuneFreq = adjustFrequencyOffSet(tuneSettings.dvbs().frequency);
+    else
+        mDev.tuneFreq = fe_params.frequency;
+
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);

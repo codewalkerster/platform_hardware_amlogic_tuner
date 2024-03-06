@@ -227,7 +227,11 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    mDev.tuneFreq = fe_params.frequency;
+    if (mDev.type == FrontendType::DVBS)
+        mDev.tuneFreq = adjustFrequencyOffSet(tuneSettings.get<FrontendSettings::Tag::dvbs>().frequency);
+    else
+        mDev.tuneFreq = fe_params.frequency;
+
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);
@@ -470,7 +474,15 @@ int FrontendDevice::blindTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);
+    if (mDev.type == FrontendType::DVBS) {
+        mDev.tuneFreq = adjustFrequencyOffSet(tuneSettings.get<FrontendSettings::Tag::dvbs>().frequency);
+        mDev.blindEndFreq = adjustFrequencyOffSet(tuneSettings.get<FrontendSettings::Tag::dvbs>().endFrequency);
+    } else {
+        mDev.tuneFreq = fe_params.frequency;
+        mDev.blindEndFreq = 0;
+    }
+
+    ALOGI("Blind scan %uHz to %uHz", mDev.tuneFreq, mDev.blindEndFreq);
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);
@@ -804,7 +816,8 @@ bool FrontendDevice::threadLoop() {
                 else if(cur_bsevent.status == BLINDSCAN_UPDATERESULTFREQ)
                 {
                     locked_freq = cur_bsevent.u.parameters.frequency;
-                    mContext->sendScanCallBack(locked_freq, true, false);
+                    mContext->sendScanCallBack(locked_freq, true, false,
+                        cur_bsevent.u.parameters.u.qpsk.symbol_rate);
                     //updateThreadState(FrontendDevice::STATE_STOP);
                 }
             }
@@ -1043,11 +1056,19 @@ int FrontendDevice::setDvbsBlindScanParams(bool start) {
             return UNAVAILABLE;
         }
     } else {
+        uint32_t startKHz = mDev.tuneFreq / 1000;
+        uint32_t endKHz = mDev.blindEndFreq / 1000;
         struct dtv_properties props;
         struct dtv_property cmds[9];
         struct dtv_property *cmd = cmds;
         int ncmd = 0;
         memset(cmds, 0, sizeof(struct dtv_property) * 9);
+
+        if (startKHz < 950000 || startKHz > 2150000)
+            startKHz = 950000;
+        if (endKHz < startKHz || endKHz > 2150000) {
+            endKHz = 2150000;
+        }
 
         cmd->cmd = DTV_DELIVERY_SYSTEM;
         cmd->u.data = getFeDeliverySystem(mDev.type);
@@ -1056,13 +1077,13 @@ int FrontendDevice::setDvbsBlindScanParams(bool start) {
 
         /*set min fre*/
         cmd->cmd = DTV_BLIND_SCAN_MIN_FRE;
-        cmd->u.data = 950000;
+        cmd->u.data = startKHz;
         cmd ++;
         ncmd ++;
 
         /*set max fre*/
         cmd->cmd = DTV_BLIND_SCAN_MAX_FRE;
-        cmd->u.data = 2150000;//settingsExt1_1.endFrequency
+        cmd->u.data = endKHz;//settingsExt1_1.endFrequency
         cmd ++;
         ncmd ++;
 

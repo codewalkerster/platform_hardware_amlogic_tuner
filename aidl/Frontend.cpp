@@ -1033,7 +1033,7 @@ void Frontend::getFrontendInfo(FrontendInfo* _aidl_return) {
     };
 }
 
-void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
+void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd, uint32_t symbol) {
     ALOGD("%s", __FUNCTION__);
     mIsLocked = isLocked;
     FrontendScanMessage msg;
@@ -1044,6 +1044,7 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
         ALOGD("%s %d,PROGRESS_PERCENT ccc:%d", __FUNCTION__,__LINE__,percent);
         return;
     }
+
     msg.set<FrontendScanMessage::Tag::isLocked>(isLocked);
     mCallback->onScanMessage(FrontendScanMessageType::LOCKED, msg);
     vector<int64_t> frequencies = {freq};
@@ -1051,8 +1052,11 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd) {
     mCallback->onScanMessage(FrontendScanMessageType::FREQUENCY, msg);
     msg.set<FrontendScanMessage::Tag::isEnd>(isEnd);
     mCallback->onScanMessage(FrontendScanMessageType::END, msg);
+
     if (isLocked) {
-        vector<int> symbols = {(int)(mFeDev->getSymbolRate())};
+        vector<int> symbols = {(int)symbol};
+        if (symbol == 0)
+            symbols[0] = (int)(mFeDev->getSymbolRate());
         msg.set<FrontendScanMessage::Tag::symbolRates>(symbols);
         mCallback->onScanMessage(FrontendScanMessageType::SYMBOL_RATE, msg);
     }

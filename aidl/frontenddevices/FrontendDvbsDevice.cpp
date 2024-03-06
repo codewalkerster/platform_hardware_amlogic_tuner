@@ -50,17 +50,15 @@ int FrontendDvbsDevice::getFrontendSettings(FrontendSettings *settings, void * f
         return -1;
     }
 
-    FrontendDvbsSettings dvbsSetting;
     p_fe_params->frequency = (settings->get<FrontendSettings::Tag::dvbs>().frequency) / 1000;
     p_fe_params->u.qpsk.symbol_rate = settings->get<FrontendSettings::Tag::dvbs>().symbolRate;
     if (settings->get<FrontendSettings::Tag::dvbs>().modulation == FrontendDvbsModulation::UNDEFINED) {
-        dvbsSetting.modulation = FrontendDvbsModulation::MOD_QPSK;
-        settings->set<FrontendSettings::Tag::dvbs>(dvbsSetting);
+        settings->get<FrontendSettings::Tag::dvbs>().modulation = FrontendDvbsModulation::MOD_QPSK;
     }
     if (settings->get<FrontendSettings::Tag::dvbs>().coderate.fec == FrontendInnerFec::FEC_UNDEFINED) {
-        dvbsSetting.coderate.fec = FrontendInnerFec::AUTO;
-        settings->set<FrontendSettings::Tag::dvbs>(dvbsSetting);
+        settings->get<FrontendSettings::Tag::dvbs>().coderate.fec = FrontendInnerFec::AUTO;
     }
+
     p_fe_params->u.qpsk.fec_inner =
         (fe_code_rate_t)(getFeInnerFecType(settings->get<FrontendSettings::Tag::dvbs>().coderate.fec));
     //TODO: which usage of other parameters

@@ -83,6 +83,7 @@ public:
         FrontendType      type;
         FrontendSettings* feSettings;
         uint32_t          blindFreq;
+        uint32_t          blindEndFreq;
         uint32_t          tuneFreq;
         bool              islocked;
     }fe_dev_t;

@@ -67,7 +67,7 @@ class Frontend : public BnFrontend, public ::android::RefBase {
     string getSourceFile();
     bool isLocked();
     void getFrontendInfo(FrontendInfo* _aidl_return);
-    void sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd);
+    void sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd, uint32_t symbol = 0);
     void sendEventCallBack(FrontendEventType locked);
 
   private:

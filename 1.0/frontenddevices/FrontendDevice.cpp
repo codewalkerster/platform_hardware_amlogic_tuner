@@ -221,7 +221,11 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    mDev.tuneFreq = adjustFrequencyOffSet(fe_params.frequency);
+    if (mDev.type == FrontendType::DVBS)
+        mDev.tuneFreq = adjustFrequencyOffSet(tuneSettings.dvbs().frequency);
+    else
+        mDev.tuneFreq = fe_params.frequency;
+
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
         sem_post(&threadSemaphore);
