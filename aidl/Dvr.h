@@ -150,7 +150,7 @@ class Dvr : public BnDvr {
     /**
      * If a specific filter's writing loop is still running
      */
-    std::atomic<bool> mDvrThreadRunning;
+    std::atomic<bool> mDvrThreadRunning = false;
 
     /**
      * Lock to protect writes to the FMQs
@@ -170,7 +170,7 @@ class Dvr : public BnDvr {
     DVR_PlaybackHandle_t mPlaybackhandle = NULL;
     DVR_RecordOpenParams_t mOpenParams;
     std::thread mDvrRecordThread;
-    std::atomic<bool> mDvrRecordThreadRunning;
+    std::atomic<bool> mDvrRecordThreadRunning = false;
     DVR_RecordReceiveParams_t mReceiveParams;
     DVR_PlaybackOpenParams_t mPlaybackParams;
     uint64_t mOffset     = 0;
