@@ -99,6 +99,7 @@ Demux::Demux(int32_t demuxId, uint32_t filterTypes) {
     mCiCamId = 0;
     mFrontendInputThreadRunning = false;
     mKeepFetchingDataFromFrontend = false;
+
 }
 
 void Demux::setTunerService(std::shared_ptr<Tuner> tuner) {
@@ -111,6 +112,8 @@ void Demux::setTunerService(std::shared_ptr<Tuner> tuner) {
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
 
     AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTuner->getTsInput());
+
+    mAmCI[mDemuxId] = new AmCI(mDemuxId, mTuner->getTsInput(), INPUT_DEMOD);
 
     mHwDemuxOps[mDemuxId] = new HwDemuxOpsSCWrap();
     if (mHwDemuxOps[mDemuxId] != nullptr) {
@@ -146,7 +149,7 @@ Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
     if (mHwDemuxOps[mDemuxId] != nullptr) {
         mDemuxHandle[mDemuxId] = mHwDemuxOps[mDemuxId]->AmHwDemux_Create(0, NULL);
     }
-
+    mAmCI[mDemuxId] = new AmCI(mDemuxId, mTuner->getTsInput(), INPUT_DEMOD);
 }
 #endif
 
@@ -1043,7 +1046,9 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
         AmDmxDevice[mDemuxId]->AM_DMX_Close();
         AmDmxDevice[mDemuxId] = NULL;
     }
-
+    if (mAmCI[mDemuxId] != NULL) {
+        mAmCI[mDemuxId] = NULL;
+    }
     if (mTuner != nullptr) {
         mTuner->removeDemux(mDemuxId);
     }
@@ -1117,25 +1122,40 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 }
 
 ::ndk::ScopedAStatus Demux::connectCiCam(int32_t in_ciCamId) {
-    ALOGD("%s TS change to passthough", __FUNCTION__);
+    ALOGD("%s TS change to passthough %d", __FUNCTION__,in_ciCamId);
 
     mCiCamId = in_ciCamId;
-    FileSystem_create();
 
-    if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
-        ALOGE("set tso_source erro %p\n",this);
+    // mAmCI[mDemuxId]->ciCamId = in_ciCamId;
+    mCiCamId = in_ciCamId;
+
+    if (mCiCamId < 8) {
+        FileSystem_create();
+
+        if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
+            ALOGE("set tso_source erro %p\n",this);
+        }
+
+        if (AmDmxDevice[mDemuxId] != NULL) {
+            AmDmxDevice[mDemuxId]->AM_DMX_SetSource(0, INPUT_DEMOD, FRONTEND_TS1);
+        }
+    } else {
+        mAmCI[mDemuxId]->setDvbSource(0, INPUT_LOCAL, DMA_5);
+        mAmCI[mDemuxId]->CIUsbOpen();
     }
 
-    if (AmDmxDevice[mDemuxId] != NULL) {
-        AmDmxDevice[mDemuxId]->AM_DMX_SetSource(0, INPUT_DEMOD, FRONTEND_TS1);
-    }
     return ::ndk::ScopedAStatus::ok();
 }
 
 ::ndk::ScopedAStatus Demux::disconnectCiCam() {
-    ALOGD("%s TS change to bypass", __FUNCTION__);
-    if (AmDmxDevice[mDemuxId] != NULL) {
-        AmDmxDevice[mDemuxId]->AM_DMX_SetSource(0, INPUT_DEMOD, FRONTEND_TS2);
+    ALOGD("%s TS change to bypass %d", __FUNCTION__, mCiCamId);
+    if (mCiCamId < 8) {
+        if (AmDmxDevice[mDemuxId] != NULL) {
+            AmDmxDevice[mDemuxId]->AM_DMX_SetSource(0, INPUT_DEMOD, FRONTEND_TS2);
+        }
+    } else {
+        mAmCI[mDemuxId]->setDvbSource(0, INPUT_DEMOD, FRONTEND_TS2);
+        mAmCI[mDemuxId]->CIUsbClose();
     }
     return ::ndk::ScopedAStatus::ok();
 }

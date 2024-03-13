@@ -36,7 +36,7 @@
 #include "AmPesFilter.h"
 #include "HwDemuxSCWrap.h"
 //#include "AmTsIndexer.h"
-
+#include "AmCI.h"
 using namespace std;
 
 namespace aidl {
@@ -316,6 +316,7 @@ class Demux : public BnDemux {
     int mTemiFid = -1;
     int mTemiRecordFid = -1;
     bool bSupportSoftDemuxForTemi = false;
+    sp<AmCI> mAmCI[DMX_COUNT] = { NULL };
     DVR_RecordHandle_t mTemiRecHandle = NULL;
     DVR_RecordReceiveParams_t mTemiReceiveParam;
 

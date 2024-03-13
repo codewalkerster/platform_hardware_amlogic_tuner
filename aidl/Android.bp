@@ -98,6 +98,8 @@ cc_defaults {
         //"MultiHwDemux/AmTsIndexer.cpp",
         "MultiHwDemux/ParseTEMIData.cpp",
         "mediasync/MediaSyncWrap.cpp",
+        "CI/AmCIModuleApi.cpp",
+        "CI/AmCI.cpp",
         //"dvr/AmDvr.cpp",
         "dvr/dvr_record.c",
         "dvr/dvr_playback.c",
@@ -143,6 +145,7 @@ cc_defaults {
         "dvr",
         "dsc",
         "utils",
+        "CI",
     ],
 
     cflags: [
