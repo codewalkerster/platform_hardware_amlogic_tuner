@@ -23,7 +23,7 @@
 
 typedef struct {
     char dev_name[32];
-    int  fd[DMX_FILTER_COUNT];
+    int  fd[DMX_FILTER_COUNT + START_FILTERID_FROM_ONE];
     int  evtfd;
 } DVBDmx_t;
 

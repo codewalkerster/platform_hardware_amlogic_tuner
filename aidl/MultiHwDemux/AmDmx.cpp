@@ -33,7 +33,7 @@ AM_DMX_Device::AM_DMX_Device(int demuxId) {
     thread = 0;
     flags = 0;
     enable_thread = false;
-    for (int fid = 0; fid < DMX_FILTER_COUNT; fid++) {
+    for (int fid = 1; fid < DMX_FILTER_COUNT + START_FILTERID_FROM_ONE; fid++) {
         filters[fid].used = false;
         filters[fid].drv_data = NULL;
         filters[fid].enable = false;
@@ -63,8 +63,8 @@ AM_ErrorCode_t AM_DMX_Device::dmx_dvr_open(dmx_input_source inputSource) {
 AM_ErrorCode_t AM_DMX_Device::dmx_get_used_filter(int filter_id, AM_DMX_Filter **pf) {
     AM_DMX_Filter *filter = NULL;
 
-    if ((filter_id < 0) || (filter_id >= DMX_FILTER_COUNT)) {
-        ALOGE("invalid filter id, must in %d~%d", 0, DMX_FILTER_COUNT-1);
+    if ((filter_id < 1) || (filter_id >= DMX_FILTER_COUNT + START_FILTERID_FROM_ONE)) {
+        ALOGE("invalid filter id, must in %d~%d", 1, DMX_FILTER_COUNT);
         return AM_DMX_ERR_INVALID_ID;
     }
 
@@ -227,7 +227,7 @@ void* AM_DMX_Device::dmx_data_thread(void *arg) {
             pthread_mutex_unlock(&dev->lock);
 #endif
 
-            for (int id = 0; id < DMX_FILTER_COUNT; id++) {
+            for (int id = 1; id < DMX_FILTER_COUNT + START_FILTERID_FROM_ONE; id++) {
                 AM_DMX_Filter *filter = &(dev->filters[id]);
                 //AM_DMX_DataCb cb;
                 //void *data;
@@ -351,7 +351,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_Close(void) {
         enable_thread = false;
         pthread_join(thread, NULL);
 
-        for (int i = 0; i < DMX_FILTER_COUNT; i++) {
+        for (int i = 1; i < DMX_FILTER_COUNT + START_FILTERID_FROM_ONE; i++) {
             dmx_free_filter(&filters[i]);
         }
         if (drv) {
@@ -395,20 +395,20 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_AllocateFilter(int *fhandle) {
 
     pthread_mutex_lock(&lock);
 
-    for (fid = 0; fid < DMX_FILTER_COUNT; fid++) {
+    for (fid = 1; fid < DMX_FILTER_COUNT + START_FILTERID_FROM_ONE; fid++) {
         if (!filters[fid].used) {
             break;
         }
     }
 
-    if (fid >= DMX_FILTER_COUNT) {
+    if (fid >= DMX_FILTER_COUNT + START_FILTERID_FROM_ONE) {
         ALOGI("no free section filter");
         ret = AM_DMX_ERR_NO_FREE_FILTER;
     }
 
     if (ret == AM_SUCCESS) {
         dmx_wait_cb();
-        filters[fid].id   = fid;
+        filters[fid].id = fid;
         ret = drv->dvb_alloc_filter(this, &filters[fid]);
     }
 

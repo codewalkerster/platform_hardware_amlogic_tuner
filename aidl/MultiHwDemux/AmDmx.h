@@ -21,6 +21,24 @@
 #include <dmx.h>
 
 #define DMX_FILTER_COUNT      (32)
+/*
+start filterId from 1 to avoid audiotrack crash;
+because get syncid by pcr filterId, if pcr filterid = 0,
+syncid will be 0, this will cause audiotrack crash.
+public TunerConfiguration(
+      @IntRange(from = 0) int contentId, @IntRange(from = 1)int syncId) {
+  if (contentId < 0) {
+      throw new IllegalArgumentException(
+              "contentId " + contentId + " must be positive or CONTENT_ID_NONE");
+  }
+  if (syncId < 1) {
+      throw new IllegalArgumentException("syncId " + syncId + " must be positive");
+  }
+  mContentId = contentId;
+  mSyncId = syncId;
+}
+*/
+#define START_FILTERID_FROM_ONE (1)
 
 #define DMX_FL_RUN_CB         (1)
 
@@ -127,7 +145,7 @@ public:
     int dev_no;
     sp<AmLinuxDvb> drv;
     void *drv_data;
-    AM_DMX_Filter filters[DMX_FILTER_COUNT];
+    AM_DMX_Filter filters[DMX_FILTER_COUNT + START_FILTERID_FROM_ONE];
     AmHwMultiDemuxWrapper* mDemuxWrapper;
     pthread_mutex_t     lock;
 private:

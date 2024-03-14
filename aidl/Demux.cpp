@@ -829,7 +829,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
                 static_cast<int32_t>(Result::INVALID_STATE));
     }
 
-    if (fid > DMX_FILTER_COUNT) {
+    if (fid > DMX_FILTER_COUNT + START_FILTERID_FROM_ONE) {
         fid = findFilterIdByfakeFilterId(fid);
     }
 
@@ -1652,7 +1652,7 @@ int Demux::recordTsPacketForPesData(int64_t         filterId) {
 }
 
 int64_t Demux::findFilterIdByfakeFilterId(int64_t fakefilterId) {
-    if (fakefilterId > DMX_FILTER_COUNT) {
+    if (fakefilterId > DMX_FILTER_COUNT + START_FILTERID_FROM_ONE) {
          return (fakefilterId >> 26) & 0x3f;
     }
     return fakefilterId;

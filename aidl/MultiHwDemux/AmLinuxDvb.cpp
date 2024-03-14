@@ -67,7 +67,7 @@ AM_ErrorCode_t AmLinuxDvb::dvb_open(AM_DMX_Device *dev) {
         return AM_DMX_ERR_NO_MEM;
     }
     snprintf(dmx->dev_name, sizeof(dmx->dev_name), "/dev/dvb0.demux%d", dev->dev_no);
-    for (i = 0; i < DMX_FILTER_COUNT; i++) {
+    for (i = 1; i < DMX_FILTER_COUNT + START_FILTERID_FROM_ONE; i++) {
         dmx->fd[i] = -1;
     }
 
@@ -265,11 +265,11 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_buf_size(AM_DMX_Device *dev, AM_DMX_Filter *f
 
 AM_ErrorCode_t AmLinuxDvb::dvb_poll(AM_DMX_Device *dev, AM_DMX_FilterMask_t *mask, int timeout) {
     DVBDmx_t *dmx = (DVBDmx_t*)dev->drv_data;
-    struct pollfd fds[DMX_FILTER_COUNT + 1];
-    int fids[DMX_FILTER_COUNT + 1];
+    struct pollfd fds[DMX_FILTER_COUNT + 1 + START_FILTERID_FROM_ONE];
+    int fids[DMX_FILTER_COUNT + 1 + START_FILTERID_FROM_ONE];
     int i, cnt = 0, ret;
 
-    for (i = 0; i < DMX_FILTER_COUNT; i++) {
+    for (i = 1; i < DMX_FILTER_COUNT + START_FILTERID_FROM_ONE; i++) {
         if (dmx->fd[i] != -1) {
             fds[cnt].events = POLLIN|POLLERR;
             fds[cnt].fd     = dmx->fd[i];
