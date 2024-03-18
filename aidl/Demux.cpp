@@ -1226,7 +1226,7 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
                   if (!mClearCache.empty()) {
                       int writeRetry = 0;
                       ALOGD("write clear cache size:%d", mClearCache.size());
-                      while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mClearCache.data(), mClearCache.size(), 300 * 1000) == -1 \
+                      while (dvr_playback_write(mPlaybackhandle, mClearCache.data(), mClearCache.size()) == -1 \
                              && writeRetry <= 100) {
                           usleep(100 * 1000);
                           writeRetry ++;
@@ -1242,6 +1242,7 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
      vector<uint8_t> udata;
      udata.resize(data.size());
      memcpy(udata.data(), data.data(), data.size() * sizeof(uint8_t));
+     //clear stream inject
      if (isValidTsPacket(udata)) {
          if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId]) {
              while (mHwDemuxOps[mDemuxId]->AmHwDemux_GetStreamControlStatus(mDemuxHandle[mDemuxId], NULL, mWriteTsSize,
@@ -1274,7 +1275,7 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
      }
      #endif
      if (isValidTsPacket(udata)) {
-         while (AmDmxDevice[mDemuxId] != NULL && AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(udata.data(), udata.size(), 300 * 1000) == -1) {
+         while (dvr_playback_write(mPlaybackhandle, udata.data(), udata.size()) == -1) {
              usleep(100 * 1000);
              if (mDvrPlayback && mDvrPlayback->stopInjectTs()) {
                  ALOGD("[demux] stop Inject TS, break!");
@@ -1987,7 +1988,6 @@ bool Demux::checkSoftDemuxForTemi() {
 int Demux::getTsInput() {
     return mTuner->getTsInput();
 }
-
 }  // namespace tuner
 }  // namespace tv
 }  // namespace hardware
