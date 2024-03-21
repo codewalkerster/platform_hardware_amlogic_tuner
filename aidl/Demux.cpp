@@ -696,8 +696,6 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 ::ndk::ScopedAStatus Demux::openFilter(const DemuxFilterType& in_type, int32_t in_bufferSize,
                                        const std::shared_ptr<IFilterCallback>& in_cb,
                                        std::shared_ptr<IFilter>* _aidl_return) {
-    ALOGD("%s", __FUNCTION__);
-
     int64_t filterId;
     int32_t dmxFilterIdx;
     bool hasTsFilterType = false;
@@ -959,7 +957,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 
 ::ndk::ScopedAStatus Demux::close() {
     ALOGD("[%s/%d] mDemuxId:%d", __FUNCTION__, __LINE__, mDemuxId);
-    std::lock_guard<std::mutex> lock(mFilterLock);
+    //std::lock_guard<std::mutex> lock(mFilterLock);
     stopFrontendInput();
 
     set<int64_t>::iterator it;
