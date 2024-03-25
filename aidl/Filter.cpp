@@ -750,11 +750,12 @@ Filter::~Filter() {
         mFilterSettings.get<DemuxFilterSettings::Tag::ts>().filterSettings.get<DemuxTsFilterSettingsFilterSettings::av>().isPassthrough;
         if (mIsMediaFilter && isPassthrough) {
             ALOGD("av filter will start in mediahal");
+            return ::ndk::ScopedAStatus::ok();
         } else {
             ALOGE("Start filter (0x%llx:%lld) failed!", mExtendId, mFilterId);
+            return ::ndk::ScopedAStatus::fromServiceSpecificError(
+                                        static_cast<int32_t>(Result::UNAVAILABLE));
         }
-        return ::ndk::ScopedAStatus::fromServiceSpecificError(
-                                    static_cast<int32_t>(Result::UNAVAILABLE));
     }
     mFilterThreadRunning = true;
     return ::ndk::ScopedAStatus::ok();
