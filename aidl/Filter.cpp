@@ -601,23 +601,24 @@ Filter::~Filter() {
                         mFilterParams.type = DVR_STREAM_AUDIO_TYPE;
                     }
                     mScIndexType = recordSettings.scIndexType;
-                    if (mScIndexType == DemuxRecordScIndexType::SC || mScIndexType == DemuxRecordScIndexType::SC_HEVC) {
+                    if (mScIndexType == DemuxRecordScIndexType::SC || mScIndexType == DemuxRecordScIndexType::SC_HEVC ||
+                        mScIndexType == DemuxRecordScIndexType::SC_AVC) {
                         mRecordVideoPid = mTpid;
                         ALOGD("%s set mRecordVideoPid pid = %d", __FUNCTION__, mRecordVideoPid);
                         mFilterParams.type = DVR_STREAM_VIDEO_TYPE;
                     }
                     if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scIndex) {
                         mScIndexMask = recordSettings.scIndexMask.get<DemuxFilterScIndexMask::scIndex>();
-                        if ((mScIndexMask & static_cast<uint32_t>(DemuxScIndex::I_FRAME)) != 0) {
-                            mFilterParams.vfmt = DVR_VIDEO_FORMAT_MPEG2;
-                            ALOGD("video format is MPEG2");
-                        } else if ((mScIndexMask & static_cast<uint32_t>(DemuxScAvcIndex::I_SLICE)) != 0) {
-                            mFilterParams.vfmt = DVR_VIDEO_FORMAT_H264;
-                            ALOGD("video format is H264");// for matching with cbs
-                        }
+                        mFilterParams.vfmt = DVR_VIDEO_FORMAT_MPEG2;
+                        ALOGD("video format is MPEG2");
                     } else if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scHevc) {
                         mScIndexMask = recordSettings.scIndexMask.get<DemuxFilterScIndexMask::scHevc>();
                         mFilterParams.vfmt = DVR_VIDEO_FORMAT_HEVC;
+                        ALOGD("video format is HEVC");
+                    } else if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scAvc) {
+                        mScIndexMask = recordSettings.scIndexMask.get<DemuxFilterScIndexMask::scAvc>();
+                        mFilterParams.vfmt = DVR_VIDEO_FORMAT_H264;
+                        ALOGD("video format is H264");
                     }
 
                     mFilterParams.pid = mTpid;
@@ -1682,16 +1683,16 @@ void Filter::updateRecordOutput(vector<int8_t>& data) {
         DemuxFilterRecordSettings recordSettings = mFilterSettings.get<DemuxFilterSettings::Tag::ts>()
                 .filterSettings.get<DemuxTsFilterSettingsFilterSettings::record>();
         if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scIndex) {
-            if ((mScIndexMask & static_cast<uint32_t>(DemuxScIndex::I_FRAME)) != 0) {
-                scIndexmask = static_cast<uint32_t>(DemuxScIndex::I_FRAME);
-                ALOGD("it is I-Frame scIndexmask = %d", scIndexmask);
-            } else if ((mScIndexMask & static_cast<uint32_t>(DemuxScAvcIndex::I_SLICE)) != 0) {
-                scIndexmask = static_cast<uint32_t>(DemuxScAvcIndex::I_SLICE);
-                ALOGD("it is I-SLICE scIndexmask = %d", scIndexmask);
-            }
+            scIndexmask = static_cast<uint32_t>(DemuxScIndex::I_FRAME);
+            scIndexmask = scIndexmask & mScIndexMask;
+            ALOGD("it is I-Frame scIndexmask = %d", scIndexmask);
         } else if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scHevc) {
             scIndexmask = static_cast<uint32_t>(DemuxScHevcIndex::SLICE_IDR_W_RADL);
             scIndexmask = scIndexmask & mScIndexMask;
+        } else if (recordSettings.scIndexMask.getTag() == DemuxFilterScIndexMask::scAvc) {
+            scIndexmask = static_cast<uint32_t>(DemuxScAvcIndex::I_SLICE);
+            scIndexmask = scIndexmask & mScIndexMask;
+            ALOGD("it is I-SLICE scIndexmask = %d", scIndexmask);
         }
 
         ALOGD("I-Frame information: offset = %llu, size = %d, pts = %llu", mCurrentOffset, mRecordFilterOutput.size(), mPts);
