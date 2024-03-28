@@ -893,16 +893,15 @@ void Frontend::scanThreadLoop() {
                 break;
             }
             case FrontendStatusType::ATSC3_ALL_PLP_INFO: {
-                FrontendScanAtsc3PlpInfo info1;
-                info1.plpId = 1;
-                info1.bLlsFlag = false;
-                FrontendScanAtsc3PlpInfo info2;
-                info2.plpId = 2;
-                info2.bLlsFlag = true;
-                FrontendScanAtsc3PlpInfo info3;
-                info3.plpId = 3;
-                info3.bLlsFlag = false;
-                vector<FrontendScanAtsc3PlpInfo> infos = {info1, info2, info3};
+                vector<atsc3_plp_list_entry_t> plpList = mFeDev->getAtsc3MPLPIDList();
+                vector<FrontendScanAtsc3PlpInfo> infos;
+                for (int i = 0; i < plpList.size(); i++) {
+                    FrontendScanAtsc3PlpInfo info;
+                    info.plpId = plpList[i].id;
+                    info.bLlsFlag = plpList[i].lls_flg;
+                    infos.push_back(info);
+                }
+
                 status.set<FrontendStatus::allPlpInfo>(infos);
                 break;
             }
@@ -1075,6 +1074,7 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd, uint32
     if (mType == FrontendType::ATSC3 && mIsLocked) {
         vector<atsc3_plp_list_entry_t> plpList = mFeDev->getAtsc3MPLPIDList();
         vector<FrontendScanAtsc3PlpInfo> tunerPlpInfos;
+        ALOGV("%s plpList.size() =%d", __FUNCTION__, plpList.size());
         for (int i = 0; i < plpList.size(); i++) {
             ALOGV("%s plpList[i].id is =%d", __FUNCTION__, plpList[i].id);
             ALOGV("%s plpEntry.lls_flg is =%d", __FUNCTION__, static_cast<bool>(plpList[i].lls_flg));
