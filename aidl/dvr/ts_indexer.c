@@ -428,6 +428,8 @@ static void find_h265(uint8_t *data, int len, TS_Indexer_t *indexer, TSParser *s
 
         case HEVC_NALU_TRAIL_CRA:
             //event.type = TS_INDEXER_EVENT_TYPE_HEVC_TRAIL_CRA;
+            indexer->pusi[indexer->pusi_cur_idx].flags |= DVR_INDEX_IFRAME;
+            DVR_INFO("HEVC CRA frame found\n");
             break;
 
         case HEVC_NALU_SPS:
