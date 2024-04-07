@@ -769,8 +769,10 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     }
 
     if (hasTsFilterType && filter->isPcrFilter()) {
-        mPcrFilterIds.insert(dmxFilterIdx);
-        ALOGD("Insert pcr filter  pcrFid = %d", dmxFilterIdx);
+        int32_t pcrFid = -1;
+        filter->getId(&pcrFid);
+        mPcrFilterIds.insert(pcrFid);
+        ALOGD("Insert pcr filter  pcrFid = %d", pcrFid);
     }
 
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::TEMI) {

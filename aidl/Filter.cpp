@@ -376,7 +376,7 @@ Filter::Filter(DemuxFilterType type, int64_t filterId, uint32_t bufferSize,
             if (mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() ==
                 DemuxTsFilterType::PCR) {
                 mIsPcrFilter = true;
-                mExtendId = mFilterId;
+                mExtendId = (mFilterId & 0x003f) | ((dmxId & 0x000f) << 6);
             }
             if (mType.subType.get<DemuxFilterSubType::Tag::tsFilterType>() ==
                 DemuxTsFilterType::RECORD) {
