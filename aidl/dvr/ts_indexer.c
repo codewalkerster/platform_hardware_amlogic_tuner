@@ -527,6 +527,7 @@ pes_packet(TS_Indexer_t *ts_indexer, uint8_t *data, int len, TSParser *stream)
         //event.type = TS_INDEXER_EVENT_TYPE_AUDIO_PTS;
       }
       pi->pusi[pi->pusi_cur_idx].pts = stream->PES.pts;
+      DVR_INFO("pts = %lld in dvr\n", stream->PES.pts);
     }
     if (stream->format != -1) {
       stream->PES.state = TS_INDEXER_STATE_PES_PTS;
@@ -591,10 +592,12 @@ ts_packet(TS_Indexer_t *ts_indexer, uint8_t *data, size_t rp)
     //event.type = TS_INDEXER_EVENT_TYPE_START_INDICATOR;
     if (pid == pi->video_parser.pid) {
       pi->video_parser.offset = pi->offset;
+      pi->video_parser.PES.len = 0;
       pi->video_parser.PES.state = TS_INDEXER_STATE_TS_START;
     }
     else if (pid == pi->audio_parser.pid) {
       pi->audio_parser.offset = pi->offset;
+      pi->audio_parser.PES.len = 0;
       pi->audio_parser.PES.state = TS_INDEXER_STATE_TS_START;
     }
 
