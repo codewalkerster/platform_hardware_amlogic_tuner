@@ -216,12 +216,12 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
         settings->analog().sifStandard = FrontendAnalogSifStandard::AUTO;
     }
 
-    set_tvafe((unsigned long)settings->get<FrontendSettings::Tag::analog>().type);
+    set_tvafe((unsigned long)settings->analog().type);
 
     p_fe_params->audmode = tmpAudStd;
     p_fe_params->soundsys = 0xff;
     p_fe_params->std = tmpTVidStd | tmpAudStd;
-    if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::AUTO) {
+    if (settings->analog().type == FrontendAnalogType::AUTO) {
         ALOGD("search , afc set true");
         p_fe_params->flag  |= ANALOG_FLAG_ENABLE_AFC;
     } else {
