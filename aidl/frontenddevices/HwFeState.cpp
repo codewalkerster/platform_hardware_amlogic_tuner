@@ -136,7 +136,7 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
             owner = device;
         }
     } else {
-        int retry = 10;
+        int retry = 20;
         int count = 0;
         while (count < retry) {
             if (device->getFeType() == FrontendType::ANALOG)
@@ -149,7 +149,7 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
                 break;
             }
             count++;
-            usleep(50 * 1000);
+            usleep(100 * 1000);
         }
     }
     return fd;
