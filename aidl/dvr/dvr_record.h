@@ -19,7 +19,7 @@ extern "C"
 #include "dvb_utils.h"
 
 // Max PUSI data len
-#define DVR_BLOCK_SIZE              (3*188*1024)
+#define DVR_BLOCK_SIZE              (12*188*1024)
 
 /**\brief DVR record handle*/
 typedef void* DVR_RecordHandle_t;

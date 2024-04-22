@@ -53,7 +53,7 @@ using ::android::hardware::EventFlag;
 using FilterMQ = AidlMessageQueue<int8_t, SynchronizedReadWrite>;
 #define DMX_COUNT (6)
 #define DVR_BUFFER_LEN    (20*188*1024)
-#define DVR_MAX_PUSI_LEN  (3*188*1024)
+#define DVR_MAX_PUSI_LEN  (12*188*1024)
 
 extern "C" {
 #include "dvr_playback.h"
