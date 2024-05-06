@@ -160,8 +160,6 @@ class Filter : public BnFilter {
     bool postFilteredEmmSection(vector<uint8_t> data);
     bool fillDataToDecoder();
     void updateIndexType(int iframeIndex, int pusiIndex);
-    bool checkRecordByVideo();
-    DemuxRecordScIndexType getScIndexType();
     int getRecordVideoPid();
     int getRecordAudioPid();
     void updateCurrentOffset(uint64_t offset);
@@ -261,10 +259,6 @@ class Filter : public BnFilter {
     void createTemiEvent(vector<DemuxFilterEvent>&);
     void createMonitorEvent(vector<DemuxFilterEvent>&);
     void createRestartEvent(vector<DemuxFilterEvent>&);
-    uint32_t covertTsIndexerTypeToScIndex(uint32_t type);
-    uint32_t convertTsIndexerTypeToScHevcIndex(uint32_t type);
-    uint32_t convertTsIndexerTypeToTsIndex(uint32_t type);
-
     /**
      * Lock to protect writes to the FMQs
      */

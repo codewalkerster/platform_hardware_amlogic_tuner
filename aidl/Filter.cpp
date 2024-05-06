@@ -2140,14 +2140,6 @@ DemuxFilterType Filter::getFilterType() {
     return mType;
 }
 
-bool Filter::checkRecordByVideo() {
-    return mRecordByVideo;
-}
-
-DemuxRecordScIndexType Filter::getScIndexType() {
-    return mScIndexType;
-}
-
 int Filter::getRecordVideoPid() {
     return mRecordVideoPid;
 }
@@ -2156,67 +2148,6 @@ int Filter::getRecordAudioPid() {
     return mRecordAudioPid;
 }
 
-uint32_t Filter::covertTsIndexerTypeToScIndex(uint32_t type) {
-    switch (type) {
-        case 2:
-            return static_cast<uint32_t>(DemuxScIndex::I_FRAME);
-        case 3:
-            return static_cast<uint32_t>(DemuxScIndex::P_FRAME);
-        case 4:
-            return static_cast<uint32_t>(DemuxScIndex::B_FRAME);
-        case 5:
-            return static_cast<uint32_t>(DemuxScIndex::SEQUENCE);
-        case 6:
-            return static_cast<uint32_t>(DemuxScAvcIndex::I_SLICE);
-        case 7:
-            return static_cast<uint32_t>(DemuxScAvcIndex::P_SLICE);
-        case 8:
-            return static_cast<uint32_t>(DemuxScAvcIndex::B_SLICE);
-        case 9:
-            return static_cast<uint32_t>(DemuxScAvcIndex::SI_SLICE);
-        case 10:
-            return static_cast<uint32_t>(DemuxScAvcIndex::SP_SLICE);
-        default:
-            ALOGD("no match sc index type");
-            return 0;
-    }
-}
-
-uint32_t Filter::convertTsIndexerTypeToScHevcIndex(uint32_t type) {
-    switch (type) {
-        case 11:
-            return static_cast<uint32_t>(DemuxScHevcIndex::SPS);
-        case 12:
-            return static_cast<uint32_t>(DemuxScHevcIndex::AUD);
-        case 13:
-            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_CE_BLA_W_LP);
-        case 14:
-            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_BLA_W_RADL);
-        case 15:
-            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_BLA_N_LP);
-        case 16:
-            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_IDR_W_RADL);
-        case 17:
-            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_IDR_N_LP);
-        case 18:
-            return static_cast<uint32_t>(DemuxScHevcIndex::SLICE_TRAIL_CRA);
-        default:
-            ALOGD("no match sc Hevc index type");
-            return 0;
-    }
-}
-
-uint32_t Filter::convertTsIndexerTypeToTsIndex(uint32_t type) {
-    switch (type) {
-        case 0:
-            return static_cast<uint32_t>(DemuxTsIndex::PAYLOAD_UNIT_START_INDICATOR);
-        case 1:
-            return static_cast<uint32_t>(DemuxTsIndex::DISCONTINUITY_INDICATOR);
-        default:
-            ALOGD("no match ts index type");
-            return 0;
-    }
-}
 }  // namespace tuner
 }  // namespace tv
 }  // namespace hardware

@@ -130,7 +130,6 @@ class Demux : public BnDemux {
 #endif
 
     static void postData(void* demux, int fid, bool esOutput, bool passthrough);
-    static void postDvrData(void* demux);
     static void pesDataCallback(void* demux, int fid, uint8_t *pes, int len);
     //static void TsIndexerCallback(TS_Indexer_t *ts_indexer, TS_Indexer_Event_t *event);
     sp<AM_DMX_Device> getAmDmxDevice();
@@ -151,31 +150,13 @@ class Demux : public BnDemux {
     void closePesRecordFilter();
     int32_t getDemuxId();
     uint64_t getVideoFid();
-    //sp<AmTsIndexer> getAmTsIndexer();
-    //TS_Indexer_StreamFormat_t convertVideoFormatToTsIndexFormat(int vf);
-    void setCurrentPts(uint64_t pts);
-    uint64_t getCurrentPts();
     int getRecordVideoPid();
     int getRecordAudioPid();
-    int getScIndexTypeForVideoFormat();
-    void setTsIndexType(int tsIndexType);
-    int getTsIndexType();
-    void setIFrame(int iFrame);
-    int getIFrame();
     int recordTsPacketForTemiData(int64_t filterId);
     void closeTemiRecordFilter();
     int getTemiFid();
     bool checkSoftDemuxForTemi();
     int getTsInput();
-
-    uint8_t *base_ptr = NULL;
-    uint8_t *last_pusi_ptr = NULL;
-    uint64_t last_pusi_offset = 0;;
-    uint64_t cache_len = 0;
-    uint8_t *cache_data = NULL;
-    uint64_t cnt = 0;
-    uint64_t count = 0;
-    uint32_t flags = 0;
 
     void setRecordHandle(DVR_RecordHandle_t handle) { mRecordHandle = handle; }
     DVR_RecordHandle_t getRecordHandle() { return mRecordHandle; }
@@ -304,12 +285,6 @@ class Demux : public BnDemux {
     uint64_t mWriteTsSize = 0;
     int mVidPid = 0x1FFF;
     int mAudPid = 0x1FFF;
-
-    uint64_t mCurPts = -1;
-    bool bInitTsIndexer = false;
-    int  mTsIndexType = -1;
-    int  mIFrame     = -1;
-    uint64_t mCurOffset = 0;
 
     std::thread mTemiRecordThread;
     std::atomic<bool> mTemiRecordThreadRunning;
