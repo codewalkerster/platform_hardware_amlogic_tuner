@@ -134,6 +134,7 @@ class Dvr : public BnDvr {
     void playbackThreadLoop();
     void DvrRecordThreadLoop();
     DVB_DemuxSource_t getDemuxSourceByTsInput(int tsInput);
+    void initDvrRecordParams();
 
     unique_ptr<DvrMQ> mDvrMQ;
     EventFlag* mDvrEventFlag;

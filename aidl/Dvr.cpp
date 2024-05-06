@@ -192,6 +192,7 @@ Dvr::~Dvr() {
         if (mDvrRecordThread.joinable()) {
             mDvrRecordThread.join();
         }
+
         if (mReceiveParams.buf) {
             free(mReceiveParams.buf);
             mReceiveParams.buf = NULL;
@@ -290,26 +291,34 @@ bool Dvr::createDvrMQ() {
     return true;
 }
 
-void Dvr::DvrRecordThreadLoop() {
-    prctl(PR_SET_NAME, "DvrRecordThread");
-    while (mDvrRecordThreadRunning) {
-        ssize_t len = 0;
-        if (mDemux != NULL && mDemux->getRecordVideoPid() != -1) {
-            videoPid = mDemux->getRecordVideoPid();
+void Dvr::initDvrRecordParams() {
+    if (mDemux != NULL && mDemux->getRecordVideoPid() != -1) {
+        videoPid = mDemux->getRecordVideoPid();
+        mReceiveParams.mode = DVR_PUSI_RECORD_MODE;
+    } else {
+        if (mDemux != NULL && mDemux->getRecordAudioPid() != -1) {
+            audioPid = mDemux->getRecordAudioPid();
             mReceiveParams.mode = DVR_PUSI_RECORD_MODE;
         } else {
-            if (mDemux != NULL && mDemux->getRecordAudioPid() != -1) {
-                audioPid = mDemux->getRecordAudioPid();
-                mReceiveParams.mode = DVR_PUSI_RECORD_MODE;
-            } else {
-                mReceiveParams.mode = DVR_DIRECT_RECORD_MODE;
-            }
+            mReceiveParams.mode = DVR_DIRECT_RECORD_MODE;
+        }
+    }
+}
+
+void Dvr::DvrRecordThreadLoop() {
+    prctl(PR_SET_NAME, "DvrRecordThread");
+    bool bInit = false;
+    while (mDvrRecordThreadRunning) {
+        ssize_t len = 0;
+        if (!bInit) {
+            initDvrRecordParams();
+            bInit =true;
         }
         len = dvr_record_read(mRecordhandle, &mReceiveParams);
         //ALOGD("[Dvr] len = %d", len);
         if (len <= 0) {
             usleep(10*1000);
-            ALOGE("dvr no data\n");
+            //ALOGE("dvr no data\n");
             continue;
         }
 
