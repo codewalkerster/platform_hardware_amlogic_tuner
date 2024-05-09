@@ -75,6 +75,7 @@ public:
     uint32_t  getActualTerrHierarchy();
     vector<uint8_t> getMPLPIDList();
     vector<atsc3_plp_list_entry_t> getAtsc3MPLPIDList();
+    uint32_t getEwbsFlag();
     uint8_t getCurrentMPlpId();
     uint32_t getFeSystem();
     virtual int getFrontendSettings(FrontendSettings *settings, void* fe_params) {return -1;};

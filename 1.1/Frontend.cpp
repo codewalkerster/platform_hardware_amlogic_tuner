@@ -362,7 +362,7 @@ Return<void> Frontend::getStatus(const hidl_vec<FrontendStatusType>& statusTypes
                 break;
             }
             case FrontendStatusType::EWBS: {
-                status.isEWBS(false);
+                status.isEWBS(mFeDev->getEwbsFlag());
                 break;
             }
             case FrontendStatusType::AGC: {

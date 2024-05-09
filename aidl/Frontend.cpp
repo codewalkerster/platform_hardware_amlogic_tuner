@@ -560,7 +560,7 @@ void Frontend::scanThreadLoop() {
                 break;
             }
             case FrontendStatusType::EWBS: {
-                status.set<FrontendStatus::isEWBS>(false);
+                status.set<FrontendStatus::isEWBS>(mFeDev->getEwbsFlag());
                 break;
             }
             case FrontendStatusType::AGC: {

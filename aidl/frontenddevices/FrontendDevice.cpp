@@ -829,6 +829,25 @@ vector<atsc3_plp_list_entry_t> FrontendDevice::getAtsc3MPLPIDList() {
     return plp_list_entry_t;
 }
 
+uint32_t FrontendDevice::getEwbsFlag() {
+    uint32_t retval = 0;
+    uint32_t sys_id = 0;
+    struct dtv_property cmd;
+    struct dtv_properties props;
+    memset(&cmd, 0, sizeof(struct dtv_property));
+    cmd.cmd = DTV_ISDBT_PARTIAL_RECEPTION;
+
+    props.num = 1;
+    props.props = &cmd;
+    if (getFeProp(&props) != SUCCESS) {
+        return 0;
+    }
+    sys_id = cmd.u.buffer.reserved1[0];
+    retval = cmd.u.buffer.reserved1[1];
+    ALOGV("%s/%d get isdbt partial reception (sys_id:%u ewbs:%u)", __FUNCTION__, __LINE__, sys_id, retval);
+    return retval;
+}
+
 int32_t FrontendDevice::getCurrentMPlpId() {
     return mPlpId;
 }
