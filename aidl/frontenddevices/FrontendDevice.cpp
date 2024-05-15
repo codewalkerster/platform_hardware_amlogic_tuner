@@ -930,7 +930,7 @@ bool FrontendDevice::threadLoop() {
                 if (cur_bsevent.status == BLINDSCAN_UPDATEPROCESS)
                 {
                     locked_freq = cur_bsevent.u.m_uiprogress;
-                    locked_freq |= 0x80000000;
+                    locked_freq |= 0xC0000000;
 
                     if (cur_bsevent.u.m_uiprogress >= 100)
                     {
@@ -953,7 +953,7 @@ bool FrontendDevice::threadLoop() {
                 }
             }
             if (inBlindScan) {
-                mContext->sendScanCallBack(0x80000064, false, true);
+                mContext->sendScanCallBack(0xC0000064, false, true);
                 setDvbsBlindScanParams(false);
                 inBlindScan = false;
             }
