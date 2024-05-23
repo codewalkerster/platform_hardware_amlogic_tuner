@@ -424,6 +424,8 @@ static void find_h265(uint8_t *data, int len, TS_Indexer_t *indexer, TSParser *s
 
         case HEVC_NALU_IDR_N_LP:
             //event.type = TS_INDEXER_EVENT_TYPE_HEVC_IDR_N_LP;
+            indexer->pusi[indexer->pusi_cur_idx].flags |= DVR_INDEX_IFRAME;
+            DVR_INFO("HEVC IDR_N_LP frame found\n");
             break;
 
         case HEVC_NALU_TRAIL_CRA:
