@@ -843,7 +843,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
         case DvrType::PLAYBACK:
             ALOGD("%s/%d DvrType::PLAYBACK bufferSize:%d KB", __FUNCTION__, __LINE__,  in_bufferSize/1024);
             mDvrPlayback = ndk::SharedRefBase::make<Dvr>(in_type, in_bufferSize, in_cb,
-                                                        this->ref<Demux>());
+                                                        this->ref<Demux>(), mTuner);
             ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL demuxId = %d", mDemuxId);
             AmDmxDevice[mDemuxId]->dmx_dvr_open(INPUT_LOCAL);
             if (!mDvrPlayback->createDvrMQ()) {
@@ -871,7 +871,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
         case DvrType::RECORD:
             ALOGD("%s/%d DvrType::RECORD bufferSize:%d KB", __FUNCTION__, __LINE__,  in_bufferSize/1024);
             mDvrRecord = ndk::SharedRefBase::make<Dvr>(in_type, in_bufferSize, in_cb,
-                                                       this->ref<Demux>());
+                                                       this->ref<Demux>(), mTuner);
             //ALOGD("[Demux] dmx_dvr_open INPUT_DEMOD");
              //mAmDvrDevice->AM_DVR_Open(INPUT_DEMOD);
             if (!mDvrRecord->createDvrMQ()) {

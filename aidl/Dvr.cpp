@@ -33,11 +33,12 @@ namespace tuner {
 #define WAIT_TIMEOUT 3000000000
 
 Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>& cb,
-         std::shared_ptr<Demux> demux) {
+         std::shared_ptr<Demux> demux, std::shared_ptr<Tuner> in_tuner) {
     mType = type;
     mBufferSize = bufferSize;
     mCallback = cb;
     mDemux = demux;
+    mTuner = in_tuner;
 
     if (mType == DvrType::PLAYBACK) {
         ALOGD("%s/%d dvr_playback_open dmxid = %d", __FUNCTION__, __LINE__, mDemux->getDemuxId());
@@ -58,8 +59,8 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>&
             mOpenParams.src = getDemuxSourceByTsInput(mDemux->getTsInput());
         }
         mOpenParams.dmx_dev_id[0] = mDemux->getDemuxId();
-        mOpenParams.dmx_dev_id[1] = 4; //keep demux4 is idle(unused)
-        mOpenParams.dmx_dev_id[2] = 5; //keep demux5 is idle(unused)
+        mOpenParams.dmx_dev_id[1] = mTuner->allocateDemuxResource(); //keep demux4 is idle(unused)
+        mOpenParams.dmx_dev_id[2] = mTuner->allocateDemuxResource(); //keep demux5 is idle(unused)
         mOpenParams.non_sec_ringbuf_size = DVR_BUFFER_LEN;
         mOpenParams.sec_buf_size         = DVR_BUFFER_LEN;
         DVR_Result_t ret = dvr_record_open(&mRecordhandle, &mOpenParams);
@@ -253,6 +254,12 @@ Dvr::~Dvr() {
             ALOGD("close dvr playback failed!\n");
         }
     } else if (mType == DvrType::RECORD) {
+        if (mOpenParams.dmx_dev_id[1] != 0 && mOpenParams.dmx_dev_id[2] != 0) {
+            mTuner->removeDemuxResource(mOpenParams.dmx_dev_id[1]);
+            mTuner->removeDemuxResource(mOpenParams.dmx_dev_id[2]);
+            mOpenParams.dmx_dev_id[1] = 0;
+            mOpenParams.dmx_dev_id[2] = 0;
+        }
         DVR_Result_t ret = dvr_record_close(mRecordhandle);
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr record failed!\n");
@@ -307,13 +314,9 @@ void Dvr::initDvrRecordParams() {
 
 void Dvr::DvrRecordThreadLoop() {
     prctl(PR_SET_NAME, "DvrRecordThread");
-    bool bInit = false;
     while (mDvrRecordThreadRunning) {
         ssize_t len = 0;
-        if (!bInit) {
-            initDvrRecordParams();
-            bInit =true;
-        }
+        initDvrRecordParams();
         len = dvr_record_read(mRecordhandle, &mReceiveParams);
         //ALOGD("[Dvr] len = %d", len);
         if (len <= 0) {

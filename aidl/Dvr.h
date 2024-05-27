@@ -75,7 +75,7 @@ class Tuner;
 class Dvr : public BnDvr {
   public:
     Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>& cb,
-        std::shared_ptr<Demux> demux);
+        std::shared_ptr<Demux> demux, std::shared_ptr<Tuner> in_tuner);
     ~Dvr();
 
     ::ndk::ScopedAStatus getQueueDesc(
@@ -136,6 +136,7 @@ class Dvr : public BnDvr {
     DVB_DemuxSource_t getDemuxSourceByTsInput(int tsInput);
     void initDvrRecordParams();
 
+    std::shared_ptr<Tuner> mTuner;
     unique_ptr<DvrMQ> mDvrMQ;
     EventFlag* mDvrEventFlag;
     /**

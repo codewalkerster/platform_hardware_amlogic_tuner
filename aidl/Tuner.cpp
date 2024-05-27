@@ -21,6 +21,7 @@
 #include <aidl/android/hardware/tv/tuner/Result.h>
 #include <utils/Log.h>
 #include <sys/stat.h>
+#include <algorithm>
 #include "Demux.h"
 #include "Descrambler.h"
 #include "Frontend.h"
@@ -34,7 +35,7 @@ namespace hardware {
 namespace tv {
 namespace tuner {
 
-#define NUMDEMUX 6
+#define NUMDEMUX 4
 #define NUMDSC 16
 #define NUMRECORD 4
 #define NUMPLAYBACK 4
@@ -833,6 +834,28 @@ std::shared_ptr<Demux> Tuner::getDemuxById(uint32_t demuxId) {
     }
 }
 
+int Tuner::allocateDemuxResource() {
+    mInternalDemuxId = NUMDEMUX;
+    auto it = std::find(mInterDmxIdManager.begin(), mInterDmxIdManager.end(), mInternalDemuxId);
+    while (it != mInterDmxIdManager.end()) {
+        mInternalDemuxId++;
+        it = std::find(mInterDmxIdManager.begin(), mInterDmxIdManager.end(), mInternalDemuxId);
+    }
+    ALOGD("allocate mInternalDemuxId = %d", mInternalDemuxId);
+    mInterDmxIdManager.push_back(mInternalDemuxId);
+    return mInternalDemuxId;
+}
+
+void Tuner::removeDemuxResource(int internalDemuxId) {
+    ALOGD("[%s/%d]internalDemuxId = %d", __FUNCTION__, __LINE__, internalDemuxId);
+    for (auto iter = mInterDmxIdManager.begin(); iter != mInterDmxIdManager.end();) {
+        if (internalDemuxId == *iter) {
+            iter = mInterDmxIdManager.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+}
 }  // namespace tuner
 }  // namespace tv
 }  // namespace hardware

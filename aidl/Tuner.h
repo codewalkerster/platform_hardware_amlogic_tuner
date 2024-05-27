@@ -91,6 +91,8 @@ class Tuner : public BnTuner {
     void setTsnSource();
     uint32_t getDscMode();
     vector<FrontendStatusType> getstatusCaps(int32_t frontendId);
+    int allocateDemuxResource();
+    void removeDemuxResource(int internalDemuxId);
     typedef struct {
         int id;
         uint32_t minFreq;
@@ -129,7 +131,11 @@ class Tuner : public BnTuner {
     uint32_t mTsInput = -1;
     uint32_t mDscMode = -1;
     std::mutex mLock;
-};
+
+    //Demux resource internal manager
+    uint32_t mInternalDemuxId = -1;
+    vector<int> mInterDmxIdManager;
+ };
 
 }  // namespace tuner
 }  // namespace tv
