@@ -622,8 +622,16 @@ std::shared_ptr<Frontend> Tuner::getFrontendById(int32_t frontendId) {
 
     //out_lnbId->push_back(1234);
     int id = mLnbs.size();
-    mLnbs[id] = ndk::SharedRefBase::make<Lnb>(id, mHwFes[0], in_lnbName.c_str());
-    *_aidl_return = mLnbs[id];
+    out_lnbId->push_back(id);
+    if (id <= 0 || mLnbs.empty() || mHwFes.size() == 0) {
+        *_aidl_return = nullptr;
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(
+                static_cast<int32_t>(Result::INVALID_ARGUMENT));
+    } else {
+        ALOGD("%s/%d new lnb success!", __FUNCTION__, __LINE__);
+        mLnbs[id] = ndk::SharedRefBase::make<Lnb>(id, mHwFes[0], in_lnbName.c_str());
+        *_aidl_return = mLnbs[id];
+    }
 
     return ::ndk::ScopedAStatus::ok();
 }

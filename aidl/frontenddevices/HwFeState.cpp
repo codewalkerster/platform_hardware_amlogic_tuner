@@ -118,7 +118,7 @@ int HwFeState::acquire(sp<FrontendDevice> device) {
             owner = device;
             return fd;
         }
-        if (owner->getFrontendId() == device->getFrontendId()) {
+        if (owner != nullptr && (owner->getFrontendId() == device->getFrontendId())) {
             return fd;
         } else {
             if (owner != nullptr) {

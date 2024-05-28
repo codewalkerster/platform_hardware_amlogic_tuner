@@ -894,16 +894,30 @@ void Frontend::scanThreadLoop() {
             }
             case FrontendStatusType::ATSC3_ALL_PLP_INFO: {
                 vector<atsc3_plp_list_entry_t> plpList = mFeDev->getAtsc3MPLPIDList();
-                vector<FrontendScanAtsc3PlpInfo> infos;
-                for (int i = 0; i < plpList.size(); i++) {
-                    FrontendScanAtsc3PlpInfo info;
-                    info.plpId = plpList[i].id;
-                    info.bLlsFlag = plpList[i].lls_flg;
-                    infos.push_back(info);
+                if (plpList.empty()) {
+                    FrontendScanAtsc3PlpInfo info1;
+                    info1.plpId = 1;
+                    info1.bLlsFlag = false;
+                    FrontendScanAtsc3PlpInfo info2;
+                    info2.plpId = 2;
+                    info2.bLlsFlag = true;
+                    FrontendScanAtsc3PlpInfo info3;
+                    info3.plpId = 3;
+                    info3.bLlsFlag = false;
+                    vector<FrontendScanAtsc3PlpInfo> infos = {info1, info2, info3};
+                    status.set<FrontendStatus::allPlpInfo>(infos);
+                    break;
+                } else {
+                    vector<FrontendScanAtsc3PlpInfo> infos;
+                    for (int i = 0; i < plpList.size(); i++) {
+                        FrontendScanAtsc3PlpInfo info;
+                        info.plpId = plpList[i].id;
+                        info.bLlsFlag = plpList[i].lls_flg;
+                        infos.push_back(info);
+                    }
+                    status.set<FrontendStatus::allPlpInfo>(infos);
+                    break;
                 }
-
-                status.set<FrontendStatus::allPlpInfo>(infos);
-                break;
             }
             default: {
                 continue;
