@@ -75,33 +75,27 @@ int FrontendDvbcDevice::getFrontendSettings(FrontendSettings *settings, void * f
         return -1;
     }
 
-    FrontendDvbcSettings dvbcSettings;
     p_fe_params->frequency = settings->get<FrontendSettings::Tag::dvbc>().frequency;
     p_fe_params->u.qam.symbol_rate = settings->get<FrontendSettings::Tag::dvbc>().symbolRate;
     if (settings->get<FrontendSettings::Tag::dvbc>().modulation == FrontendDvbcModulation::UNDEFINED) {
-        dvbcSettings.modulation = FrontendDvbcModulation::AUTO;
-        settings->set<FrontendSettings::Tag::dvbc>(dvbcSettings);
+        settings->get<FrontendSettings::Tag::dvbc>().modulation = FrontendDvbcModulation::AUTO;
     }
     p_fe_params->u.qam.modulation =
         (fe_modulation_t)(getFeModulationType(settings->get<FrontendSettings::Tag::dvbc>().modulation));
     if (settings->get<FrontendSettings::Tag::dvbc>().fec == FrontendInnerFec::FEC_UNDEFINED) {
-        dvbcSettings.fec = FrontendInnerFec::AUTO;
-        settings->set<FrontendSettings::Tag::dvbc>(dvbcSettings);
+        settings->get<FrontendSettings::Tag::dvbc>().fec = FrontendInnerFec::AUTO;
     }
     p_fe_params->u.qam.fec_inner =
         (fe_code_rate_t)(getFeInnerFecType(settings->get<FrontendSettings::Tag::dvbc>().fec));
     if (settings->get<FrontendSettings::Tag::dvbc>().outerFec == FrontendDvbcOuterFec::UNDEFINED) {
-        dvbcSettings.outerFec = FrontendDvbcOuterFec::OUTER_FEC_NONE;
-        settings->set<FrontendSettings::Tag::dvbc>(dvbcSettings);
+        settings->get<FrontendSettings::Tag::dvbc>().outerFec = FrontendDvbcOuterFec::OUTER_FEC_NONE;
     }
     if (settings->get<FrontendSettings::Tag::dvbc>().annex == FrontendDvbcAnnex::UNDEFINED) {
-        dvbcSettings.annex = FrontendDvbcAnnex::A;
-        settings->set<FrontendSettings::Tag::dvbc>(dvbcSettings);
+        settings->get<FrontendSettings::Tag::dvbc>().annex = FrontendDvbcAnnex::A;
 
     }
     if (settings->get<FrontendSettings::Tag::dvbc>().inversion == FrontendSpectralInversion::UNDEFINED) {
-        dvbcSettings.inversion = FrontendSpectralInversion::NORMAL;
-        settings->set<FrontendSettings::Tag::dvbc>(dvbcSettings);
+        settings->get<FrontendSettings::Tag::dvbc>().inversion = FrontendSpectralInversion::NORMAL;
     }
 
     return 0;

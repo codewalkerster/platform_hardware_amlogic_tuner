@@ -180,7 +180,6 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
         return -1;
     }
 
-    FrontendAnalogSettings analogSettings;
     p_fe_params->frequency = settings->get<FrontendSettings::Tag::analog>().frequency;
     if (settings->get<FrontendSettings::Tag::analog>().type >= FrontendAnalogType::UNDEFINED
        && settings->get<FrontendSettings::Tag::analog>().type <= FrontendAnalogType::PAL_60) {
@@ -213,12 +212,10 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
     }
 
     if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::UNDEFINED) {
-        analogSettings.type = FrontendAnalogType::AUTO;
-        settings->set<FrontendSettings::Tag::analog>(analogSettings);
+        settings->get<FrontendSettings::Tag::analog>().type = FrontendAnalogType::AUTO;
     }
     if (settings->get<FrontendSettings::Tag::analog>().sifStandard == FrontendAnalogSifStandard::UNDEFINED) {
-        analogSettings.sifStandard = FrontendAnalogSifStandard::AUTO;
-        settings->set<FrontendSettings::Tag::analog>(analogSettings);
+        settings->get<FrontendSettings::Tag::analog>().sifStandard = FrontendAnalogSifStandard::AUTO;
     }
 
     set_tvafe((unsigned long)settings->get<FrontendSettings::Tag::analog>().type);

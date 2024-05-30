@@ -50,11 +50,9 @@ int FrontendIsdbtDevice::getFrontendSettings(FrontendSettings *settings, void * 
         return -1;
     }
 
-    FrontendIsdbtSettings isdbtSettings;
     p_fe_params->frequency = settings->get<FrontendSettings::Tag::isdbt>().frequency;
     if (settings->get<FrontendSettings::Tag::isdbt>().bandwidth == FrontendIsdbtBandwidth::UNDEFINED) {
-        isdbtSettings.bandwidth = FrontendIsdbtBandwidth::AUTO;
-        settings->set<FrontendSettings::Tag::isdbt>(isdbtSettings);
+        settings->get<FrontendSettings::Tag::isdbt>().bandwidth = FrontendIsdbtBandwidth::AUTO;
     }
     p_fe_params->u.ofdm.bandwidth =
         (fe_bandwidth_t)(getFeBandwidthType(settings->get<FrontendSettings::Tag::isdbt>().bandwidth));
@@ -67,8 +65,7 @@ int FrontendIsdbtDevice::getFrontendSettings(FrontendSettings *settings, void * 
         (fe_modulation_t)(getFeModulationType(settings->get<FrontendSettings::Tag::isdbt>().modulation));
         */
     if (settings->get<FrontendSettings::Tag::isdbt>().guardInterval == FrontendIsdbtGuardInterval::UNDEFINED) {
-        isdbtSettings.guardInterval =  FrontendIsdbtGuardInterval::AUTO;
-        settings->set<FrontendSettings::Tag::isdbt>(isdbtSettings);
+        settings->get<FrontendSettings::Tag::isdbt>().guardInterval =  FrontendIsdbtGuardInterval::AUTO;
     }
     p_fe_params->u.ofdm.guard_interval =
         (fe_guard_interval_t)(getFeDvbGuardIntervalType(settings->get<FrontendSettings::Tag::isdbt>().guardInterval));
@@ -78,8 +75,7 @@ int FrontendIsdbtDevice::getFrontendSettings(FrontendSettings *settings, void * 
         settings->set<FrontendSettings::Tag::isdbt>(isdbtSettings);
     }*/
     if (settings->get<FrontendSettings::Tag::isdbt>().mode == FrontendIsdbtMode::UNDEFINED) {
-        isdbtSettings.mode = FrontendIsdbtMode::AUTO;
-        settings->set<FrontendSettings::Tag::isdbt>(isdbtSettings);
+        settings->get<FrontendSettings::Tag::isdbt>().mode = FrontendIsdbtMode::AUTO;
     }
     p_fe_params->u.ofdm.code_rate_HP = FEC_AUTO;
     p_fe_params->u.ofdm.code_rate_LP = FEC_AUTO;

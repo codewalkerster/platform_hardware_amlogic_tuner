@@ -59,9 +59,7 @@ int FrontendAtscDevice::getFrontendSettings(FrontendSettings *settings, void * f
             p_fe_params->u.vsb.modulation = VSB_16;
             break;
         default:
-            FrontendAtscSettings atscSettings;
-            atscSettings.modulation = FrontendAtscModulation::MOD_8VSB;
-            settings->set<FrontendSettings::Tag::atsc>(atscSettings);
+            settings->get<FrontendSettings::Tag::atsc>().modulation = FrontendAtscModulation::MOD_8VSB;
             p_fe_params->u.vsb.modulation = VSB_8;
             break;
     }

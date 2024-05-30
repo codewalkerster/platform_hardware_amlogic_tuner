@@ -80,7 +80,7 @@ int FrontendDtmbDevice::getFrontendSettingsExt(V1_1::FrontendSettingsExt1_1 *set
     }
 
     //guardInterval
-    if (settingsExt->settingExt.dtmb().guardInterval != V1_1::FrontendDtmbGuardInterval::UNDEFINED) {
+    if (settingsExt->settingExt.dtmb().guardInterval == V1_1::FrontendDtmbGuardInterval::UNDEFINED) {
         settingsExt->settingExt.dtmb().guardInterval = V1_1::FrontendDtmbGuardInterval::AUTO;
     }
     p_fe_params->u.ofdm.guard_interval = GUARD_INTERVAL_AUTO;

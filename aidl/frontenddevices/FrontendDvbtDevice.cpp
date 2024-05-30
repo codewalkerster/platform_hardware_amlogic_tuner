@@ -51,53 +51,45 @@ int FrontendDvbtDevice::getFrontendSettings(FrontendSettings *settings, void * f
         return -1;
     }
 
-    FrontendDvbtSettings dvbtsetting;
     p_fe_params->frequency = settings->get<FrontendSettings::Tag::dvbt>().frequency;
     if (settings->get<FrontendSettings::Tag::dvbt>().bandwidth == FrontendDvbtBandwidth::UNDEFINED) {
-        dvbtsetting.bandwidth = FrontendDvbtBandwidth::AUTO;
-        settings->set<FrontendSettings::Tag::dvbt>(dvbtsetting);
+        settings->get<FrontendSettings::Tag::dvbt>().bandwidth = FrontendDvbtBandwidth::AUTO;
     }
     p_fe_params->u.ofdm.bandwidth =
         (fe_bandwidth_t)(getFeDvbBandwidthType(settings->get<FrontendSettings::Tag::dvbt>().bandwidth));
 
     if (settings->get<FrontendSettings::Tag::dvbt>().hpCoderate == FrontendDvbtCoderate::UNDEFINED) {
-        dvbtsetting.hpCoderate = FrontendDvbtCoderate::AUTO;
-        settings->set<FrontendSettings::Tag::dvbt>(dvbtsetting);
+        settings->get<FrontendSettings::Tag::dvbt>().hpCoderate = FrontendDvbtCoderate::AUTO;
     }
     p_fe_params->u.ofdm.code_rate_HP =
         (fe_code_rate_t)(getFeInnerFecTypeFromCodeRate(settings->get<FrontendSettings::Tag::dvbt>().hpCoderate));
 
     if (settings->get<FrontendSettings::Tag::dvbt>().lpCoderate == FrontendDvbtCoderate::UNDEFINED) {
-        dvbtsetting.lpCoderate = FrontendDvbtCoderate::AUTO;
-        settings->set<FrontendSettings::Tag::dvbt>(dvbtsetting);
+        settings->get<FrontendSettings::Tag::dvbt>().lpCoderate = FrontendDvbtCoderate::AUTO;
     }
     p_fe_params->u.ofdm.code_rate_LP =
         (fe_code_rate_t)(getFeInnerFecTypeFromCodeRate(settings->get<FrontendSettings::Tag::dvbt>().lpCoderate));
 
     if (settings->get<FrontendSettings::Tag::dvbt>().constellation == FrontendDvbtConstellation::UNDEFINED) {
-        dvbtsetting.constellation = FrontendDvbtConstellation::AUTO;
-        settings->set<FrontendSettings::Tag::dvbt>(dvbtsetting);
+        settings->get<FrontendSettings::Tag::dvbt>().constellation = FrontendDvbtConstellation::AUTO;
     }
     p_fe_params->u.ofdm.constellation =
         (fe_modulation_t)(getFeModulationType(settings->get<FrontendSettings::Tag::dvbt>().constellation));
 
     if (settings->get<FrontendSettings::Tag::dvbt>().guardInterval == FrontendDvbtGuardInterval::UNDEFINED) {
-        dvbtsetting.guardInterval = FrontendDvbtGuardInterval::AUTO;
-        settings->set<FrontendSettings::Tag::dvbt>(dvbtsetting);
+        settings->get<FrontendSettings::Tag::dvbt>().guardInterval = FrontendDvbtGuardInterval::AUTO;
     }
     p_fe_params->u.ofdm.guard_interval =
         (fe_guard_interval_t)(getFeDvbGuardIntervalType(settings->get<FrontendSettings::Tag::dvbt>().guardInterval));
 
     if (settings->get<FrontendSettings::Tag::dvbt>().hierarchy == FrontendDvbtHierarchy::UNDEFINED) {
-        dvbtsetting.hierarchy = FrontendDvbtHierarchy::AUTO;
-        settings->set<FrontendSettings::Tag::dvbt>(dvbtsetting);
+        settings->get<FrontendSettings::Tag::dvbt>().hierarchy = FrontendDvbtHierarchy::AUTO;
     }
     p_fe_params->u.ofdm.hierarchy_information =
         (fe_hierarchy_t)getFeDvbHierarchy(settings->get<FrontendSettings::Tag::dvbt>().hierarchy);
 
     if (settings->get<FrontendSettings::Tag::dvbt>().transmissionMode == FrontendDvbtTransmissionMode::UNDEFINED) {
-        dvbtsetting.transmissionMode = FrontendDvbtTransmissionMode::AUTO;
-        settings->set<FrontendSettings::Tag::dvbt>(dvbtsetting);
+        settings->get<FrontendSettings::Tag::dvbt>().transmissionMode = FrontendDvbtTransmissionMode::AUTO;
     }
     p_fe_params->u.ofdm.transmission_mode =
         (fe_transmit_mode_t)getFeDvbTransmissionMode(settings->get<FrontendSettings::Tag::dvbt>().transmissionMode);

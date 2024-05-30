@@ -96,14 +96,21 @@ bool Lnb::prepareFeSystem(int fd) {
 
     int devFd = acquireLnbDevice();
     ALOGD("%s: %d(0:13,1:18,2:off)", __FUNCTION__, devVoltage);
-    if (devFd != -1) {
-        if (ioctl(devFd, FE_SET_VOLTAGE, devVoltage) == -1)
-        {
-            ALOGE("%s failed.", __FUNCTION__);
-            return ::ndk::ScopedAStatus::fromServiceSpecificError(
-            static_cast<int32_t>(Result::UNAVAILABLE));
-        }
+
+    if (devFd == -1 || !prepareFeSystem(devFd)) {
+        if (devFd == -1)
+            ALOGE("%s failed for no device.", __FUNCTION__);
+        else
+            ALOGE("%s failed for set dvbs failed.", __FUNCTION__);
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(static_cast<int32_t>(Result::UNAVAILABLE));
     }
+
+    if (ioctl(devFd, FE_SET_VOLTAGE, devVoltage) == -1)
+    {
+        ALOGE("%s failed %s.", __FUNCTION__, strerror(errno));
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(static_cast<int32_t>(Result::UNAVAILABLE));
+    }
+
     return ::ndk::ScopedAStatus::ok();
 }
 
@@ -115,13 +122,18 @@ bool Lnb::prepareFeSystem(int fd) {
     ALOGD("%s: %d(0:on,1:off)", __FUNCTION__, devTone);
 
     int devFd = acquireLnbDevice();
-    if (devFd != -1) {
-        if (ioctl(devFd, FE_SET_TONE, devTone) == -1)
-        {
-            ALOGE("%s failed.", __FUNCTION__);
-            return ::ndk::ScopedAStatus::fromServiceSpecificError(
-            static_cast<int32_t>(Result::UNAVAILABLE));
-        }
+    if (devFd == -1 || !prepareFeSystem(devFd)) {
+        if (devFd == -1)
+            ALOGE("%s failed for no device.", __FUNCTION__);
+        else
+            ALOGE("%s failed for set dvbs failed.", __FUNCTION__);
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(static_cast<int32_t>(Result::UNAVAILABLE));
+    }
+
+    if (ioctl(devFd, FE_SET_TONE, devTone) == -1)
+    {
+        ALOGE("%s failed %s.", __FUNCTION__, strerror(errno));
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(static_cast<int32_t>(Result::UNAVAILABLE));
     }
 
     //Add a delay for some multi-switch devices
@@ -147,13 +159,18 @@ bool Lnb::prepareFeSystem(int fd) {
     ALOGD("%s: %d(0:a,1:b)", __FUNCTION__, cmd);
 
     int devFd = acquireLnbDevice();
-    if (devFd != -1) {
-        if (ioctl(devFd, FE_DISEQC_SEND_BURST, cmd) == -1)
-        {
-            ALOGE("%s failed.", __FUNCTION__);
-            return ::ndk::ScopedAStatus::fromServiceSpecificError(
-            static_cast<int32_t>(Result::UNAVAILABLE));
-        }
+    if (devFd == -1 || !prepareFeSystem(devFd)) {
+        if (devFd == -1)
+            ALOGE("%s failed for no device.", __FUNCTION__);
+        else
+            ALOGE("%s failed for set dvbs failed.", __FUNCTION__);
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(static_cast<int32_t>(Result::UNAVAILABLE));
+    }
+
+    if (ioctl(devFd, FE_DISEQC_SEND_BURST, cmd) == -1)
+    {
+        ALOGE("%s failed %s.", __FUNCTION__, strerror(errno));
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(static_cast<int32_t>(Result::UNAVAILABLE));
     }
 
     return ::ndk::ScopedAStatus::ok();

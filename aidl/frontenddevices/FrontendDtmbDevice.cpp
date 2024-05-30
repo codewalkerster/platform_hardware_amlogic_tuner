@@ -51,24 +51,23 @@ int FrontendDtmbDevice::getFrontendSettings(FrontendSettings *settings, void * f
         return -1;
     }
 
-    FrontendDtmbSettings dtmbSetting;
     //transmissionMode
     p_fe_params->frequency = settings->get<FrontendSettings::Tag::dtmb>().frequency;
     if (settings->get<FrontendSettings::Tag::dtmb>().transmissionMode == FrontendDtmbTransmissionMode::UNDEFINED) {
-        dtmbSetting.transmissionMode = FrontendDtmbTransmissionMode::AUTO;
+        settings->get<FrontendSettings::Tag::dtmb>().transmissionMode = FrontendDtmbTransmissionMode::AUTO;
     }
     p_fe_params->u.ofdm.transmission_mode = TRANSMISSION_MODE_AUTO;
 
     //bandwidth
     if (settings->get<FrontendSettings::Tag::dtmb>().bandwidth == FrontendDtmbBandwidth::UNDEFINED) {
-        dtmbSetting.bandwidth = FrontendDtmbBandwidth::AUTO;
+        settings->get<FrontendSettings::Tag::dtmb>().bandwidth = FrontendDtmbBandwidth::AUTO;
     }
     p_fe_params->u.ofdm.bandwidth =
         (fe_bandwidth_t)(getFeDtmbBandwidthType(settings->get<FrontendSettings::Tag::dtmb>().bandwidth));
 
     //modulation
     if (settings->get<FrontendSettings::Tag::dtmb>().modulation == FrontendDtmbModulation::UNDEFINED) {
-        dtmbSetting.modulation = FrontendDtmbModulation::AUTO;
+        settings->get<FrontendSettings::Tag::dtmb>().modulation = FrontendDtmbModulation::AUTO;
     }
     p_fe_params->u.ofdm.constellation =
         (fe_modulation_t)(getFeModulationType(settings->get<FrontendSettings::Tag::dtmb>().modulation));
@@ -84,14 +83,12 @@ int FrontendDtmbDevice::getFrontendSettings(FrontendSettings *settings, void * f
     }
 
     //guardInterval
-    if (settings->get<FrontendSettings::Tag::dtmb>().guardInterval != FrontendDtmbGuardInterval::UNDEFINED) {
-        dtmbSetting.guardInterval = FrontendDtmbGuardInterval::AUTO;
+    if (settings->get<FrontendSettings::Tag::dtmb>().guardInterval == FrontendDtmbGuardInterval::UNDEFINED) {
+        settings->get<FrontendSettings::Tag::dtmb>().guardInterval = FrontendDtmbGuardInterval::AUTO;
     }
     p_fe_params->u.ofdm.guard_interval = GUARD_INTERVAL_AUTO;
 
     //interleaveMode -- not support in linux dvb
-
-    settings->set<FrontendSettings::Tag::dtmb>(dtmbSetting);
 
     return 0;
 }
