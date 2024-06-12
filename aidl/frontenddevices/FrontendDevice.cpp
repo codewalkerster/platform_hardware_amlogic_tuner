@@ -953,7 +953,6 @@ bool FrontendDevice::threadLoop() {
                 }
             }
             if (inBlindScan) {
-                mContext->sendScanCallBack(0xC0000064, false, true);
                 setDvbsBlindScanParams(false);
                 inBlindScan = false;
             }
