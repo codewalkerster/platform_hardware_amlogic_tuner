@@ -90,6 +90,7 @@ typedef struct {
 
   int is_secure_mode;                                   /**< DVR record session run in secure mode*/
   size_t dsm_sess;                                      /**< DVR record descrambling session*/
+  int encrypt_pvr;                                      /**< DVR record encrypt or not*/
   size_t sects_sess;                                    /**< DVR record secure ts indexer session*/
   int ca_flags;                                         /**< DVR record usage ready flags*/
 
@@ -364,7 +365,10 @@ static int ca_prepare(
   }
 
   if (usage == DVR_CA_USAGE_DES) {
-    dmx_dev_id = p_ctx->dmx_dev_id[1];
+    if (p_ctx->encrypt_pvr)
+        dmx_dev_id = p_ctx->dmx_dev_id[1];
+    else
+        dmx_dev_id = p_ctx->dmx_dev_id[0];
     dsc_type = CA_DSC_COMMON_TYPE;
 
     // Check if descrambling slot is ready
@@ -393,7 +397,7 @@ static int ca_prepare(
   DVR_CHECK(keyslot_list.count > 0);
 
   if (p_ctx->ca_flags == 0) {
-    DVR_CHECK(ca_init() == 0);
+    //DVR_CHECK(ca_init() == 0);
   }
 
   if (!(p_ctx->ca_flags & usage)) {
@@ -598,6 +602,7 @@ DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_
   }
 
   memcpy(p_ctx->dmx_dev_id, params->dmx_dev_id, sizeof(params->dmx_dev_id));
+  p_ctx->encrypt_pvr = params->encrypt_pvr;
   p_ctx->sects_sess = -1;
   p_ctx->dsm_sess = -1;
   p_ctx->is_secure_mode = 0;
@@ -767,7 +772,7 @@ int dvr_record_open_filter(DVR_RecordHandle_t handle, DVR_RecordFilterParams_t *
   // The pid should use secure if it has key token
   for (i = 0; i < DVR_MAX_RECORD_PID_CNT; i++) {
     if (p_ctx->streams[i].pid == params->pid) {
-      if (p_ctx->streams[i].key_token != -1) {
+      if (p_ctx->streams[i].key_token != -1 && p_ctx->encrypt_pvr) {
         is_secure = 1;
       }
       break;
@@ -962,13 +967,27 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
         // with TSE
         DVR_INFO("%s Clear-Scramble, pid: %#x", __func__, pid);
         if (!p_ctx->is_secure_mode) {
-          if (secure_resource_prepare(p_ctx) != 0)
-            goto exit;
+          if (p_ctx->encrypt_pvr) {
+            if (secure_resource_prepare(p_ctx) != 0)
+              goto exit;
+          } else if (p_ctx->dsm_sess == -1) {
+            p_ctx->dsm_sess = DSM_OpenSession(0);
+            DVR_CHECK_WITH_UNLOCK(p_ctx->dsm_sess != -1, &p_ctx->lock);
+          }
 
           // DSM Bind key token
           DVR_CHECK_WITH_UNLOCK(
                 DSM_BindToken(p_ctx->dsm_sess, key_token) == 0,
                 &p_ctx->lock);
+
+          if (!p_ctx->encrypt_pvr) {
+            // Prepare ca
+            DVR_CHECK_WITH_UNLOCK(
+                ca_prepare(p_ctx, stream, DVR_CA_USAGE_DES) == 0,
+                &p_ctx->lock);
+            stream->key_token = key_token;
+            goto exit;
+          }
         }
 
         // Stop/Free old clear pid filter and re-create pid filter on secure demux
@@ -1042,9 +1061,14 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
   if (i >= DVR_MAX_RECORD_PID_CNT &&
             key_token != -1 &&
             !p_ctx->is_secure_mode) {
-      DVR_CHECK_WITH_UNLOCK(
-            secure_resource_prepare(p_ctx) == 0,
-            &p_ctx->lock);
+      if (p_ctx->encrypt_pvr) {
+        DVR_CHECK_WITH_UNLOCK(
+              secure_resource_prepare(p_ctx) == 0,
+              &p_ctx->lock);
+      } else if (p_ctx->dsm_sess == -1) {
+        p_ctx->dsm_sess = DSM_OpenSession(0);
+        DVR_CHECK_WITH_UNLOCK(p_ctx->dsm_sess != -1, &p_ctx->lock);
+      }
   }
 
   // This is a new pid, and we need to find a slot to store it
@@ -1068,9 +1092,11 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
   DVR_CHECK_WITH_UNLOCK(
             ca_prepare(p_ctx, &p_ctx->streams[i], DVR_CA_USAGE_DES) == 0,
             &p_ctx->lock);
-  DVR_CHECK_WITH_UNLOCK(
-            ca_prepare(p_ctx, &p_ctx->streams[i], DVR_CA_USAGE_ENC) == 0,
-            &p_ctx->lock);
+  if (p_ctx->encrypt_pvr) {
+    DVR_CHECK_WITH_UNLOCK(
+              ca_prepare(p_ctx, &p_ctx->streams[i], DVR_CA_USAGE_ENC) == 0,
+              &p_ctx->lock);
+  }
 
 exit:
   pthread_mutex_unlock(&p_ctx->lock);

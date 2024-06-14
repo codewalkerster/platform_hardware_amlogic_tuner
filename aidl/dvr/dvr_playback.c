@@ -244,7 +244,7 @@ DVR_Result_t dvr_playback_open(
         DVB_DEMUX_SOURCE_DMA0 + params->dmx_dev_id
   );
 
-  DVR_CHECK(ca_init() == 0);
+  //DVR_CHECK(ca_init() == 0);
   ca_open(params->dmx_dev_id);
 
   // Open dmx_dev_id[2] for inject and recording the re-encrypted ts

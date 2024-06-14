@@ -29,6 +29,8 @@
 #include <json/json.h>
 #include "FileSystemIo.h"
 
+#include "dsc_dev.h"
+
 namespace aidl {
 namespace android {
 namespace hardware {
@@ -355,6 +357,7 @@ void Tuner::init() {
 #endif
 
     setTsnSource();
+    ca_init();
 }
 
 /*
