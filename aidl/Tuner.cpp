@@ -89,6 +89,7 @@ void Tuner::init() {
                 auto& arrayHwFes = root["hwfe"];
                 auto& arrayFronts = root["frontends"];
                 auto& dmxSetting = root["dmxsetting"];
+                auto& dvrSetting = root["dvrsetting"];
                 for (int i = 0; i < arrayHwFes.size(); i ++) {
                     if (!arrayHwFes[i]["id"].isNull()) {
                         int hwId = arrayHwFes[i]["id"].asInt();
@@ -331,6 +332,11 @@ void Tuner::init() {
                 if (!dmxSetting["ts_input"].isNull()) {
                     mTsInput = dmxSetting["ts_input"].asInt();
                     ALOGD("ts_input = %d", mTsInput);
+                }
+
+                if (!dvrSetting["encrypt_pvr"].isNull()) {
+                    mEncryptPvr = dvrSetting["encrypt_pvr"].asInt();
+                    ALOGD("encrypt_pvr = %d", mEncryptPvr);
                 }
             }
 
@@ -858,6 +864,10 @@ void Tuner::removeDemuxResource(int internalDemuxId) {
             ++iter;
         }
     }
+}
+
+uint32_t Tuner::getEncryptPvrSetting() {
+    return mEncryptPvr;
 }
 }  // namespace tuner
 }  // namespace tv

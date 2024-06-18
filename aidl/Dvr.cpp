@@ -63,6 +63,7 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>&
         mOpenParams.dmx_dev_id[2] = mTuner->allocateDemuxResource(); //keep demux5 is idle(unused)
         mOpenParams.non_sec_ringbuf_size = DVR_BUFFER_LEN;
         mOpenParams.sec_buf_size         = DVR_BUFFER_LEN;
+        mOpenParams.encrypt_pvr          = mTuner->getEncryptPvrSetting();
         DVR_Result_t ret = dvr_record_open(&mRecordhandle, &mOpenParams);
         if (ret != DVR_SUCCESS) {
             ALOGD("open dvr record failed!\n");

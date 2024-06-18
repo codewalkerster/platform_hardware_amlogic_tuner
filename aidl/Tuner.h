@@ -93,6 +93,8 @@ class Tuner : public BnTuner {
     vector<FrontendStatusType> getstatusCaps(int32_t frontendId);
     int allocateDemuxResource();
     void removeDemuxResource(int internalDemuxId);
+    uint32_t getEncryptPvrSetting();
+
     typedef struct {
         int id;
         uint32_t minFreq;
@@ -131,6 +133,7 @@ class Tuner : public BnTuner {
     uint32_t mTsInput = -1;
     uint32_t mDscMode = -1;
     std::mutex mLock;
+    uint32_t mEncryptPvr = -1;
 
     //Demux resource internal manager
     uint32_t mInternalDemuxId = -1;
