@@ -63,13 +63,6 @@ extern DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid,
 extern DVR_Result_t dvr_playback_set_key_token(DVR_PlaybackHandle_t handle, int pid, uint32_t key_token);
 }
 
-typedef enum PlayType {
-    INVALID = 0,
-    DEMOD_LIVE,
-    DVR_RECORD,
-    DVR_PLAYBACK
-} PLAY_TYPE_t;
-
 class Tuner;
 class Demux;
 class Descrambler : public BnDescrambler {
@@ -96,8 +89,7 @@ class Descrambler : public BnDescrambler {
     bool allocNskDscChannels();
     bool clearNskDscChannels();
     bool getTsnSourceStatus(bool *out_isLocalMode);
-    DVR_Result_t setKeyToken(PlayType type, int pid, int token);
-    PlayType checkPlayType();
+    DVR_Result_t setKeyToken(int pid, int token);
 
     int32_t mSourceDemuxId;
     bool mDemuxSet = false;
@@ -116,11 +108,11 @@ class Descrambler : public BnDescrambler {
     struct dsm_keyslot_list mKeyslotList;
     std::map<uint16_t, uint32_t> mPidToDscChannel;
     uint32_t mIsNskDsc = 0;
+    uint32_t mCasSessionUsage = DSM_PROP_SESSION_USAGE_LIVE;
 
     std::shared_ptr<Demux> mDemux = nullptr;
     DVR_RecordHandle_t mRecordHandle = NULL;
     DVR_PlaybackHandle_t mPlaybackhandle = NULL;
-    PlayType mType = INVALID;
 };
 
 }  // namespace tuner
