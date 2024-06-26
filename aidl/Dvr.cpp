@@ -56,7 +56,10 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>&
         if (bPlayback) {
             mOpenParams.src = static_cast<DVB_DemuxSource_t>(DVB_DEMUX_SOURCE_DMA0 + mDemux->getDemuxId());
         } else {
-            mOpenParams.src = getDemuxSourceByTsInput(mDemux->getTsInput());
+            if (mDemux->checkCiCamInsert())
+                mOpenParams.src = DVB_DEMUX_SOURCE_TS1;
+            else
+                mOpenParams.src = getDemuxSourceByTsInput(mDemux->getTsInput());
         }
         mOpenParams.dmx_dev_id[0] = mDemux->getDemuxId();
         mOpenParams.dmx_dev_id[1] = mTuner->allocateDemuxResource(); //keep demux4 is idle(unused)

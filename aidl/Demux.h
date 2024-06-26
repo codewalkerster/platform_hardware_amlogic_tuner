@@ -164,6 +164,7 @@ class Demux : public BnDemux {
     DVR_PlaybackHandle_t getPlaybackHandle() { return mPlaybackhandle; }
     bool checkDemuxPlayback() { return bDemuxUsePlayback; }
     bool checkDemuxRecord() { return bDemuxUseRecord; }
+    bool checkCiCamInsert() { return bCiInsert; }
 
   private:
     // Tuner service
@@ -304,6 +305,7 @@ class Demux : public BnDemux {
 
     bool bDemuxUsePlayback = false;
     bool bDemuxUseRecord   = false;
+    bool bCiInsert   = false;
 };
 
 }  // namespace tuner

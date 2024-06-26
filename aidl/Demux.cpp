@@ -892,13 +892,13 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 }
 
 ::ndk::ScopedAStatus Demux::connectCiCam(int32_t in_ciCamId) {
-    ALOGD("%s TS change to passthough %d", __FUNCTION__,in_ciCamId);
+    ALOGD("%s TS change to passthough %d %d", __FUNCTION__,in_ciCamId, mDemuxId);
 
     mCiCamId = in_ciCamId;
 
     // mAmCI[mDemuxId]->ciCamId = in_ciCamId;
     mCiCamId = in_ciCamId;
-
+    bCiInsert = true;
     if (mCiCamId < 8) {
         FileSystem_create();
 
@@ -907,7 +907,8 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
         }
 
         if (AmDmxDevice[mDemuxId] != NULL) {
-            AmDmxDevice[mDemuxId]->AM_DMX_SetSource(0, INPUT_DEMOD, FRONTEND_TS1);
+            ALOGD("%s passthough %d %d", __FUNCTION__,in_ciCamId, mDemuxId);
+            AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS1);
         }
     } else {
         mAmCI[mDemuxId]->setDvbSource(0, INPUT_LOCAL, DMA_5);
@@ -918,10 +919,11 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 }
 
 ::ndk::ScopedAStatus Demux::disconnectCiCam() {
-    ALOGD("%s TS change to bypass %d", __FUNCTION__, mCiCamId);
+    ALOGD("%s TS change to bypass %d %d", __FUNCTION__, mCiCamId, mDemuxId);
+    bCiInsert = false;
     if (mCiCamId < 8) {
         if (AmDmxDevice[mDemuxId] != NULL) {
-            AmDmxDevice[mDemuxId]->AM_DMX_SetSource(0, INPUT_DEMOD, FRONTEND_TS2);
+            AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS2);
         }
     } else {
         mAmCI[mDemuxId]->setDvbSource(0, INPUT_DEMOD, FRONTEND_TS2);
