@@ -165,6 +165,7 @@ class Demux : public BnDemux {
     bool checkDemuxPlayback() { return bDemuxUsePlayback; }
     bool checkDemuxRecord() { return bDemuxUseRecord; }
     bool checkCiCamInsert() { return bCiInsert; }
+    std::shared_ptr<Descrambler> getDescrambler();
 
   private:
     // Tuner service
@@ -306,6 +307,7 @@ class Demux : public BnDemux {
     bool bDemuxUsePlayback = false;
     bool bDemuxUseRecord   = false;
     bool bCiInsert   = false;
+    std::shared_ptr<Descrambler> mDesc = nullptr;
 };
 
 }  // namespace tuner

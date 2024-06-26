@@ -79,6 +79,8 @@ class Descrambler : public BnDescrambler {
     ::ndk::ScopedAStatus close() override;
     bool isPidSupported(uint16_t in_pid);
     bool isDescramblerReady();
+    std::vector<uint8_t> getBackUpKeyToken();
+    void closeDsmSession();
 
   private:
     virtual ~Descrambler();
@@ -113,6 +115,7 @@ class Descrambler : public BnDescrambler {
     std::shared_ptr<Demux> mDemux = nullptr;
     DVR_RecordHandle_t mRecordHandle = NULL;
     DVR_PlaybackHandle_t mPlaybackhandle = NULL;
+    std::vector<uint8_t> mBackUpKeyToken;
 };
 
 }  // namespace tuner

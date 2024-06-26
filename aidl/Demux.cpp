@@ -880,7 +880,15 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
                 return ::ndk::ScopedAStatus::fromServiceSpecificError(
                         static_cast<int32_t>(Result::UNKNOWN_ERROR));
             }
-
+            mDesc = getDescrambler();
+            if (mDesc != nullptr) {
+                std::vector<uint8_t> keyToken = mDesc->getBackUpKeyToken();
+                if (!keyToken.empty()) {
+                    ALOGD("start to set keyToken");
+                    mDesc->closeDsmSession();
+                    mDesc->setKeyToken(keyToken);
+                }
+            }
             bDemuxUseRecord = true;
             *_aidl_return = mDvrRecord;
             return ::ndk::ScopedAStatus::ok();
@@ -1715,6 +1723,17 @@ bool Demux::checkSoftDemuxForTemi() {
 
 int Demux::getTsInput() {
     return mTuner->getTsInput();
+}
+
+std::shared_ptr<Descrambler> Demux::getDescrambler() {
+    // one demux for one descrambler
+    for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
+         if (descramblerIt->second != nullptr) {
+            ALOGD("get descrambler object");
+            return descramblerIt->second;
+         }
+    }
+    return nullptr;
 }
 }  // namespace tuner
 }  // namespace tv

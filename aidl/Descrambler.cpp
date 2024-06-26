@@ -106,6 +106,8 @@ Descrambler::~Descrambler() {
           return ::ndk::ScopedAStatus::fromServiceSpecificError(
               static_cast<int32_t>(Result::INVALID_ARGUMENT));
   }
+  mBackUpKeyToken.resize(tokenSize);
+  memcpy(mBackUpKeyToken.data(), in_keyToken.data(), tokenSize * sizeof(uint8_t));
 
   for (int tokenIdx = sizeof(mKeyToken) - 1; tokenIdx >= 0; --tokenIdx) {
       tempToken = (tempToken << 8) | in_keyToken[tokenIdx];
@@ -139,7 +141,7 @@ Descrambler::~Descrambler() {
         TUNER_DSC_WRAN(mDescramblerId, "DSM_BindToken failed! %s", strerror(errno));
 
       if (DSM_GetProperty(mDsmFd, DSM_PROP_CAS_SESSION_USAGE, &mCasSessionUsage) == 0) {
-        TUNER_DSC_DBG(mDescramblerId, "DSM_PROP_CAS_SESSION_USAGE value = %d", mCasSessionUsage);
+        TUNER_DSC_DBG(mDescramblerId, "LIVE:0, PLAYBACK:1, RECORD:2, TIMESHIFT:3, mCasSessionUsage = %d", mCasSessionUsage);
       }
       if (mCasSessionUsage == DSM_PROP_SESSION_USAGE_LIVE && mDemux->checkDemuxPlayback()) {
         mCasSessionUsage = DSM_PROP_SESSION_USAGE_PLAYBACK;
@@ -864,6 +866,16 @@ DVR_Result_t Descrambler::setKeyToken(int pid, int token) {
     return result;
 }
 
+std::vector<uint8_t> Descrambler::getBackUpKeyToken() {
+   return mBackUpKeyToken;
+}
+
+void Descrambler::closeDsmSession() {
+    if (mDsmFd >= 0) {
+      DSM_CloseSession(mDsmFd);
+      mDsmFd = -1;
+    }
+}
 }  // namespace tuner
 }  // namespace tv
 }  // namespace hardware
