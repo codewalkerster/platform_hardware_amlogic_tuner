@@ -257,6 +257,7 @@ Dvr::~Dvr() {
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr playback failed!\n");
         }
+        mDemux->setPlaybackHandle(NULL);
     } else if (mType == DvrType::RECORD) {
         if (mOpenParams.dmx_dev_id[1] != 0 && mOpenParams.dmx_dev_id[2] != 0) {
             mTuner->removeDemuxResource(mOpenParams.dmx_dev_id[1]);
@@ -268,6 +269,7 @@ Dvr::~Dvr() {
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr record failed!\n");
         }
+        mDemux->setRecordHandle(NULL);
     }
 
     return ::ndk::ScopedAStatus::ok();

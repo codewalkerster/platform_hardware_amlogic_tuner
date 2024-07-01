@@ -30,7 +30,7 @@
 
 #define DVR_MAX_RECORD_SESSION_CNT  (4)
 #define DVR_MAX_RECORD_PID_CNT      (16)
-#define DVR_MAX_RECORD_PUSI_CNT     (100)
+#define DVR_MAX_RECORD_PUSI_CNT     (200)
 #define DVR_TIMEOUT                 (100)
 
 #define HAVE_PUSI(_m_)      ((_m_) & INDEX_PUSI)
@@ -525,8 +525,6 @@ static int ca_release(DVR_RecordContext_t *p_ctx, DVR_RecordStream_t *stream)
     }
   }
 
-  p_ctx->ca_flags = 0;
-
   return 0;
 }
 
@@ -706,6 +704,12 @@ DVR_Result_t dvr_record_close(DVR_RecordHandle_t handle)
       p_ctx->streams[i].key_token = -1;
     }
   }
+  if (p_ctx->ca_flags & DVR_CA_USAGE_DES)
+    ca_close(p_ctx->dmx_dev_id[1]);
+  if (p_ctx->ca_flags & DVR_CA_USAGE_ENC)
+    ca_close(p_ctx->dmx_dev_id[2]);
+  p_ctx->ca_flags = 0;
+
   secure_resource_release(p_ctx);
 
   p_ctx->state = DVR_RECORD_STATE_CLOSED;
