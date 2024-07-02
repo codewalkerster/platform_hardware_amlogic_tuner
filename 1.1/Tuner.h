@@ -41,7 +41,7 @@ class Lnb;
 class Descrambler;
 class HwFeState;
 
-#define NUMDEMUX 16
+#define NUMDEMX 6
 #define NUMDSC 16
 #define NUMRECORD 4
 #define NUMPLAYBACK 4
@@ -91,6 +91,7 @@ class Tuner : public ITuner {
     void removeDescrambler(uint32_t descramblerId);
     void attachDescramblerToDemux(uint32_t descramblerId, uint32_t demuxId) const;
     void detachDescramblerFromDemux(uint32_t descramblerId, uint32_t demuxId) const;
+    sp<Demux> getDemuxById(uint32_t demuxId);
 
     uint32_t getTsInput();
     void setTsnSource();

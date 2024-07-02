@@ -37,7 +37,7 @@ namespace implementation {
 #define NDS_EMM_ENABLE_TID 0x01U
 #define NDS_EMM_ENABLE_TID_NDS 0x02U
 
-#define DEFAULT_PAGE_SIZE     4096
+#define DEFAULT_PAGE_SIZE           4096
 
 static int gFilterToken = 0;
 
@@ -424,19 +424,37 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                 if ((mTsIndexMask & static_cast<uint32_t>(V1_1::DemuxTsIndex::MPT_INDEX_AUDIO)) != 0) {
                     mRecordAudioPid = mTpid;
                     ALOGD("%s set mRecordAudioPid pid = %d", __FUNCTION__, mRecordAudioPid);
+                    mFilterParams.type = DVR_STREAM_AUDIO_TYPE;
                 }
                 mScIndexType = settings.ts().filterSettings.record().scIndexType;
+                ALOGD("%s mScIndexType = %d", __FUNCTION__, static_cast<uint32_t>(mScIndexType));
                 if (mScIndexType ==  DemuxRecordScIndexType::SC || mScIndexType ==  DemuxRecordScIndexType::SC_HEVC) {
                     mRecordVideoPid = mTpid;
                     ALOGD("%s set mRecordVideoPid pid = %d", __FUNCTION__, mRecordVideoPid);
+                    mFilterParams.type = DVR_STREAM_VIDEO_TYPE;
                 }
                 if (settings.ts().filterSettings.record().scIndexMask.getDiscriminator()
                     == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::sc) {
-                    mScIndexMask = settings.ts().filterSettings.record().scIndexMask.sc();
+                     mScIndexMask = settings.ts().filterSettings.record().scIndexMask.sc();
+                     if ((mScIndexMask & static_cast<uint32_t>(DemuxScIndex::I_FRAME)) != 0) {
+                        mFilterParams.vfmt = DVR_VIDEO_FORMAT_MPEG2;
+                        ALOGD("video format is MPEG2");
+                    } else if ((mScIndexMask & static_cast<uint32_t>(V1_1::DemuxScIndex::I_SLICE)) != 0) {
+                        mFilterParams.vfmt = DVR_VIDEO_FORMAT_H264;
+                        ALOGD("video format is H264");// for matching with cbs
+                    }
                 } else if (settings.ts().filterSettings.record().scIndexMask.getDiscriminator()
                     == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::scHevc) {
                     mScIndexMask =  settings.ts().filterSettings.record().scIndexMask.scHevc();
+                    mFilterParams.vfmt = DVR_VIDEO_FORMAT_HEVC;
                 }
+
+                mFilterParams.pid = mTpid;
+                mRecordhandle = mDemux->getRecordHandle();
+                if (mRecordhandle != NULL) {
+                    recFilerId = dvr_record_open_filter(mRecordhandle, &mFilterParams);
+                }
+#if 0
                 struct dmx_pes_filter_params pparam;
                 memset(&pparam, 0, sizeof(pparam));
                 pparam.pid = mTpid;
@@ -451,6 +469,7 @@ Return<Result> Filter::configure(const DemuxFilterSettings& settings) {
                     ALOGE("record AM_DMX_SetPesFilter");
                     return Result::UNAVAILABLE;
                 }
+#endif
                 ALOGD("stream(pid = %d) start recording, filter = (0x%llx:%u)", mTpid, mExtendId, mFilterId);
                 break;
             }
@@ -538,6 +557,11 @@ Return<Result> Filter::start() {
         ALOGD("start PMT filter in demuxId = %d", mDemux->getDemuxId());
     }*/
 
+    if (mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.tsFilterType() == DemuxTsFilterType::RECORD) {
+        dvr_record_start_filter(mRecordhandle, recFilerId);
+        return Result::SUCCESS;
+    }
     if (mType.mainType == DemuxFilterMainType::IP) {
         ALOGD("start Ip Filter");
         return Result::SUCCESS;
@@ -612,6 +636,10 @@ Return<Result> Filter::start() {
 
 Return<Result> Filter::stop() {
     ALOGD("%s/%d mFilterId:(0x%llx:%u)", __FUNCTION__, __LINE__, mExtendId, mFilterId);
+    if (mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.tsFilterType() == DemuxTsFilterType::RECORD) {
+        dvr_record_stop_filter(mRecordhandle, recFilerId);
+    }
     if (mEnableDmaBuf && mType.mainType == DemuxFilterMainType::TS &&
         mType.subType.tsFilterType() == DemuxTsFilterType::VIDEO) {
         dmabuf_wrapper_setfilterinfo(mFilterToken, mFilterFd, 1);
@@ -667,6 +695,10 @@ Return<Result> Filter::releaseAvHandle(const hidl_handle& avMemory, uint64_t avD
 
 Return<Result> Filter::close() {
     ALOGD("%s/%d mFilterId = (0x%llx:%u)", __FUNCTION__, __LINE__, mExtendId, mFilterId);
+    if (mType.mainType == DemuxFilterMainType::TS &&
+        mType.subType.tsFilterType() == DemuxTsFilterType::RECORD) {
+        dvr_record_close_filter(mRecordhandle, recFilerId);
+    }
 
     Return<Result> res = Result::SUCCESS;
     if (mDemux->getAmDmxDevice() != NULL) {
@@ -675,6 +707,13 @@ Return<Result> Filter::close() {
     }
     res = mDemux->removeFilter(mFilterId);
 
+    if (mRecordVideoPid != -1) {
+        if (iFrameFile != NULL) {
+            fflush(iFrameFile);
+            fclose(iFrameFile);
+            iFrameFile = NULL;
+        }
+    }
     std::lock_guard<std::mutex> lock(mFilterEventLock);
     auto it = mDataId2Avfd.begin();
     while (it != mDataId2Avfd.end()) {
@@ -1265,15 +1304,10 @@ void Filter::updatePts(uint64_t pts) {
     //ALOGD("%s/%d mPts = 0x%llx, pts = 0x%llx",  __FUNCTION__, __LINE__, mPts, pts);
 }
 
-void Filter::updateIndexType(int scIndexType, int tsIndexType) {
+void Filter::updateIndexType(int iframeIndex, int pusiIndex) {
     std::lock_guard<std::mutex> lock(mRecordFilterOutputLock);
-    if (scIndexType != -1) {
-        mScIndType = scIndexType;
-    }
-
-    if (tsIndexType != -1) {
-        mTsIndType = tsIndexType;
-    }
+    mIframeIndex = iframeIndex;
+    mPusiIndex = pusiIndex;
     //ALOGD("%s/%d mTsIndexType = %d, mScIndexType = %d",  __FUNCTION__, __LINE__, mTsIndType, mScIndType);
 }
 
@@ -1282,6 +1316,7 @@ void Filter::updateCurrentOffset(uint64_t offset) {
     mCurrentOffset = offset;
     //ALOGD("%s/%d offset = 0x%llx, mCurrentOffset = 0x%llx",  __FUNCTION__, __LINE__, offset, mCurrentOffset);
 }
+
 
 void Filter::updateRecordOutput(vector<uint8_t> data) {
     std::lock_guard<std::mutex> lock(mRecordFilterOutputLock);
@@ -1672,6 +1707,10 @@ Result Filter::startRecordFilterHandler() {
         }
     }
 
+   //ALOGD("%s/%d [demuxId = %d] mPusiIndex = %d, mIframeIndex = %d", __FUNCTION__, __LINE__, mDemux->getDemuxId(), mPusiIndex, mIframeIndex);
+   uint32_t tsIndexmask = 0;
+   uint32_t scIndexmask = 0;
+
     if (mTsIndType == 0 && mScIndType == 2) {
         mLastTsIndType = mTsIndType;
         mLastScIndType = mScIndType;
@@ -1702,27 +1741,38 @@ Result Filter::startRecordFilterHandler() {
     DemuxPid demuxPid;
     demuxPid.tPid(static_cast<DemuxTpid>(mTpid));
     DemuxFilterTsRecordEvent::ScIndexMask mask;
-    uint32_t scIndexmask = 0;
-    uint32_t tsIndexmask = 0;
     bool bUserTsIndexer = false;
 
-    if (mTsIndType >= 0 && mTsIndType <= 1) {
-        tsIndexmask = convertTsIndexerTypeToTsIndex(mTsIndType);
+    if (mPusiIndex != 0) {
+        tsIndexmask = static_cast<uint32_t>(DemuxTsIndex::PAYLOAD_UNIT_START_INDICATOR);
         tsIndexmask = tsIndexmask & mTsIndexMask;
-        bUserTsIndexer = true;
     }
-    if (mScIndType >= 2 && mScIndType <= 17) {
+
+    if (mIframeIndex != 0) {
         if (mFilterSettings.ts().filterSettings.record().scIndexMask.getDiscriminator()
             == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::sc) {
-            scIndexmask = covertTsIndexerTypeToScIndex(mScIndType);
-            //ALOGD("%s/%d mScIndType = %d, scIndexmask = %d, mScIndexMask = %d", __FUNCTION__, __LINE__, mScIndType,
-            //scIndexmask, mScIndexMask);
+            if ((mScIndexMask & static_cast<uint32_t>(DemuxScIndex::I_FRAME)) != 0) {
+                scIndexmask = static_cast<uint32_t>(DemuxScIndex::I_FRAME);
+                ALOGD("it is I-Frame scIndexmask = %d", scIndexmask);
+            } else if ((mScIndexMask & static_cast<uint32_t>(V1_1::DemuxScIndex::I_SLICE)) != 0) {
+                scIndexmask = static_cast<uint32_t>(V1_1::DemuxScIndex::I_SLICE);
+                ALOGD("it is I-SLICE scIndexmask = %d", scIndexmask);
+            }
         } else if (mFilterSettings.ts().filterSettings.record().scIndexMask.getDiscriminator()
             == DemuxFilterRecordSettings::ScIndexMask::hidl_discriminator::scHevc) {
-            scIndexmask = convertTsIndexerTypeToScHevcIndex(mScIndType);
+            scIndexmask = static_cast<uint32_t>(DemuxScHevcIndex::SLICE_IDR_W_RADL);
+            scIndexmask = scIndexmask & mScIndexMask;
         }
-        scIndexmask = scIndexmask & mScIndexMask;
-        //ALOGD("%s/%d scIndexmask = %d", __FUNCTION__, __LINE__, scIndexmask);
+
+        ALOGD("I-Frame information: offset = %llu, size = %d, pts = %llu", mCurrentOffset, mRecordFilterOutput.size(), mPts);
+        if (mDemux->getDemuxId() == 3) {
+            if (iFrameFile == NULL) {
+                iFrameFile = fopen("/data/local/tmp/iFrameData.ts", "wb+");
+            }
+            if (iFrameFile != NULL) {
+                fwrite(mRecordFilterOutput.data(), 1, mRecordFilterOutput.size(), iFrameFile);
+            }
+        }
     }
 
     mask.sc(scIndexmask);
@@ -1754,6 +1804,9 @@ Result Filter::startRecordFilterHandler() {
     }
 
     mRecordFilterOutput.clear();
+    mPusiIndex = 0;
+    mIframeIndex = 0;
+    mCurrentOffset = -1;
     mTsIndType = -1;
     mScIndType = -1;
     return Result::SUCCESS;
@@ -2192,21 +2245,12 @@ bool Filter::isRawData() {
     return bIsRaw;
 }
 
-
 bool Filter::checkRecordByVideo() {
     return mRecordByVideo;
 }
 
 DemuxRecordScIndexType Filter::getScIndexType() {
     return mScIndexType;
-}
-
-int Filter::getRecordVideoPid() {
-    return mRecordVideoPid;
-}
-
-int Filter::getRecordAudioPid() {
-    return mRecordAudioPid;
 }
 
 uint32_t Filter::covertTsIndexerTypeToScIndex(uint32_t type) {

@@ -469,7 +469,7 @@ Return<void> Tuner::openDemux(openDemux_cb _hidl_cb) {
         it = mDemuxes.find(mLastUsedId);
     }
 
-    if (mLastUsedId == NUMDEMUX)
+    if (mLastUsedId == NUMDEMX)
         mLastUsedId = 1; //match with cbs, dmxid 0 for dtvfs, dmxid 1 for dtvinput
 
     DemuxId demuxId = mLastUsedId;
@@ -484,7 +484,7 @@ Return<void> Tuner::getDemuxCaps(getDemuxCaps_cb _hidl_cb) {
     ALOGV("%s", __FUNCTION__);
 
     DemuxCapabilities caps;
-    caps.numDemux                = NUMDEMUX;
+    caps.numDemux                = NUMDEMX;
     caps.numRecord               = NUMRECORD;
     caps.numPlayback             = NUMPLAYBACK;
     caps.numTsFilter             = NUMTSFILTER;
@@ -728,6 +728,14 @@ void Tuner::setTsnSource() {
 
 uint32_t Tuner::getDscMode() {
     return mDscMode;
+}
+
+sp<Demux> Tuner::getDemuxById(uint32_t demuxId) {
+    if (mDemuxes.find(demuxId) != mDemuxes.end()) {
+        return mDemuxes.at(demuxId);
+    } else {
+        return nullptr;
+    }
 }
 
 }  // namespace implementation

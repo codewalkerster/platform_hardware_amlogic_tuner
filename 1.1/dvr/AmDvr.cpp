@@ -24,7 +24,7 @@
 * Static functions
 ***************************************************************************/
 
-static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSource)
+static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source inputSource)
 {
     char dev_name[32];
     int fd;
@@ -57,7 +57,7 @@ static AM_ErrorCode_t dvr_open(AM_DVR_Device_t *dev, dmx_input_source_t inputSou
     return AM_SUCCESS;
 }
 
-static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source_t inputSource, int ts_input) {
+static AM_ErrorCode_t setDvbSource(AM_DVR_Device_t *dev, dmx_input_source inputSource, int ts_input) {
     char dev_name[32];
     int fd;
     int ret = -1;
@@ -201,7 +201,7 @@ AmDvr::~AmDvr() {
     }
 }
 
-AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source_t inputSource, uint32_t ts_input, bool bsetInput)
+AM_ErrorCode_t AmDvr::AM_DVR_Open(dmx_input_source inputSource, uint32_t ts_input, bool bsetInput)
 {
     ALOGD("%s/%d dev_no = %d", __FUNCTION__, __LINE__, mDvrDevice->dev_no);
     if (opencnt > 0) {

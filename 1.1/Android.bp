@@ -95,7 +95,11 @@ cc_defaults {
         "MultiHwDemux/AmTsIndexer.cpp",
         "MultiHwDemux/ParseTEMIData.cpp",
         "mediasync/MediaSyncWrap.cpp",
-        "dvr/AmDvr.cpp",
+        //"dvr/AmDvr.cpp",
+        "dvr/dvr_record.c",
+        "dvr/dvr_playback.c",
+        "dvr/ts_indexer.c",
+        "dvr/dvb_utils.c",
         "dsc/dsc_dev.c",
         "Dmabufwrapper.cpp",
         "Filter.cpp",
@@ -157,6 +161,9 @@ cc_defaults {
     //    address: true,
     //    recover: ["address"],
     //},
+    cppflags: [
+      // "-DSUPPORT_PVR_REENCRYPTION",
+    ],
     include_dirs: [
         "hardware/amlogic/tuner/1.1/frontenddevices",
         "vendor/amlogic/common/frameworks/services/systemcontrol",

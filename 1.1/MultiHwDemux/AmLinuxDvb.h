@@ -46,8 +46,8 @@ public:
     AM_ErrorCode_t dvb_poll(AM_DMX_Device *dev, AM_DMX_FilterMask_t *mask, int timeout);
     AM_ErrorCode_t dvb_poll_exit(AM_DMX_Device *dev);
     AM_ErrorCode_t dvb_read(AM_DMX_Device *dev, AM_DMX_Filter *filter, uint8_t *buf, int *size,bool pollflag = true);
-    AM_ErrorCode_t dvb_set_source(AM_DMX_Device *dev, dmx_input_source_t inputSource);
-    AM_ErrorCode_t dvr_open(AM_DMX_Device *dev,dmx_input_source_t inputSource);
+    AM_ErrorCode_t dvb_set_source(AM_DMX_Device *dev, dmx_input_source inputSource);
+    AM_ErrorCode_t dvr_open(AM_DMX_Device *dev,dmx_input_source inputSource);
     int dvr_data_write(uint8_t *buf, int size,uint64_t timeout);
     AM_ErrorCode_t dvr_close(void);
     AM_ErrorCode_t dvb_set_source(int id, int input, int source);

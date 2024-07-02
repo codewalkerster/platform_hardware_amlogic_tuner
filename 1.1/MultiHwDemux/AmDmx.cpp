@@ -53,7 +53,7 @@ AM_DMX_Device::~AM_DMX_Device() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 }
 
-AM_ErrorCode_t AM_DMX_Device::dmx_dvr_open(dmx_input_source_t inputSource) {
+AM_ErrorCode_t AM_DMX_Device::dmx_dvr_open(dmx_input_source inputSource) {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
 
     AM_ErrorCode_t ret = drv->dvr_open(this,inputSource);
@@ -725,6 +725,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_SetSource(int id, int input, int source)
 
     return ret;
 }
+
 
 #if 0
 AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetScrambleStatus(AM_Bool_t dev_status[2])

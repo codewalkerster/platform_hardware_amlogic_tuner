@@ -42,6 +42,23 @@ using ::android::hardware::MQDescriptorSync;
 
 using DvrMQ = MessageQueue<uint8_t, kSynchronizedReadWrite>;
 
+extern "C"  {
+#include "dvr_record.h"
+#include "dvr_playback.h"
+extern DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_t *params);
+extern DVR_Result_t dvr_record_close(DVR_RecordHandle_t handle);
+extern DVR_Result_t dvr_record_start(DVR_RecordHandle_t handle);
+extern DVR_Result_t dvr_record_stop(DVR_RecordHandle_t handle);
+extern DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32_t key_token);
+extern ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *params);
+
+extern DVR_Result_t dvr_playback_open(DVR_PlaybackHandle_t *p_handle, DVR_PlaybackOpenParams_t *params);
+extern DVR_Result_t dvr_playback_close(DVR_PlaybackHandle_t handle);
+extern DVR_Result_t dvr_playback_start(DVR_PlaybackHandle_t handle);
+extern DVR_Result_t dvr_playback_stop(DVR_PlaybackHandle_t handle);
+extern DVR_Result_t dvr_playback_set_key_token(DVR_PlaybackHandle_t handle, int pid, uint32_t key_token);
+}
+
 struct MediaEsMetaData {
     bool isAudio;
     int startIndex;
@@ -94,6 +111,7 @@ class Dvr : public IDvr {
     EventFlag* getDvrEventFlag();
     DvrSettings getSettings() { return mDvrSettings; }
     bool stopInjectTs() { return mFlushing | !mStartDvrThread; }
+    DVR_RecordHandle_t getRecordHandle() { return mRecordhandle; }
 
   private:
     // Demux service
@@ -121,7 +139,8 @@ class Dvr : public IDvr {
     static void* __threadLoopPlayback(void* user);
     static void* __threadLoopRecord(void* user);
     void playbackThreadLoop();
-    void recordThreadLoop();
+    void DvrRecordThreadLoop();
+    DVB_DemuxSource_t getDemuxSourceByTsInput(int tsInput);
 
     unique_ptr<DvrMQ> mDvrMQ;
     EventFlag* mDvrEventFlag;
@@ -161,6 +180,21 @@ class Dvr : public IDvr {
     bool mStartDvrThread = false;
     std::mutex mReadLock;
     bool mFlushing = false;
+
+    DVR_RecordHandle_t mRecordhandle = NULL;
+    DVR_PlaybackHandle_t mPlaybackhandle = NULL;
+    DVR_RecordOpenParams_t mOpenParams;
+    std::thread mDvrRecordThread;
+    std::atomic<bool> mDvrRecordThreadRunning;
+    DVR_RecordReceiveParams_t mReceiveParams;
+    DVR_PlaybackOpenParams_t mPlaybackParams;
+    uint64_t mOffset = 0;
+    int mPusiIndex       = 0;
+    int mIframeIndex     = 0;
+    uint64_t mPts        = 0;
+    int videoPid = -1;
+    int audioPid = -1;
+    FILE *recordFile = NULL;
 };
 
 }  // namespace implementation

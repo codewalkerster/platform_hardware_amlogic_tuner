@@ -95,8 +95,9 @@ Demux::Demux(uint32_t demuxId, sp<Tuner> tuner) {
     AmDmxDevice[mDemuxId] = new AM_DMX_Device(mDemuxId);
     ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d, bSupportSoftDemuxForTemi = %d", mDemuxId, bSupportSoftDemuxForSubtitle, bSupportSoftDemuxForTemi);
     AmDmxDevice[mDemuxId]->AM_DMX_Open();
-    mAmDvrDevice[mDemuxId] = new AmDvr(mDemuxId);
-    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_DEMOD, mTunerService->getTsInput(), true);
+
+    ALOGD("Support PVR Re-encyption");
+    AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTunerService->getTsInput());
 
     mHwDemuxOps[mDemuxId] = new HwDemuxOpsSCWrap();
     if (mHwDemuxOps[mDemuxId] != nullptr) {
@@ -255,7 +256,7 @@ void Demux::postDvrData(void* demux) {
     //cnt = size;
     //vector<uint8_t> leftData;
 
-    ret = dmxDev->getAmDvrDevice()->AM_DVR_Read(mData, &cnt);
+    //ret = dmxDev->getAmDvrDevice()->AM_DVR_Read(mData, &cnt);
     if (ret != 0) {
         //ALOGE("No data available from DVR");
         //usleep(200 * 1000);
@@ -756,7 +757,7 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
         } else if (tsFilterType == DemuxTsFilterType::PCR) {
             AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
         } else if (tsFilterType == DemuxTsFilterType::RECORD) {
-            mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
+            //mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
         }
     }
 
@@ -986,10 +987,6 @@ Return<Result> Demux::close() {
         AmDmxDevice[mDemuxId] = NULL;
     }
 
-    if (mAmDvrDevice[mDemuxId] != NULL) {
-        mAmDvrDevice[mDemuxId]->AM_DVR_Close();
-        mAmDvrDevice[mDemuxId] = NULL;
-    }
     mTunerService->removeDemux(mDemuxId);
     return Result::SUCCESS;
 }
@@ -1027,6 +1024,7 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
 
             mVidPid = 0x1FFF;
             mAudPid = 0x1FFF;
+            bDemuxUsePlayback = true;
             _hidl_cb(Result::SUCCESS, mDvrPlayback);
             return Void();
         case DvrType::RECORD:
@@ -1038,13 +1036,13 @@ Return<void> Demux::openDvr(DvrType type, uint32_t bufferSize, const sp<IDvrCall
                 _hidl_cb(Result::UNKNOWN_ERROR, mDvrRecord);
                 return Void();
             }
-
             mAmTsIndexer[mDemuxId] = new AmTsIndexer();
             cache_data = new uint8_t[2 * 1024 *1024];
             if (cache_data == NULL) {
                 ALOGD("new cache data fail");
             }
             mAmTsIndexer[mDemuxId]->ts_indexer_set_event_callback(TsIndexerCallback, this);
+            bDemuxUseRecord = true;
             _hidl_cb(Result::SUCCESS, mDvrRecord);
             return Void();
         default:
@@ -1138,85 +1136,85 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
 
         {
             std::lock_guard<std::mutex> lock(mFilterLock);
-            for (auto descramblerIt = mDescramblers.begin(); \
-                 descramblerIt != mDescramblers.end(); \
-                 descramblerIt++) {
-                if (descramblerIt->second && descramblerIt->second->isDescramblerReady())
-                    isDscReady = true;
-            }
+            if (0) {
+                for (auto descramblerIt = mDescramblers.begin(); \
+                     descramblerIt != mDescramblers.end(); \
+                     descramblerIt++) {
+                    if (descramblerIt->second && descramblerIt->second->isDescramblerReady())
+                        isDscReady = true;
+                }
 
-            if (!isDscReady && mDescramblers.size() > 0) {
-                for (int tsDataIdx = 0; tsDataIdx < data.size(); tsDataIdx += 188) {
-                    if (data[tsDataIdx] != 0x47)
-                        ALOGW("ts sync byte: 0x%x", data[tsDataIdx]);
-                    uint16_t pid = ((data[tsDataIdx + 1] & 0x1f) << 8) | ((data[tsDataIdx + 2] & 0xff));
-                    for (auto descramblerIt = mDescramblers.begin(); \
-                         descramblerIt != mDescramblers.end(); \
-                         descramblerIt++) {
-                        if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
-                            if (mScrambledCache.size() > MAX_SCRAMBLED_CACHE_SIZE) {
-                                ALOGW("reset scrambled cache! cache size:%d", mScrambledCache.size());
-                                vector<uint8_t>().swap(mScrambledCache);
+                if (!isDscReady && mDescramblers.size() > 0) {
+                    for (int tsDataIdx = 0; tsDataIdx < data.size(); tsDataIdx += 188) {
+                        if (data[tsDataIdx] != 0x47)
+                            ALOGW("ts sync byte: 0x%x", data[tsDataIdx]);
+                        uint16_t pid = ((data[tsDataIdx + 1] & 0x1f) << 8) | ((data[tsDataIdx + 2] & 0xff));
+                        for (auto descramblerIt = mDescramblers.begin(); \
+                             descramblerIt != mDescramblers.end(); \
+                             descramblerIt++) {
+                            if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
+                                if (mScrambledCache.size() > MAX_SCRAMBLED_CACHE_SIZE) {
+                                    ALOGW("reset scrambled cache! cache size:%d", mScrambledCache.size());
+                                    vector<uint8_t>().swap(mScrambledCache);
+                                }
+                                mScrambledCache.insert(mScrambledCache.end(), data.begin() + tsDataIdx, data.begin() + tsDataIdx + 188);
+                                ALOGV("scrambled cache idx:%d pid:0x%x size:%d", tsDataIdx, pid, mScrambledCache.size());
+                            } else {
+                                mClearCache.insert(mClearCache.end(), data.begin() + tsDataIdx, data.begin() + tsDataIdx + 188);
+                                ALOGV("clear cache idx:%d pid:0x%x size:%d", tsDataIdx, pid, mClearCache.size());
+                                break;
                             }
-                            mScrambledCache.insert(mScrambledCache.end(), data.begin() + tsDataIdx, data.begin() + tsDataIdx + 188);
-                            ALOGV("scrambled cache idx:%d pid:0x%x size:%d", tsDataIdx, pid, mScrambledCache.size());
+                        }
+                    }
+                    if (!mClearCache.empty()) {
+                        int writeRetry = 0;
+                        ALOGD("write clear cache size:%d", mClearCache.size());
+                        while (dvr_playback_write(mPlaybackhandle, data.data(), data.size()) == -1 &&  writeRetry <= 100) {
+                            usleep(100 * 1000);
+                            writeRetry ++;
+                            ALOGW("write clear cache retry: %d", writeRetry);
+                        }
+                        vector<uint8_t>().swap(mClearCache);
+                    }
+                    return;
+                }
+            }
+            if (isValidTsPacket(data)) {
+                if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId]) {
+                    while (mHwDemuxOps[mDemuxId]->AmHwDemux_GetStreamControlStatus(mDemuxHandle[mDemuxId], NULL, mWriteTsSize,
+                        mVidPid, mAudPid) != AM_DEMUX_OK) {
+                        usleep(10 * 1000);
+                        if (mDvrPlayback) {
+                            if (mDvrPlayback->stopInjectTs()) {
+                               ALOGD("[dvr] exit Inject, break!");
+                               break;
+                            }
                         } else {
-                            mClearCache.insert(mClearCache.end(), data.begin() + tsDataIdx, data.begin() + tsDataIdx + 188);
-                            ALOGV("clear cache idx:%d pid:0x%x size:%d", tsDataIdx, pid, mClearCache.size());
                             break;
                         }
                     }
                 }
-                if (!mClearCache.empty()) {
-                    int writeRetry = 0;
-                    ALOGD("write clear cache size:%d", mClearCache.size());
-                    while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mClearCache.data(), mClearCache.size(), 300 * 1000) == -1 \
-                           && writeRetry <= 100) {
-                        usleep(100 * 1000);
-                        writeRetry ++;
-                        ALOGW("write clear cache retry: %d", writeRetry);
-                    }
-                    vector<uint8_t>().swap(mClearCache);
-                }
-                return;
             }
-       }
-        if (isValidTsPacket(data)) {
-            if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId]) {
-                while (mHwDemuxOps[mDemuxId]->AmHwDemux_GetStreamControlStatus(mDemuxHandle[mDemuxId], NULL, mWriteTsSize,
-                    mVidPid, mAudPid) != AM_DEMUX_OK) {
-                    usleep(10 * 1000);
-                    if (mDvrPlayback) {
-                        if (mDvrPlayback->stopInjectTs()) {
-                           ALOGD("[dvr] exit Inject, break!");
-                           break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
 
-        if (isDscReady && !mScrambledCache.empty()) {
-            int writeRetry = 0;
-            ALOGD("write scrambled cache size:%d", mScrambledCache.size());
-            while (AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(mScrambledCache.data(), mScrambledCache.size(), 300 * 1000) == -1 \
-                   && writeRetry <= 100) {
-                usleep(100 * 1000);
-                writeRetry ++;
-                ALOGW("write scrambled cache retry: %d", writeRetry);
+            if (isDscReady && !mScrambledCache.empty()) {
+                int writeRetry = 0;
+                ALOGD("write scrambled cache size:%d", mScrambledCache.size());
+                while (dvr_playback_write(mPlaybackhandle, data.data(), data.size()) == -1 &&  writeRetry <= 100) {
+                    usleep(100 * 1000);
+                    writeRetry ++;
+                    ALOGW("write scrambled cache retry: %d", writeRetry);
+                }
+                vector<uint8_t>().swap(mScrambledCache);
             }
-            vector<uint8_t>().swap(mScrambledCache);
         }
         if (isValidTsPacket(data)) {
-            while (AmDmxDevice[mDemuxId] != NULL && AmDmxDevice[mDemuxId]->AM_DMX_WriteTs(data.data(), data.size(), 300 * 1000) == -1) {
+            while (dvr_playback_write(mPlaybackhandle, data.data(), data.size()) == -1) {
                 usleep(100 * 1000);
                 if (mDvrPlayback && mDvrPlayback->stopInjectTs()) {
                     ALOGD("[demux] stop Inject TS, break!");
                     break;
                 }
-                ALOGD("[Demux] wait for 100ms to write dvr device demuxId = %d", mDemuxId);
+                ALOGD("[Demux][dmxId = %d] wait for 100ms to write dvr device", mDemuxId);
             }
             if (property_get_int32(TUNERHAL_DUMP_TS_DATA, 0) && getDemuxId() == 2) {
                 FILE *filedump = fopen("/data/local/tmp/demux_inject_demux2.ts", "ab+");
@@ -1264,41 +1262,42 @@ void Demux::sendFrontendInputToRecord(vector<uint8_t> data) {
     }
     //mFilters[*it]->updateRecordOutput(data);
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-        if (mFilters[*it]->getRecordVideoPid() != -1) {
-             break;
-        }
-    }
-
-    if (it != mRecordFilterIds.end()) {
-        mFilters[*it]->updateRecordOutput(data);
-    } else {
-        for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-            if (mFilters[*it]->getRecordAudioPid() != -1) {
-                 //ALOGD("[demuxid = %d]find record audio pid = %d", mDemuxId, mFilters[*it]->getRecordAudioPid());
+            if (mFilters[*it]->getRecordVideoPid() != -1) {
                  break;
             }
         }
+
         if (it != mRecordFilterIds.end()) {
             mFilters[*it]->updateRecordOutput(data);
         } else {
-            it = mRecordFilterIds.begin();
-            mFilters[*it]->updateRecordOutput(data);
+            for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
+                if (mFilters[*it]->getRecordAudioPid() != -1) {
+                     //ALOGD("[demuxid = %d]find record audio pid = %d", mDemuxId, mFilters[*it]->getRecordAudioPid());
+                     break;
+                }
+            }
+            if (it != mRecordFilterIds.end()) {
+                mFilters[*it]->updateRecordOutput(data);
+            } else {
+                it = mRecordFilterIds.begin();
+                mFilters[*it]->updateRecordOutput(data);
+            }
         }
-    }
 }
 
-void Demux::sendFrontendInputToRecord(vector<uint8_t> data, uint16_t pid, uint64_t offset, uint64_t pts, int scIndextype,int tsIndexType) {
+void Demux::sendFrontendInputToRecord(vector<uint8_t> data, uint16_t pid, uint64_t offset, uint64_t pts, int iFrameIndex,int pusiIndex) {
     sendFrontendInputToRecord(data);
     std::lock_guard<std::mutex> lock(mFilterLock);
-    set<uint64_t>::iterator it =  mRecordFilterIds.begin();
+    set<uint64_t>::iterator it;
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
         if (mFilters[*it] != nullptr && pid == mFilters[*it]->getTpid()) {
             mFilters[*it]->updatePts(pts);
-            mFilters[*it]->updateIndexType(scIndextype, tsIndexType);
+            mFilters[*it]->updateIndexType(iFrameIndex, pusiIndex);
             mFilters[*it]->updateCurrentOffset(offset);
         }
     }
 }
+
 
 bool Demux::startBroadcastFilterDispatcher() {
     std::lock_guard<std::mutex> lock(mFilterLock);
@@ -1323,8 +1322,9 @@ bool Demux::startRecordFilterDispatcher() {
     set<uint64_t>::iterator it = mRecordFilterIds.begin();
 
     //if (mFilters[*it]->startRecordFilterHandler() != Result::SUCCESS) {
-     //   return false;
+    //    return false;
    // }
+
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
         if (mFilters[*it]->getRecordVideoPid() != -1) {
             break;
@@ -1360,10 +1360,12 @@ Result Demux::startFilterHandler(uint64_t filterId) {
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (DEBUG_DEMUX)
         ALOGD("%s/%d filterId:%llu", __FUNCTION__, __LINE__, filterId);
-    for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
-        if (descramblerIt->second && !descramblerIt->second->isDescramblerReady())
-            ALOGV("[Demux] dsc isn't ready.");
-        continue;
+    if (!bDemuxUsePlayback && !bDemuxUseRecord) {
+        for (auto descramblerIt = mDescramblers.begin(); descramblerIt != mDescramblers.end(); descramblerIt++) {
+            if (descramblerIt->second && !descramblerIt->second->isDescramblerReady())
+                ALOGV("[Demux] dsc isn't ready.");
+            continue;
+        }
     }
     //Create mFilterEvent with mFilterOutput
     if (mFilters[filterId] != nullptr) {
@@ -1507,9 +1509,9 @@ sp<AM_DMX_Device> Demux::getAmDmxDevice(void) {
     return AmDmxDevice[mDemuxId];
 }
 
-sp<AmDvr> Demux::getAmDvrDevice() {
-    return mAmDvrDevice[mDemuxId];
-}
+//sp<AmDvr> Demux::getAmDvrDevice() {
+//    return mAmDvrDevice[mDemuxId];
+//}
 
 bool Demux::checkPesFilterId(uint64_t filterId) {
     set<uint64_t>::iterator it;
@@ -1609,43 +1611,72 @@ int Demux::recordTsPacketForPesData(uint64_t filterId) {
     mFilters[filterId]->stop();
     mPesFid = filterId;
 
-    mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
-    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTunerService->getTsInput(), false);
-
     int pid = getFilterTpid(filterId);
     ALOGD("%s/%d pid = %d", __FUNCTION__, __LINE__, pid);
 
-    struct dmx_pes_filter_params pparam;
-    memset(&pparam, 0, sizeof(pparam));
-    pparam.pid = pid;
-    pparam.input = DMX_IN_FRONTEND;
-    pparam.output = DMX_OUT_TS_TAP;
-    pparam.pes_type = DMX_PES_OTHER;
-    AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&mPesRecordFid);
+    DVR_RecordOpenParams_t openParams;
+    memset(&openParams, 0, sizeof(DVR_RecordOpenParams_t));
+    openParams.src = static_cast<DVB_DemuxSource_t>(DVB_DEMUX_SOURCE_DMA0 + mDemuxId);
+    openParams.dmx_dev_id[0] = mDemuxId;
+    openParams.non_sec_ringbuf_size = DVR_BUFFER_LEN;
+    DVR_Result_t ret = dvr_record_open(&mSubtitleRecHandle, &openParams);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("open dvr record failed!\n");
+    }
 
-    if (AmDmxDevice[mDemuxId]->AM_DMX_SetBufferSize(mPesRecordFid, 10 * 1024 * 1024) != 0) {
-        ALOGE("record AM_DMX_SetBufferSize");
-        return -1;
+    memset(&mSubReceiveParam, 0, sizeof(DVR_RecordReceiveParams_t));
+    mSubReceiveParam.buf = (uint8_t *)malloc(DVR_MAX_PUSI_LEN);
+    mSubReceiveParam.len = DVR_MAX_PUSI_LEN;
+    mSubReceiveParam.mode = DVR_DIRECT_RECORD_MODE;
+    mSubtitleRecordThreadRunning = true;
+    mSubtitleRecordThread = std::thread(&Demux::subtitleRecordThreadLoop, this);
+    ret = dvr_record_start(mSubtitleRecHandle);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("start dvr record failed!\n");
     }
-    if (AmDmxDevice[mDemuxId]->AM_DMX_SetPesFilter(mPesRecordFid, &pparam) != 0) {
-        ALOGE("record AM_DMX_SetPesFilter");
-        return -1;
-    }
-    if (AmDmxDevice[mDemuxId]->AM_DMX_StartFilter(mPesRecordFid) != 0) {
-        ALOGE("Start filter %d failed!", mPesRecordFid);
-        return -1;
+
+    DVR_RecordFilterParams_t filterParams;
+    filterParams.pid = pid;//0x2000;
+    mPesRecordFid = dvr_record_open_filter(mSubtitleRecHandle, &filterParams);
+
+    ret = dvr_record_start_filter(mSubtitleRecHandle, mPesRecordFid);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record start filter failed!\n");
     }
     ALOGD("stream(pid = %d) start recording, filter = %d", pid, mPesRecordFid);
-
     return 1;
 }
 
 void Demux::closePesRecordFilter() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
-    if (AmDmxDevice[mDemuxId] != NULL) {
-        AmDmxDevice[mDemuxId]->AM_DMX_StopFilter(mPesRecordFid);
-        AmDmxDevice[mDemuxId]->AM_DMX_FreeFilter(mPesRecordFid);
+    DVR_Result_t ret = dvr_record_stop_filter(mSubtitleRecHandle, mPesRecordFid);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record stop filter failed!\n");
     }
+    mSubtitleRecordThreadRunning = false;
+    if (mSubtitleRecordThread.joinable()) {
+        mSubtitleRecordThread.join();
+    }
+    if (mSubReceiveParam.buf) {
+        free(mSubReceiveParam.buf);
+        mSubReceiveParam.buf = NULL;
+    }
+
+    ret = dvr_record_close_filter(mSubtitleRecHandle, mPesRecordFid);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record close filter failed!\n");
+    }
+
+    ret = dvr_record_stop(mSubtitleRecHandle);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record stop failed!\n");
+    }
+
+    ret = dvr_record_close(mSubtitleRecHandle);
+    if (ret != DVR_SUCCESS) {
+        ALOGD("dvr record close failed!\n");
+    }
+
     //mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(NULL, this);
     if (mAmPesFilter != NULL) {
         mAmPesFilter->release();
@@ -1653,6 +1684,25 @@ void Demux::closePesRecordFilter() {
     }
     mPesFid = -1;
     mPesRecordFid = -1;
+}
+
+void Demux::subtitleRecordThreadLoop() {
+    prctl(PR_SET_NAME, "subtitleRecordThread");
+    while (mSubtitleRecordThreadRunning) {
+        ssize_t len = 0;
+        len = dvr_record_read(mSubtitleRecHandle, &mSubReceiveParam);
+        //ALOGD("[Dvr] len = %d", len);
+        if (len <= 0) {
+          //usleep(100*1000);
+          //ALOGE("dvr no data\n");
+          continue;
+        }
+
+        if (mAmPesFilter != NULL) {
+            int pid = getFilterTpid(mPesFid);
+            mAmPesFilter->extractPesDataFromTsPacket(pid, mSubReceiveParam.buf, len);
+         }
+    }
 }
 
 bool Demux::checkSoftDemuxForSubtitle() {
@@ -1707,6 +1757,10 @@ int Demux::getRecordAudioPid() {
     return -1;
 }
 
+int Demux::getTsInput() {
+    return mTunerService->getTsInput();
+}
+
 int Demux::getScIndexTypeForVideoFormat() {
     set<uint64_t>::iterator it;
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
@@ -1749,8 +1803,8 @@ void Demux::TemiRecordThreadLoop() {
 int Demux::recordTsPacketForTemiData(uint64_t filterId) {
     mFilters[filterId]->stop();
     mTemiFid = filterId;
-    mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
-    mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTunerService->getTsInput(), false);
+    //mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
+    //mAmDvrDevice[mDemuxId]->AM_DVR_Open(INPUT_LOCAL, mTunerService->getTsInput(), false);
 
     int pid = getFilterTpid(filterId);
     ALOGD("%s/%d TEMI pid = %d", __FUNCTION__, __LINE__, pid);

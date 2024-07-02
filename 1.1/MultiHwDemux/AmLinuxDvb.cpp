@@ -384,7 +384,7 @@ int AmLinuxDvb::getDmaByDemuxId(int demuxId) {
     return -1;
 }
 
-AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, dmx_input_source_t inputSource) {
+AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, dmx_input_source inputSource) {
     DVBDmx_t *dmx = (DVBDmx_t*)dev->drv_data;
     int ret = 0;
     ALOGI("%s/%d", __FUNCTION__, __LINE__);
@@ -411,7 +411,7 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, dmx_input_source_t
     return AM_SUCCESS;
 }
 
-AM_ErrorCode_t AmLinuxDvb::dvr_open(AM_DMX_Device *dev, dmx_input_source_t inputSource) {
+AM_ErrorCode_t AmLinuxDvb::dvr_open(AM_DMX_Device *dev, dmx_input_source inputSource) {
     //int ret = 0;
     char name[32];
     ALOGI("%s/%d", __FUNCTION__, __LINE__);
@@ -475,6 +475,30 @@ AM_ErrorCode_t AmLinuxDvb::dvr_close(void) {
     return AM_SUCCESS;
 }
 
+static int getTsInputById(uint32_t tsInputId) {
+    switch (tsInputId) {
+        case 32:
+            return FRONTEND_TS0;
+        case 33:
+            return FRONTEND_TS1;
+        case 34:
+            return FRONTEND_TS2;
+        case 35:
+            return FRONTEND_TS3;
+        case 36:
+            return FRONTEND_TS4;
+        case 37:
+            return FRONTEND_TS5;
+        case 38:
+            return FRONTEND_TS6;
+        case 39:
+            return FRONTEND_TS7;
+        default:
+            assert(0);
+    }
+    return -1;
+}
+
 AM_ErrorCode_t AmLinuxDvb::dvb_set_source(int id, int input, int source) {
     char node[32] = {0};
     int r = -1;
@@ -491,14 +515,14 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_source(int id, int input, int source) {
             r = 0;
         }
 
-        if (ioctl(fd, DMX_SET_HW_SOURCE, source) == -1)
+        if (ioctl(fd, DMX_SET_HW_SOURCE, getTsInputById(source)) == -1)
         {
-            ALOGD("dvb_set_source ioctl DMX_SET_HW_SOURCE:%d error:%d", source, errno);
+            ALOGD("dvb_set_source ioctl DMX_SET_HW_SOURCE:%d error:%d", getTsInputById(source), errno);
             r = -1;
         }
         else
         {
-            ALOGE("dvb_set_source ioctl succeeded DMX_SET_HW_SOURCE:%d dmx_idx:%d", source, id);
+            ALOGE("dvb_set_source ioctl succeeded DMX_SET_HW_SOURCE:%d dmx_idx:%d", getTsInputById(source), id);
             r = 0;
         }
      }

@@ -21,6 +21,7 @@
 #include <android/hardware/tv/tuner/1.1/ITuner.h>
 #include <inttypes.h>
 #include "Tuner.h"
+
 extern "C" {
 #include "libdsm.h"
 #include "dsc_dev.h"
@@ -53,8 +54,22 @@ namespace implementation {
 
 #define TUNERHAL_DSC_TYPE_PROP "vendor.media.tunerhal.dsc_type"
 #define MAX_SCRAMBLED_CACHE_SIZE 30 * 1024 * 1024
+extern "C" {
+#include "dvr_record.h"
+#include "dvr_playback.h"
+extern DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32_t key_token);
+extern DVR_Result_t dvr_playback_set_key_token(DVR_PlaybackHandle_t handle, int pid, uint32_t key_token);
+}
 
 class Tuner;
+class Demux;
+
+typedef enum PlayType {
+    INVALID = 0,
+    DEMOD_LIVE,
+    DVR_RECORD,
+    DVR_PLAYBACK
+} PLAY_TYPE_t;
 
 class Descrambler : public IDescrambler {
   public:
@@ -73,15 +88,19 @@ class Descrambler : public IDescrambler {
     virtual Return<Result> close() override;
     bool isPidSupported(uint16_t pid);
     bool isDescramblerReady();
+
+  private:
+    virtual ~Descrambler();
+
     bool allocDscChannels();
     bool clearDscChannels();
     bool bindDscChannelToKeyTable(uint32_t dsc_dev_id, uint32_t dsc_handle);
     bool allocNskDscChannels();
     bool clearNskDscChannels();
     bool getTsnSourceStatus(bool *is_local_mode);
+    DVR_Result_t setKeyToken(PlayType type, int pid, int token);
+    PlayType checkPlayType();
 
-  private:
-    virtual ~Descrambler();
     uint32_t mDescramblerId;
     sp<Tuner> mTunerService;
     // Transport stream pid only.
@@ -100,6 +119,10 @@ class Descrambler : public IDescrambler {
     struct dsm_keyslot_list mKeyslotList;
     std::map<uint16_t, uint32_t> es_pid_to_dsc_channel;
     uint32_t mIsNskDsc = 0;
+    sp<Demux> mDemux = nullptr;
+    DVR_RecordHandle_t mRecordHandle = NULL;
+    DVR_PlaybackHandle_t mPlaybackhandle = NULL;
+    PlayType mType = INVALID;
 };
 
 }  // namespace implementation

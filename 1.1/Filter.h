@@ -46,6 +46,16 @@ using ::android::hardware::MQDescriptorSync;
 using FilterMQ = MessageQueue<uint8_t, kSynchronizedReadWrite>;
 const uint32_t BUFFER_SIZE_16M = 0x1000000;
 
+extern "C"  {
+#include "dvr_record.h"
+extern int dvr_record_open_filter(DVR_RecordHandle_t handle, DVR_RecordFilterParams_t *params);
+extern DVR_Result_t dvr_record_start_filter(DVR_RecordHandle_t handle, int filter_idx);
+extern DVR_Result_t dvr_record_stop_filter(DVR_RecordHandle_t handle, int filter_idx);
+extern DVR_Result_t dvr_record_close_filter(DVR_RecordHandle_t handle, int filter_idx);
+}
+
+
+
 class Demux;
 class Dvr;
 
@@ -109,12 +119,12 @@ class Filter : public V1_1::IFilter {
     bool fillDataToDecoder();
     DemuxFilterType getFilterType();
     bool isRawData();
-    void updateIndexType(int scIndType, int tsIndType);
+    int getRecordVideoPid() { return mRecordVideoPid; }
+    int getRecordAudioPid() { return mRecordAudioPid; }
+    void updateIndexType(int iframeIndex, int pusiIndex);
+    void updateCurrentOffset(uint64_t offset);
     bool checkRecordByVideo();
     DemuxRecordScIndexType getScIndexType();
-    int getRecordVideoPid();
-    int getRecordAudioPid();
-    void updateCurrentOffset(uint64_t offset);
     bool getFilterStatus();
 
   private:
@@ -276,9 +286,9 @@ class Filter : public V1_1::IFilter {
 
     uint64_t tempAudioFilterId = -1;
     uint64_t tempVideoFilterId = -1;
-    uint32_t mTsIndexMask = 0;
+    uint32_t mTsIndex;
     DemuxRecordScIndexType mScIndexType = DemuxRecordScIndexType::NONE;
-    uint32_t mScIndexMask = -1;
+    uint32_t mScIndex;
     int mRecordByVideo = -1;
     int mEnableDmaBuf;
     int mFilterFd;
@@ -288,9 +298,20 @@ class Filter : public V1_1::IFilter {
     uint32_t mSequenceNumber = 0;
     int mRecordVideoPid = -1;
     int mRecordAudioPid = -1;
+    uint32_t mTsIndexMask;
+    uint32_t mScIndexMask;
+
+    // PVR parameters
+    DVR_RecordFilterParams_t mFilterParams;
+    int recFilerId = -1;
+    DVR_RecordHandle_t mRecordhandle = NULL;
+    int mPusiIndex = 0;
+    int mIframeIndex = 0;
+    uint64_t mCurrentOffset = -1;
+    FILE *iFrameFile = NULL;
+
     int mTsIndType = -1;
     int mScIndType = -1;
-    uint64_t mCurrentOffset = 0;
     uint64_t mLastOffset = -1;
     int mLastTsIndType = -1;
     int mLastScIndType = -1;
