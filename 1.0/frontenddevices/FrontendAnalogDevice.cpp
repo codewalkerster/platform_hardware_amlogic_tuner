@@ -179,8 +179,11 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
         return -1;
     }
 
+    ALOGD("%s, type:%d, sifStandard:%d, ",__FUNCTION__, settings->analog().type,
+        settings->analog().sifStandard);
+
     p_fe_params->frequency = settings->analog().frequency;
-    if (settings->analog().type >= FrontendAnalogType::UNDEFINED
+    if (settings->analog().type >= FrontendAnalogType::PAL
        && settings->analog().type <= FrontendAnalogType::PAL_60) {
         tmpTVidStd |= V4L2_COLOR_STD_PAL;
     } else if (settings->analog().type == FrontendAnalogType::NTSC
@@ -205,8 +208,6 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
     } else if (settings->analog().sifStandard >= FrontendAnalogSifStandard::M
           && settings->analog().sifStandard <= FrontendAnalogSifStandard::M_EIAJ) {
         tmpAudStd |= V4L2_STD_NTSC_M;
-    } else {
-        tmpAudStd |= V4L2_STD_PAL_BG;
     }
 
     if (settings->analog().type == FrontendAnalogType::UNDEFINED) {

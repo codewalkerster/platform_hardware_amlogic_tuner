@@ -231,13 +231,19 @@ int FrontendDevice::getAnalogPara(FrontendAnalogType & at, FrontendAnalogSifStan
         return UNAVAILABLE;
     }
 
+    ALOGD("%s, v4l2_para.std:0x%x, v4l2_para.audmode:0x%x, ",__FUNCTION__, (int)v4l2_para.std,
+        v4l2_para.audmode);
+
     if ((v4l2_para.std & V4L2_COLOR_STD_PAL) == V4L2_COLOR_STD_PAL) {
-        if ((v4l2_para.audmode & V4L2_STD_PAL_M) == V4L2_STD_PAL_M)
-          at = FrontendAnalogType::PAL_M;
+        if ((v4l2_para.std & V4L2_STD_PAL_M) == V4L2_STD_PAL_M)
+            at = FrontendAnalogType::PAL_M;
+        else if((v4l2_para.std & V4L2_STD_PAL_Nc) == V4L2_STD_PAL_Nc
+            || (v4l2_para.std & V4L2_STD_PAL_N) == V4L2_STD_PAL_N)
+            at = FrontendAnalogType::PAL_N;
         else
-          at = FrontendAnalogType::PAL;
+            at = FrontendAnalogType::PAL;
     } else if ((v4l2_para.std & V4L2_COLOR_STD_NTSC) == V4L2_COLOR_STD_NTSC) {
-        at = FrontendAnalogType::NTSC;
+            at = FrontendAnalogType::NTSC;
     } else if ((v4l2_para.std & V4L2_COLOR_STD_SECAM) == V4L2_COLOR_STD_SECAM) {
         at = FrontendAnalogType::SECAM;
     } else {
@@ -259,8 +265,11 @@ int FrontendDevice::getAnalogPara(FrontendAnalogType & at, FrontendAnalogSifStan
     } else if ((v4l2_para.audmode & V4L2_STD_SECAM_L) == V4L2_STD_SECAM_L) {
         ast = FrontendAnalogSifStandard::L;
     } else {
-        ast = FrontendAnalogSifStandard::DK;
+        ast = FrontendAnalogSifStandard::AUTO;
     }
+
+    ALOGD("%s, at:%d, ast:%d, ",__FUNCTION__, at, ast);
+
 
     return 0;
 }
