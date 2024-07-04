@@ -33,13 +33,9 @@ namespace tv {
 namespace tuner {
 
 namespace {
-constexpr int kTsPacketSize = 188 * 100;
-constexpr int oneTsPacketSize = 188;
-
 bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
-  return (tsPacket.size() == kTsPacketSize && tsPacket[0] == 0x47) || (tsPacket.size() == oneTsPacketSize && tsPacket[0] == 0x47);
+    return tsPacket[0] == 0x47;
 }
-
 }  // namespace
 
 #define WAIT_TIMEOUT 3000000000

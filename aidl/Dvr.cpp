@@ -469,7 +469,7 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
     std::lock_guard<std::mutex> lock(mReadLock);
     size_t size = mDvrMQ->availableToRead();
     int64_t playbackPacketSize = mDvrSettings.get<DvrSettings::Tag::playback>().packetSize * 100; //188 bytes
-    bool bInjectData = false;
+    size_t tmpSize = 0;
     vector<int8_t> dataOutputBuffer;
     dataOutputBuffer.resize(playbackPacketSize);
     // Dispatch the packet to the PID matching filter output buffer
@@ -484,12 +484,13 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
         } else {
             startTpidFilter(dataOutputBuffer);
         }
-        bInjectData = true;
+        tmpSize += playbackPacketSize;
     }
-
-    if (!bInjectData && size > 0 && size < playbackPacketSize && !mFlushing && mDvrThreadRunning) {
-        dataOutputBuffer.resize(size);
-        if (!mDvrMQ->read(dataOutputBuffer.data(), size)) {
+    size_t leftSize = size - tmpSize;
+    if (leftSize > 0 && !mFlushing && mDvrThreadRunning) {
+        ALOGD("[Dvr] inject data left size = %d", leftSize);
+        dataOutputBuffer.resize(leftSize);
+        if (!mDvrMQ->read(dataOutputBuffer.data(), leftSize)) {
             ALOGD("%s/%d read data fail", __FUNCTION__, __LINE__);
             return false;
         }
