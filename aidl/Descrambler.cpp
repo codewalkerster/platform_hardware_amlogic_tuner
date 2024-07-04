@@ -94,6 +94,34 @@ Descrambler::~Descrambler() {
   return ::ndk::ScopedAStatus::ok();
 }
 
+void* Descrambler::caSetKey(void *arg) {
+    Descrambler *dsc = (Descrambler*)arg;
+    bool caReady = false;
+    int num = 0;
+
+    while (dsc && !caReady) {
+        {
+            std::lock_guard<std::mutex> lock(dsc->mDescrambleLock);
+            if (num > 0 && num % 100 == 0)
+                TUNER_DSC_DBG(dsc->mDescramblerId, "Waiting for CA ready %ds", num/100);
+            if (dsc->mDsmFd == -1) {
+                TUNER_DSC_DBG(dsc->mDescramblerId, "Exit ca set key thread!");
+                break;
+            }
+        }
+
+        caReady = dsc->isDescramblerReady();
+        if (caReady) {
+            TUNER_DSC_DBG(dsc->mDescramblerId, "CA is ready! num:%d", num);
+            break;
+        }
+        usleep(10 * 1000);
+        num ++;
+    }
+
+    return NULL;
+}
+
 ::ndk::ScopedAStatus Descrambler::setKeyToken(const std::vector<uint8_t>&  in_keyToken) {
   std::lock_guard<std::mutex> lock(mDescrambleLock);
   TUNER_DSC_TRACE(mDescramblerId);
@@ -183,6 +211,11 @@ Descrambler::~Descrambler() {
     TUNER_DSC_ERR(mDescramblerId, "DSM_SetProperty failed! %s", strerror(errno));
   }
 #endif
+  if (mCaSetKeyThread == 0) {
+      int ret = pthread_create(&mCaSetKeyThread, NULL, caSetKey, this);
+      if (ret < 0)
+          TUNER_DSC_ERR(mDescramblerId, "Create ca set key thread failed! ret=%d", ret);
+  }
 
   return ::ndk::ScopedAStatus::ok();
 }
@@ -492,6 +525,7 @@ Descrambler::~Descrambler() {
       mDemuxSet = false;
     }
   }
+  pthread_join(mCaSetKeyThread, NULL);
 
   return ::ndk::ScopedAStatus::ok();
 }

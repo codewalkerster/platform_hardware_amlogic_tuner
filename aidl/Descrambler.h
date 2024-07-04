@@ -24,6 +24,7 @@ extern "C" {
 #include "libdsm.h"
 #include "dsc_dev.h"
 }
+#include <pthread.h>
 
 using namespace std;
 
@@ -92,6 +93,7 @@ class Descrambler : public BnDescrambler {
     bool clearNskDscChannels();
     bool getTsnSourceStatus(bool *out_isLocalMode);
     DVR_Result_t setKeyToken(int pid, int token);
+    static void* caSetKey(void *arg);
 
     int32_t mSourceDemuxId;
     bool mDemuxSet = false;
@@ -116,6 +118,7 @@ class Descrambler : public BnDescrambler {
     DVR_RecordHandle_t mRecordHandle = NULL;
     DVR_PlaybackHandle_t mPlaybackhandle = NULL;
     std::vector<uint8_t> mBackUpKeyToken;
+    pthread_t mCaSetKeyThread = 0;
 };
 
 }  // namespace tuner

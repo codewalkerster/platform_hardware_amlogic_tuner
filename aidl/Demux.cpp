@@ -1221,15 +1221,6 @@ bool Demux::startRecordFilterDispatcher() {
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (DEBUG_DEMUX)
         ALOGD("%s/%d filterId:%lld", __FUNCTION__, __LINE__, filterId);
-
-    for (auto descramblerIt = mDescramblers.begin();
-         descramblerIt != mDescramblers.end();
-         descramblerIt++) {
-        if (descramblerIt->second && !descramblerIt->second->isDescramblerReady())
-            ALOGV("[Demux] dsc isn't ready.");
-        continue;
-    }
-
     //Create mFilterEvent with mFilterOutput
     if (mFilters[filterId] != nullptr) {
         mFilters[filterId]->startFilterHandler();
