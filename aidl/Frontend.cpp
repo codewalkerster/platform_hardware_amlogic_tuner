@@ -939,14 +939,14 @@ void Frontend::scanThreadLoop() {
 }
 
 ::ndk::ScopedAStatus Frontend::linkCiCam(int32_t in_ciCamId, int32_t* _aidl_return) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGE("%s", __FUNCTION__);
 
-    mCiCamId = in_ciCamId;
-    FileSystem_create();
+    // mCiCamId = in_ciCamId;
+    // FileSystem_create();
 
-    if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
-        ALOGE("set tso_source erro %p\n",this);
-    }
+    // if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
+    //     ALOGE("set tso_source erro %p\n",this);
+    // }
 
     *_aidl_return = 0;
 
@@ -954,14 +954,14 @@ void Frontend::scanThreadLoop() {
 }
 
 ::ndk::ScopedAStatus Frontend::unlinkCiCam(int32_t /* in_ciCamId */) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGE("%s", __FUNCTION__);
 
-    mCiCamId = -1;
-    FileSystem_create();
+    // mCiCamId = -1;
+    // FileSystem_create();
 
-    if (FileSystem_writeFile(TSO_SOURCE, "close") != 0) {
-        ALOGE("set tso_source erro %p\n",this);
-    }
+    // if (FileSystem_writeFile(TSO_SOURCE, "close") != 0) {
+    //     ALOGE("set tso_source erro %p\n",this);
+    // }
 
     return ::ndk::ScopedAStatus::ok();
 }

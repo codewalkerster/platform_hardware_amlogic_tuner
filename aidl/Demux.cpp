@@ -51,6 +51,8 @@ bool isValidTsPacket(const vector<uint8_t>& tsPacket) {
 #define TSO_SOURCE    "/sys/class/stb/tso_source"
 #define SUPPORT_SOFTWARE_DEMUX_TEMI "vendor.tunerhal.softwaredemux.temi"
 
+static int connectcicam_ref;
+static sp<AmCI> mAmCI = NULL;
 static void dump(uint8_t* data, int len) {
     int i;
     string strData;
@@ -129,7 +131,6 @@ Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
     if (mHwDemuxOps != nullptr) {
         mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
     }
-
 }
 #endif
 
@@ -497,8 +498,19 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     mTuner->setFrontendAsDemuxSource(in_frontendId, mDemuxId);
     if (AmDmxDevice) {
         mTsInput = mTuner->getTsInput(in_frontendId);
-        AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTsInput);
-        mAmCI = new AmCI(mDemuxId,mTsInput, INPUT_DEMOD);
+
+        if (checkCiCamInsert()) {
+                if (getDemuxSource() < 0x0F)/*0~15 for PCMCIA type,16~31 USB type */
+                    AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS1);
+                else
+                    AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_LOCAL, DMA_4);
+        }
+        else
+            AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTsInput);
+
+        if (!mAmCI)
+            mAmCI = new AmCI(mDemuxId,mTsInput, INPUT_DEMOD);
+
     }
     return ::ndk::ScopedAStatus::ok();
 }
@@ -810,9 +822,9 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
         AmDmxDevice->AM_DMX_Close();
         AmDmxDevice = NULL;
     }
-    if (mAmCI != NULL) {
-        mAmCI = NULL;
-    }
+    //if (mAmCI != nullptr) {
+    //    mAmCI = nullptr;
+    //}
     if (mTuner != nullptr) {
         mTuner->removeDemux(mDemuxId);
     }
@@ -871,6 +883,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             if (!mDvrRecord->createDvrMQ()) {
                 mDvrRecord = nullptr;
                 *_aidl_return = mDvrRecord;
+
                 return ::ndk::ScopedAStatus::fromServiceSpecificError(
                         static_cast<int32_t>(Result::UNKNOWN_ERROR));
             }
@@ -895,26 +908,31 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 
 ::ndk::ScopedAStatus Demux::connectCiCam(int32_t in_ciCamId) {
     ALOGD("%s TS change to passthough %d %d", __FUNCTION__,in_ciCamId, mDemuxId);
+    if (bCiInsert == false)
+    {
+        mCiCamId = in_ciCamId;
+        bCiInsert = true;
+        connectcicam_ref++;
+        if (mCiCamId < 0x0F) {/*0~15 for PCMCIA type,16~31 USB type */
+            if (connectcicam_ref == 1) {
+                FileSystem_create();
 
-    mCiCamId = in_ciCamId;
+                if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
+                    ALOGE("set tso_source erro %p\n",this);
+                }
+            }
 
-    // mAmCI[mDemuxId]->ciCamId = in_ciCamId;
-    mCiCamId = in_ciCamId;
-    bCiInsert = true;
-    if (mCiCamId < 8) {
-        FileSystem_create();
+            if (AmDmxDevice != NULL) {
+                ALOGD("%s passthough %d %d", __FUNCTION__,in_ciCamId, mDemuxId);
+                AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS1);
+            }
+        } else {
+            if (connectcicam_ref == 1)
+                mAmCI->CIUsbOpen();
 
-        if (FileSystem_writeFile(TSO_SOURCE, "ts2") != 0) {
-            ALOGE("set tso_source erro %p\n",this);
+            mAmCI->setDvbSource(mDemuxId, INPUT_LOCAL, DMA_4);
+
         }
-
-        if (AmDmxDevice != NULL) {
-            ALOGD("%s passthough %d %d", __FUNCTION__,in_ciCamId, mDemuxId);
-            AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS1);
-        }
-    } else {
-        mAmCI->setDvbSource(0, INPUT_LOCAL, DMA_5);
-        mAmCI->CIUsbOpen();
     }
 
     return ::ndk::ScopedAStatus::ok();
@@ -922,15 +940,23 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 
 ::ndk::ScopedAStatus Demux::disconnectCiCam() {
     ALOGD("%s TS change to bypass %d %d", __FUNCTION__, mCiCamId, mDemuxId);
-    bCiInsert = false;
-    if (mCiCamId < 8) {
-        if (AmDmxDevice != NULL) {
-            AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS2);
+    if (bCiInsert == true)
+    {
+        bCiInsert = false;
+        connectcicam_ref--;
+        if (mCiCamId < 0x0F) {/*0~15 for PCMCIA type,16~31 USB type */
+            if (AmDmxDevice != NULL) {
+                AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS2);
+            }
+        } else {
+            ALOGD("%s mTsInput = %d", __FUNCTION__, mTsInput);
+            mAmCI->setDvbSource(mDemuxId, INPUT_DEMOD, mTsInput);
+
+            if (connectcicam_ref == 0)
+                mAmCI->CIUsbClose();
         }
-    } else {
-        mAmCI->setDvbSource(0, INPUT_DEMOD, FRONTEND_TS2);
-        mAmCI->CIUsbClose();
     }
+
     return ::ndk::ScopedAStatus::ok();
 }
 

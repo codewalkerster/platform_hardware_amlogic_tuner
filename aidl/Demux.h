@@ -166,6 +166,7 @@ class Demux : public BnDemux {
     bool checkDemuxRecord() { return bDemuxUseRecord; }
     bool checkCiCamInsert() { return bCiInsert; }
     std::shared_ptr<Descrambler> getDescrambler();
+    int32_t getDemuxSource() { return mCiCamId; }
 
   private:
     // Tuner service
@@ -293,7 +294,7 @@ class Demux : public BnDemux {
     int mTemiFid = -1;
     int mTemiRecordFid = -1;
     bool bSupportSoftDemuxForTemi = false;
-    sp<AmCI> mAmCI = NULL;
+    // sp<AmCI> mAmCI = NULL;
     DVR_RecordHandle_t mTemiRecHandle = NULL;
     DVR_RecordReceiveParams_t mTemiReceiveParam;
 

@@ -107,7 +107,7 @@ bool AmCI::set_usbcam_recording_demux(int source)
     //Aml_MP_SetDemuxSource(rec_dev_id, source); it has been setting in amDvr.cpp
     //mpCIApi->set_dvb_source(rec_dev_id, mTsInput, mSource);
     setDvbSource(rec_dev_id, INPUT_DEMOD, getTsInputById(source));
-    setDvbSource(inj_dev_id, INPUT_LOCAL, DMA_5);
+    setDvbSource(inj_dev_id, INPUT_LOCAL, DMA_4);
     ALOGD("================= set usb camcard data source %d", source);
 
     snprintf(rec_dmx_path, sizeof(rec_dmx_path), "/dev/dvb0.demux%d", rec_dev_id);
@@ -493,8 +493,11 @@ int AmCI::record_from_tsin(void* buff, int buff_len)
 #ifdef DEMUX_USB_MODULE_DEBUG
         ALOGD("fds revents %d", fds[0].revents);
 #endif
+        // return -1;
     }
     ret = read(rec_dvr_fd, buff, buff_len);
+    if (ret < 0)
+        ALOGD("record_from_tsin error: ret = %d, [%d]%s", ret, -errno, strerror(errno));
     return ret;
 }
 
@@ -516,56 +519,78 @@ bool AmCI::CIUsbModuleInserted()
     return module_inserted;
 }
 
+void* AmCI::CIUsbMonitorMediaWRTread(void *args)
+{
+    AmCI *pAmCI = (AmCI*)args;
+    const char *media_node = "/dev/cimodule_media0";
+    void *status = NULL;
+    while (1) {
+        usleep(10000);
+        if (0 == access(media_node, F_OK)) {
 
+            if (pAmCI->thread_running == false) {
+
+                pAmCI->inj_dev_id = 4;
+                pAmCI->rec_dev_id = 5;
+                pAmCI->prepare_working_demuxes();
+                pAmCI->thread_running = true;
+
+                pthread_create(&(pAmCI->tMediaReadTaskId), NULL, AmCI::cimodule_media_read_task, pAmCI);
+                ALOGD("cimodule_media_read_task success");
+                pthread_create(&(pAmCI->tMediaWriteTaskId), NULL, AmCI::cimodule_media_write_task, pAmCI);
+                ALOGD("cimodule_media_write_task success");
+            }
+        } else {
+
+            if (pAmCI->thread_running == true) {
+
+                pAmCI->thread_running = false;
+
+                if (pthread_join(pAmCI->tMediaReadTaskId, &status) != 0)
+                {
+                    ALOGD("media read task join failed =======");
+                }
+
+                if (pthread_join(pAmCI->tMediaWriteTaskId, &status) != 0)
+                {
+                    ALOGD("media write task join failed ======");
+                }
+
+                pAmCI->setDvbSource(pAmCI->rec_dev_id, INPUT_DEMOD, FRONTEND_TS0);
+                pAmCI->setDvbSource(pAmCI->inj_dev_id, INPUT_DEMOD, FRONTEND_TS0);
+                ioctl(pAmCI->rec_dmx_fd, DMX_STOP, 0);
+                close(pAmCI->rec_dmx_fd);
+                close(pAmCI->rec_dvr_fd);
+                close(pAmCI->inj_dvr_fd);
+                pAmCI->rec_dmx_fd = -1;
+                pAmCI->rec_dvr_fd = -1;
+                pAmCI->inj_dvr_fd = -1;
+            }
+        }
+    }
+
+    return NULL;
+
+}
 
 int AmCI::CIUsbOpen()
 {
     ALOGD("AmCI %s", __FUNCTION__);
     init_mutex();
 
-    if (thread_running)
-        return true;
-
     module_inserted = true;
-    thread_running = true;
-    inj_dev_id = 4;
-    rec_dev_id = 5;
-    prepare_working_demuxes();
-ALOGD("AmCI %s", __FUNCTION__);
-    pthread_create(&tMediaReadTaskId, NULL, cimodule_media_read_task, this);
-    ALOGD("cimodule_media_read_task success");
-    pthread_create(&tMediaWriteTaskId, NULL, cimodule_media_write_task, this);
-    ALOGD("cimodule_media_write_task success");
+
+    if (thread_init == false) {
+        pthread_create(&tMediaWRTaskId, NULL, CIUsbMonitorMediaWRTread, this);
+        thread_init = true;
+    }
 
     return true;
 }
 
 int AmCI::CIUsbClose()
 {
-    void *status = NULL;
-
-    thread_running = false;
-    ALOGD("AmCI %s thread_running %d", __FUNCTION__,thread_running);
-    if (pthread_join(tMediaReadTaskId, &status) != 0)
-    {
-        ALOGD("media read task join failed =======");
-    }
-    if (pthread_join(tMediaWriteTaskId, &status) != 0)
-    {
-        ALOGD("media write task join failed ======");
-    }
-
-    int dmxid = 0;
-    setDvbSource(dmxid, INPUT_DEMOD, getTsInputById(mTsInput));
-    setDvbSource(rec_dev_id, INPUT_DEMOD, FRONTEND_TS0);
-    setDvbSource(inj_dev_id, INPUT_DEMOD, FRONTEND_TS0);
-    ioctl(rec_dmx_fd, DMX_STOP, 0);
-    close(rec_dmx_fd);
-    close(rec_dvr_fd);
-    close(inj_dvr_fd);
-    rec_dmx_fd = -1;
-    rec_dvr_fd = -1;
-    inj_dvr_fd = -1;
+    ALOGD("CIUsbClose");
 
     module_inserted = false;
 

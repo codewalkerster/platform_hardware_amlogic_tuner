@@ -79,6 +79,7 @@ public:
     static void *cimodule_media_read_task(void *args);
     static void *cimodule_media_write_task(void *args);
     static void *cimodule_cmd_read_task(void *args);
+    static void *CIUsbMonitorMediaWRTread(void *args);
     AmCIModuleApi* getCIModuelApi();
     int setDvbSource(int dmxId, int input, int source);
     int getUsbcamDriverStatus();
@@ -100,8 +101,8 @@ private:
     int mDemuxId = -1;
     int mTsInput = -1;
     int mSource  = -1;
-    int rec_dev_id = 4;
-    int inj_dev_id = 5;
+    int inj_dev_id = 4;
+    int rec_dev_id = 5;
     int rec_dvr_fd = -1;
     int rec_dmx_fd = -1;
     int inj_dvr_fd = -1;
@@ -115,6 +116,7 @@ private:
     pthread_t tMediaReadTaskId;
     pthread_t tMediaWriteTaskId;
     pthread_t tCmdReadTaskId;
+    pthread_t tMediaWRTaskId;
 
     unsigned char *g_pCmdWriteBuf = NULL;
     unsigned char *g_pCmdReadBuf = NULL;
@@ -124,8 +126,10 @@ private:
     //int ci_cmd_len;
     bool module_inserted = true;
     bool mutex_init = true;
+    bool thread_init = false;
     DataBlock *data_block_head = NULL;
     AmCIModuleApi *mpCIApi = NULL;
+
 };
 
 

@@ -56,8 +56,12 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>&
         if (bPlayback) {
             mOpenParams.src = static_cast<DVB_DemuxSource_t>(DVB_DEMUX_SOURCE_DMA0 + mDemux->getDemuxId());
         } else {
-            if (mDemux->checkCiCamInsert())
-                mOpenParams.src = DVB_DEMUX_SOURCE_TS1;
+            if (mDemux->checkCiCamInsert()) {
+                if (mDemux->getDemuxSource() < 0x0F) /*0~15 for PCMCIA type,16~31 USB type */
+                    mOpenParams.src = DVB_DEMUX_SOURCE_TS1;
+                else
+                    mOpenParams.src = DVB_DEMUX_SOURCE_DMA4;
+            }
             else
                 mOpenParams.src = getDemuxSourceByTsInput(mDemux->getTsInput());
         }
