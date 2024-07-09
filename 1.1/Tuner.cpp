@@ -24,6 +24,7 @@
 #include "Frontend.h"
 #include "Lnb.h"
 #include "FileSystemIo.h"
+#include "dsc_dev.h"
 
 namespace android {
 namespace hardware {
@@ -232,6 +233,7 @@ Tuner::Tuner() {
                 auto& arrayHwFes = root["hwfe"];
                 auto& arrayFronts = root["frontends"];
                 auto& dmxSetting = root["dmxsetting"];
+                auto& dvrSetting = root["dvrsetting"];
                 for (int i = 0; i < arrayHwFes.size(); i ++) {
                     if (!arrayHwFes[i]["id"].isNull()) {
                         int hwId = arrayHwFes[i]["id"].asInt();
@@ -396,6 +398,10 @@ Tuner::Tuner() {
                     mTsInput = dmxSetting["ts_input"].asInt();
                     ALOGD("ts_input = %d", mTsInput);
                 }
+                if (!dvrSetting["encrypt_pvr"].isNull()) {
+                    mEncryptPvr = dvrSetting["encrypt_pvr"].asInt();
+                    ALOGD("encrypt_pvr = %d", mEncryptPvr);
+                }
             }
             mLnbs.resize(1);
             if (mHwFes.size() > 0) {
@@ -419,6 +425,7 @@ Tuner::Tuner() {
     }
 
     setTsnSource();
+    ca_init();
 }
 
 Tuner::~Tuner() {}
@@ -470,7 +477,7 @@ Return<void> Tuner::openDemux(openDemux_cb _hidl_cb) {
         it = mDemuxes.find(mLastUsedId);
     }
 
-    if (mLastUsedId == NUMDEMX)
+    if (mLastUsedId == NUMDEMUX)
         mLastUsedId = 1; //match with cbs, dmxid 0 for dtvfs, dmxid 1 for dtvinput
 
     DemuxId demuxId = mLastUsedId;
@@ -485,7 +492,7 @@ Return<void> Tuner::getDemuxCaps(getDemuxCaps_cb _hidl_cb) {
     ALOGV("%s", __FUNCTION__);
 
     DemuxCapabilities caps;
-    caps.numDemux                = NUMDEMX;
+    caps.numDemux                = NUMDEMUX;
     caps.numRecord               = NUMRECORD;
     caps.numPlayback             = NUMPLAYBACK;
     caps.numTsFilter             = NUMTSFILTER;
@@ -761,6 +768,32 @@ sp<Demux> Tuner::getDemuxById(uint32_t demuxId) {
     }
 }
 
+int Tuner::allocateDemuxResource() {
+    mInternalDemuxId = NUMDEMUX;
+    auto it = std::find(mInterDmxIdManager.begin(), mInterDmxIdManager.end(), mInternalDemuxId);
+    while (it != mInterDmxIdManager.end()) {
+        mInternalDemuxId++;
+        it = std::find(mInterDmxIdManager.begin(), mInterDmxIdManager.end(), mInternalDemuxId);
+    }
+    ALOGD("allocate mInternalDemuxId = %d", mInternalDemuxId);
+    mInterDmxIdManager.push_back(mInternalDemuxId);
+    return mInternalDemuxId;
+}
+
+void Tuner::removeDemuxResource(int internalDemuxId) {
+    ALOGD("[%s/%d]internalDemuxId = %d", __FUNCTION__, __LINE__, internalDemuxId);
+    for (auto iter = mInterDmxIdManager.begin(); iter != mInterDmxIdManager.end();) {
+        if (internalDemuxId == *iter) {
+            iter = mInterDmxIdManager.erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+}
+
+uint32_t Tuner::getEncryptPvrSetting() {
+    return mEncryptPvr;
+}
 }  // namespace implementation
 }  // namespace V1_0
 }  // namespace tuner

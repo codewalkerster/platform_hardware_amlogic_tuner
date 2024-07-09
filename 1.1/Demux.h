@@ -56,7 +56,7 @@ class TimeFilter;
 class Tuner;
 #define DMX_COUNT (6)
 #define DVR_BUFFER_LEN    (20*188*1024)
-#define DVR_MAX_PUSI_LEN  (3*188*1024)
+#define DVR_MAX_PUSI_LEN  (12*188*1024)
 
 extern "C" {
 #include "dvr_playback.h"
@@ -146,32 +146,14 @@ class Demux : public IDemux {
     bool checkDemuxRecord() { return bDemuxUseRecord; }
     int getTsInput();
     void getTemiData(uint64_t filterId);
-    uint64_t getVideoFid();
-    sp<AmTsIndexer> getAmTsIndexer();
-    TS_Indexer_StreamFormat_t convertVideoFormatToTsIndexFormat(int vf);
-    void setCurrentPts(uint64_t pts);
-    uint64_t getCurrentPts();
+    uint64_t getVideoFid();;
     int getRecordVideoPid();
     int getRecordAudioPid();
-    int getScIndexTypeForVideoFormat();
-    void setTsIndexType(int tsIndexType);
-    int getTsIndexType();
-    void setIFrame(int iFrame);
-    int getIFrame();
     int recordTsPacketForTemiData(uint64_t filterId);
     void closeTemiRecordFilter();
     int getTemiFid();
     bool checkSoftDemuxForTemi();
-
-    uint8_t *base_ptr = NULL;
-    uint8_t *last_pusi_ptr = NULL;
-    uint64_t last_pusi_offset = 0;;
-    uint64_t cache_len = 0;
-    uint8_t *cache_data = NULL;
-    uint64_t cnt = 0;
-    uint64_t count = 0;
-    bool     bUseTsIndexer = false;
-    uint32_t flags = 0;
+    sp<Descrambler> getDescrambler();
 
   private:
     // Tuner service
@@ -276,7 +258,6 @@ class Demux : public IDemux {
     sp<MediaSyncWrap> mMediaSync = nullptr;
     //sp<AmDvr> mAmDvrDevice[DMX_COUNT] = { NULL };
     sp<AmPesFilter> mAmPesFilter = NULL;
-    sp<AmTsIndexer> mAmTsIndexer[DMX_COUNT] = { NULL };
     int mAvSyncHwId = -1;
     int mPesFid = -1;
     int mPesRecordFid = -1;
@@ -303,17 +284,12 @@ class Demux : public IDemux {
     bool bDemuxUsePlayback = false;
     bool bDemuxUseRecord   = false;
 
-    uint64_t mCurPts = -1;
-    bool bInitTsIndexer = false;
-    int  mTsIndexType = -1;
-    int  mIFrame     = -1;
-    uint64_t mCurOffset = 0;
-
     std::thread mTemiRecordThread;
     std::atomic<bool> mTemiRecordThreadRunning;
     int mTemiFid = -1;
     int mTemiRecordFid = -1;
     bool bSupportSoftDemuxForTemi = false;
+    sp<Descrambler> mDesc = nullptr;
 };
 
 }  // namespace implementation

@@ -41,7 +41,7 @@ class Lnb;
 class Descrambler;
 class HwFeState;
 
-#define NUMDEMX 6
+#define NUMDEMUX 4
 #define NUMDSC 16
 #define NUMRECORD 4
 #define NUMPLAYBACK 4
@@ -92,6 +92,9 @@ class Tuner : public ITuner {
     void attachDescramblerToDemux(uint32_t descramblerId, uint32_t demuxId) const;
     void detachDescramblerFromDemux(uint32_t descramblerId, uint32_t demuxId) const;
     sp<Demux> getDemuxById(uint32_t demuxId);
+    int allocateDemuxResource();
+    void removeDemuxResource(int internalDemuxId);
+    uint32_t getEncryptPvrSetting();
 
     uint32_t getTsInput();
     void setTsnSource();
@@ -137,6 +140,12 @@ class Tuner : public ITuner {
     uint32_t mTsInput = -1;
     uint32_t mDscMode = -1;
     std::mutex mLock;
+    uint32_t mEncryptPvr = -1;
+
+    //Demux resource internal manager
+    uint32_t mInternalDemuxId = -1;
+    vector<int> mInterDmxIdManager;
+
 };
 
 }  // namespace implementation

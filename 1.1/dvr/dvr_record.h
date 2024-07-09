@@ -19,7 +19,7 @@ extern "C"
 #include "dvb_utils.h"
 
 // Max PUSI data len
-#define DVR_BLOCK_SIZE              (3*188*1024)
+#define DVR_BLOCK_SIZE              (12*188*1024)
 
 /**\brief DVR record handle*/
 typedef void* DVR_RecordHandle_t;
@@ -66,6 +66,7 @@ typedef struct {
 typedef struct {
   DVB_DemuxSource_t     src;                    /**< Demux input source */
   int                   dmx_dev_id[3];          /**< Demux device id */
+  int                   encrypt_pvr;            /**< encrypted pvr or not */
   int                   sec_buf_size;           /**< secure dvr buffer size */
   int                   non_sec_ringbuf_size;   /**< none secure ring buffer size */
   int                   reserved[8];            /**< reserved */

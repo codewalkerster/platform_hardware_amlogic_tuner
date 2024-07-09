@@ -424,10 +424,14 @@ static void find_h265(uint8_t *data, int len, TS_Indexer_t *indexer, TSParser *s
 
         case HEVC_NALU_IDR_N_LP:
             //event.type = TS_INDEXER_EVENT_TYPE_HEVC_IDR_N_LP;
+            indexer->pusi[indexer->pusi_cur_idx].flags |= DVR_INDEX_IFRAME;
+            DVR_INFO("HEVC IDR_N_LP frame found\n");
             break;
 
         case HEVC_NALU_TRAIL_CRA:
             //event.type = TS_INDEXER_EVENT_TYPE_HEVC_TRAIL_CRA;
+            indexer->pusi[indexer->pusi_cur_idx].flags |= DVR_INDEX_IFRAME;
+            DVR_INFO("HEVC CRA frame found\n");
             break;
 
         case HEVC_NALU_SPS:
@@ -525,6 +529,7 @@ pes_packet(TS_Indexer_t *ts_indexer, uint8_t *data, int len, TSParser *stream)
         //event.type = TS_INDEXER_EVENT_TYPE_AUDIO_PTS;
       }
       pi->pusi[pi->pusi_cur_idx].pts = stream->PES.pts;
+      DVR_INFO("pts = %lld in dvr\n", stream->PES.pts);
     }
     if (stream->format != -1) {
       stream->PES.state = TS_INDEXER_STATE_PES_PTS;
@@ -589,10 +594,12 @@ ts_packet(TS_Indexer_t *ts_indexer, uint8_t *data, size_t rp)
     //event.type = TS_INDEXER_EVENT_TYPE_START_INDICATOR;
     if (pid == pi->video_parser.pid) {
       pi->video_parser.offset = pi->offset;
+      pi->video_parser.PES.len = 0;
       pi->video_parser.PES.state = TS_INDEXER_STATE_TS_START;
     }
     else if (pid == pi->audio_parser.pid) {
       pi->audio_parser.offset = pi->offset;
+      pi->audio_parser.PES.len = 0;
       pi->audio_parser.PES.state = TS_INDEXER_STATE_TS_START;
     }
 

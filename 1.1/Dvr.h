@@ -75,7 +75,7 @@ class Dvr : public IDvr {
   public:
     Dvr();
 
-    Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux> demux);
+    Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux> demux, sp<Tuner> tuner);
 
     ~Dvr();
 
@@ -195,6 +195,7 @@ class Dvr : public IDvr {
     int videoPid = -1;
     int audioPid = -1;
     FILE *recordFile = NULL;
+    sp<Tuner> mTuner;
 };
 
 }  // namespace implementation

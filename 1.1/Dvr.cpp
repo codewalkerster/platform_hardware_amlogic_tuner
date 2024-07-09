@@ -39,7 +39,7 @@ Dvr::Dvr() {
     mKeepFetchingDataFromFrontend = false;
 }
 
-Dvr::Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux> demux) {
+Dvr::Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux> demux, sp<Tuner> tuner) {
     mType = type;
     mBufferSize = bufferSize;
     mCallback = cb;
@@ -47,6 +47,7 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux
     mKeepFetchingDataFromFrontend = false;
     mDvrEventFlag = NULL;
     mDvrThread = 0;
+    mTuner = tuner;
     mPlaybackStatus = PlaybackStatus(1u);
     mRecordStatus = DemuxFilterStatus(0);
     ALOGD("%s/%d type:%d bufsize:%d MB", __FUNCTION__, __LINE__, (int)type, bufferSize/1024/1024);
@@ -74,10 +75,11 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const sp<IDvrCallback>& cb, sp<Demux
             mOpenParams.src = getDemuxSourceByTsInput(mDemux->getTsInput());
         }
         mOpenParams.dmx_dev_id[0] = mDemux->getDemuxId();
-        mOpenParams.dmx_dev_id[1] = 4; //keep demux4 is idle(unused)
-        mOpenParams.dmx_dev_id[2] = 5; //keep demux5 is idle(unused)
+        mOpenParams.dmx_dev_id[1] = mTuner->allocateDemuxResource(); //keep demux4 is idle(unused)
+        mOpenParams.dmx_dev_id[2] = mTuner->allocateDemuxResource(); //keep demux5 is idle(unused)
         mOpenParams.non_sec_ringbuf_size = DVR_BUFFER_LEN;
         mOpenParams.sec_buf_size         = DVR_BUFFER_LEN;
+        mOpenParams.encrypt_pvr          = mTuner->getEncryptPvrSetting();
         DVR_Result_t ret = dvr_record_open(&mRecordhandle, &mOpenParams);
         if (ret != DVR_SUCCESS) {
             ALOGD("open dvr record failed!\n");
@@ -285,11 +287,13 @@ Return<Result> Dvr::close() {
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr playback failed!\n");
         }
+        mDemux->setPlaybackHandle(NULL);
     } else if (mType == DvrType::RECORD) {
         DVR_Result_t ret = dvr_record_close(mRecordhandle);
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr record failed!\n");
         }
+        mDemux->setRecordHandle(NULL);
     }
     return Result::SUCCESS;
 }
@@ -474,6 +478,7 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
     // Read playback data from the input FMQ
     int size = mDvrMQ->availableToRead();
     int playbackPacketSize = mDvrSettings.playback().packetSize * 100;//188 bytes
+    size_t tmpSize = 0;
     vector<uint8_t> dataOutputBuffer;
     dataOutputBuffer.resize(playbackPacketSize);
     // Dispatch the packet to the PID matching filter output buffer
@@ -490,8 +495,19 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
         } else {
             startTpidFilter(dataOutputBuffer);
         }
+        tmpSize += playbackPacketSize;
     }
 
+    size_t leftSize = size - tmpSize;
+    if (leftSize > 0 && !mFlushing && mDvrThreadRunning) {
+        ALOGD("[Dvr] inject data left size = %d", leftSize);
+        dataOutputBuffer.resize(leftSize);
+        if (!mDvrMQ->read(dataOutputBuffer.data(), leftSize)) {
+            ALOGD("%s/%d read data fail", __FUNCTION__, __LINE__);
+            return false;
+        }
+        mDemux->startBroadcastTsFilter(dataOutputBuffer);
+    }
     return true;
 }
 

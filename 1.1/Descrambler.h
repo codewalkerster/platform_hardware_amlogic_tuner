@@ -64,13 +64,6 @@ extern DVR_Result_t dvr_playback_set_key_token(DVR_PlaybackHandle_t handle, int 
 class Tuner;
 class Demux;
 
-typedef enum PlayType {
-    INVALID = 0,
-    DEMOD_LIVE,
-    DVR_RECORD,
-    DVR_PLAYBACK
-} PLAY_TYPE_t;
-
 class Descrambler : public IDescrambler {
   public:
     Descrambler(uint32_t descramblerId, sp<Tuner> tuner);
@@ -88,6 +81,8 @@ class Descrambler : public IDescrambler {
     virtual Return<Result> close() override;
     bool isPidSupported(uint16_t pid);
     bool isDescramblerReady();
+    std::vector<uint8_t> getBackUpKeyToken();
+    void closeDsmSession();
 
   private:
     virtual ~Descrambler();
@@ -98,19 +93,19 @@ class Descrambler : public IDescrambler {
     bool allocNskDscChannels();
     bool clearNskDscChannels();
     bool getTsnSourceStatus(bool *is_local_mode);
-    DVR_Result_t setKeyToken(PlayType type, int pid, int token);
-    PlayType checkPlayType();
+    DVR_Result_t setKeyToken(int pid, int token);
 
     uint32_t mDescramblerId;
     sp<Tuner> mTunerService;
+    std::set<uint16_t> mAddedPid;
     // Transport stream pid only.
-    std::set<uint16_t> added_pid;
     uint32_t mSourceDemuxId;
     bool mDemuxSet = false;
     std::mutex mDescrambleLock;
     bool mIsReady = false;
     uint32_t mCasSessionToken = 0;
     bool mIsLocalMode = false;
+    uint32_t mKeyToken;
 
     int32_t mDsmFd = -1;
     int32_t mDscType = -1;
@@ -119,10 +114,12 @@ class Descrambler : public IDescrambler {
     struct dsm_keyslot_list mKeyslotList;
     std::map<uint16_t, uint32_t> es_pid_to_dsc_channel;
     uint32_t mIsNskDsc = 0;
+    uint32_t mCasSessionUsage = DSM_PROP_SESSION_USAGE_LIVE;
+
     sp<Demux> mDemux = nullptr;
     DVR_RecordHandle_t mRecordHandle = NULL;
     DVR_PlaybackHandle_t mPlaybackhandle = NULL;
-    PlayType mType = INVALID;
+    std::vector<uint8_t> mBackUpKeyToken;
 };
 
 }  // namespace implementation

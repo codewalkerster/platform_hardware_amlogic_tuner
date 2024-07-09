@@ -30,7 +30,7 @@
 
 #define DVR_MAX_RECORD_SESSION_CNT  (4)
 #define DVR_MAX_RECORD_PID_CNT      (16)
-#define DVR_MAX_RECORD_PUSI_CNT     (100)
+#define DVR_MAX_RECORD_PUSI_CNT     (200)
 #define DVR_TIMEOUT                 (100)
 
 #define HAVE_PUSI(_m_)      ((_m_) & INDEX_PUSI)
@@ -82,6 +82,7 @@ typedef struct {
 typedef struct {
   int fd[4];                                            /**< DVR record device file descriptor*/
   int recfd;                                            /**< DVR record fd for record whole ts*/
+  int eventfd;                                          /**< DVR record event fd for polling*/
   int dmx_dev_id[3];                                    /**< DVR record devices*/
   DVB_DemuxSource_t src;                                /**< DVR record dvr source*/
   pthread_mutex_t lock;                                 /**< DVR record context mutex*/
@@ -89,6 +90,7 @@ typedef struct {
 
   int is_secure_mode;                                   /**< DVR record session run in secure mode*/
   size_t dsm_sess;                                      /**< DVR record descrambling session*/
+  int encrypt_pvr;                                      /**< DVR record encrypt or not*/
   size_t sects_sess;                                    /**< DVR record secure ts indexer session*/
   int ca_flags;                                         /**< DVR record usage ready flags*/
 
@@ -135,6 +137,7 @@ int (*SECTS_IndexerParse_Func)(
         size_t max_pusi_cnt);
 size_t (*SECTS_Map2InjBuff_Func)(size_t session, size_t sec_buf, size_t len);
 int (*SECTS_Deinit_Func)(void);
+static int dvr_poll_exit(int event_fd);
 
 static int load_sects_library(void)
 {
@@ -362,7 +365,10 @@ static int ca_prepare(
   }
 
   if (usage == DVR_CA_USAGE_DES) {
-    dmx_dev_id = p_ctx->dmx_dev_id[1];
+    if (p_ctx->encrypt_pvr)
+        dmx_dev_id = p_ctx->dmx_dev_id[1];
+    else
+        dmx_dev_id = p_ctx->dmx_dev_id[0];
     dsc_type = CA_DSC_COMMON_TYPE;
 
     // Check if descrambling slot is ready
@@ -391,7 +397,7 @@ static int ca_prepare(
   DVR_CHECK(keyslot_list.count > 0);
 
   if (p_ctx->ca_flags == 0) {
-    DVR_CHECK(ca_init() == 0);
+    //DVR_CHECK(ca_init() == 0);
   }
 
   if (!(p_ctx->ca_flags & usage)) {
@@ -518,9 +524,6 @@ static int ca_release(DVR_RecordContext_t *p_ctx, DVR_RecordStream_t *stream)
         stream->ca.chans[i] = -1;
     }
   }
-
-  p_ctx->ca_flags = 0;
-
   return 0;
 }
 
@@ -596,6 +599,7 @@ DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_
   }
 
   memcpy(p_ctx->dmx_dev_id, params->dmx_dev_id, sizeof(params->dmx_dev_id));
+  p_ctx->encrypt_pvr = params->encrypt_pvr;
   p_ctx->sects_sess = -1;
   p_ctx->dsm_sess = -1;
   p_ctx->is_secure_mode = 0;
@@ -655,6 +659,7 @@ DVR_Result_t dvr_record_open(DVR_RecordHandle_t *p_handle, DVR_RecordOpenParams_
   memcpy(&p_ctx->reserved[0], &params->reserved[0], sizeof(params->reserved));
   p_ctx->src = params->src;
   p_ctx->state = DVR_RECORD_STATE_OPENED;
+  p_ctx->eventfd = eventfd(0, 0);
 
   *p_handle = p_ctx;
   pthread_mutex_unlock(&p_ctx->lock);
@@ -682,6 +687,8 @@ DVR_Result_t dvr_record_close(DVR_RecordHandle_t handle)
     p_ctx->fd[1] = -1;
     p_ctx->fd[2] = -1;
   }
+  close(p_ctx->eventfd);
+  p_ctx->eventfd = -1;
 
   if (p_ctx->rb0.buffer) {
     free(p_ctx->rb0.buffer);
@@ -696,6 +703,13 @@ DVR_Result_t dvr_record_close(DVR_RecordHandle_t handle)
       p_ctx->streams[i].key_token = -1;
     }
   }
+
+  if (p_ctx->ca_flags & DVR_CA_USAGE_DES)
+    ca_close(p_ctx->dmx_dev_id[1]);
+  if (p_ctx->ca_flags & DVR_CA_USAGE_ENC)
+    ca_close(p_ctx->dmx_dev_id[2]);
+  p_ctx->ca_flags = 0;
+
   secure_resource_release(p_ctx);
 
   p_ctx->state = DVR_RECORD_STATE_CLOSED;
@@ -727,7 +741,6 @@ DVR_Result_t dvr_record_start(DVR_RecordHandle_t handle)
 DVR_Result_t dvr_record_stop(DVR_RecordHandle_t handle)
 {
   DVR_RecordContext_t *p_ctx = (DVR_RecordContext_t *)handle;
-
   DVR_CHECK(p_ctx != NULL);
   pthread_mutex_lock(&p_ctx->lock);
   DVR_CHECK_WITH_UNLOCK(
@@ -739,6 +752,7 @@ DVR_Result_t dvr_record_stop(DVR_RecordHandle_t handle)
 
   // stop record device
   p_ctx->state = DVR_RECORD_STATE_STOPPED;
+  dvr_poll_exit(p_ctx->eventfd);
   pthread_mutex_unlock(&p_ctx->lock);
   return DVR_SUCCESS;
 }
@@ -762,7 +776,7 @@ int dvr_record_open_filter(DVR_RecordHandle_t handle, DVR_RecordFilterParams_t *
   // The pid should use secure if it has key token
   for (i = 0; i < DVR_MAX_RECORD_PID_CNT; i++) {
     if (p_ctx->streams[i].pid == params->pid) {
-      if (p_ctx->streams[i].key_token != -1) {
+      if (p_ctx->streams[i].key_token != -1 && p_ctx->encrypt_pvr) {
         is_secure = 1;
       }
       break;
@@ -957,13 +971,27 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
         // with TSE
         DVR_INFO("%s Clear-Scramble, pid: %#x", __func__, pid);
         if (!p_ctx->is_secure_mode) {
-          if (secure_resource_prepare(p_ctx) != 0)
-            goto exit;
+          if (p_ctx->encrypt_pvr) {
+            if (secure_resource_prepare(p_ctx) != 0)
+              goto exit;
+          } else if (p_ctx->dsm_sess == -1) {
+            p_ctx->dsm_sess = DSM_OpenSession(0);
+            DVR_CHECK_WITH_UNLOCK(p_ctx->dsm_sess != -1, &p_ctx->lock);
+          }
 
           // DSM Bind key token
           DVR_CHECK_WITH_UNLOCK(
                 DSM_BindToken(p_ctx->dsm_sess, key_token) == 0,
                 &p_ctx->lock);
+
+          if (!p_ctx->encrypt_pvr) {
+            // Prepare ca
+            DVR_CHECK_WITH_UNLOCK(
+                ca_prepare(p_ctx, stream, DVR_CA_USAGE_DES) == 0,
+                &p_ctx->lock);
+            stream->key_token = key_token;
+            goto exit;
+          }
         }
 
         // Stop/Free old clear pid filter and re-create pid filter on secure demux
@@ -1037,9 +1065,14 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
   if (i >= DVR_MAX_RECORD_PID_CNT &&
             key_token != -1 &&
             !p_ctx->is_secure_mode) {
-      DVR_CHECK_WITH_UNLOCK(
-            secure_resource_prepare(p_ctx) == 0,
-            &p_ctx->lock);
+      if (p_ctx->encrypt_pvr) {
+        DVR_CHECK_WITH_UNLOCK(
+              secure_resource_prepare(p_ctx) == 0,
+              &p_ctx->lock);
+      } else if (p_ctx->dsm_sess == -1) {
+        p_ctx->dsm_sess = DSM_OpenSession(0);
+        DVR_CHECK_WITH_UNLOCK(p_ctx->dsm_sess != -1, &p_ctx->lock);
+      }
   }
 
   // This is a new pid, and we need to find a slot to store it
@@ -1063,9 +1096,11 @@ DVR_Result_t dvr_record_set_key_token(DVR_RecordHandle_t handle, int pid, uint32
   DVR_CHECK_WITH_UNLOCK(
             ca_prepare(p_ctx, &p_ctx->streams[i], DVR_CA_USAGE_DES) == 0,
             &p_ctx->lock);
-  DVR_CHECK_WITH_UNLOCK(
-            ca_prepare(p_ctx, &p_ctx->streams[i], DVR_CA_USAGE_ENC) == 0,
-            &p_ctx->lock);
+  if (p_ctx->encrypt_pvr) {
+    DVR_CHECK_WITH_UNLOCK(
+              ca_prepare(p_ctx, &p_ctx->streams[i], DVR_CA_USAGE_ENC) == 0,
+              &p_ctx->lock);
+  }
 
 exit:
   pthread_mutex_unlock(&p_ctx->lock);
@@ -1105,39 +1140,47 @@ static int secure_dvr_with_rb(int dvr_fd, DVR_RecordOutput_t *ringbuf)
   return DVR_SUCCESS;
 }
 
-static int dvr_poll(int dvr_fd, pthread_mutex_t lock)
+static int dvr_poll_exit(int event_fd) {
+    int64_t pad = 1;
+    DVR_INFO("dvb_poll_exit");
+    write(event_fd, &pad, sizeof(pad));
+    return 0;
+}
+
+static int dvr_poll(int dvr_fd, int event_fd, pthread_mutex_t *lock)
 {
   int ret;
-  struct pollfd poll_fd;
+  struct pollfd poll_fds[2];
 
-  memset(&poll_fd, 0, sizeof(poll_fd));
-  poll_fd.fd = dvr_fd;
-  poll_fd.events = POLLIN | POLLERR;
+  //memset(poll_fds, 0, sizeof(poll_fds));
+  poll_fds[0].fd = dvr_fd;
+  poll_fds[0].events = POLLIN | POLLERR;
+  poll_fds[1].fd = event_fd;
+  poll_fds[1].events = POLLIN | POLLERR;
 
-  pthread_mutex_unlock(&lock);
-  ret = poll(&poll_fd, 1, DVR_TIMEOUT);
+  pthread_mutex_unlock(lock);
+  ret = poll(poll_fds, 2, DVR_TIMEOUT);
   if (ret < 0) {
     DVR_ERROR("%s failed: %s. fd: %d", __func__, strerror(errno), dvr_fd);
-    pthread_mutex_lock(&lock);
+    pthread_mutex_lock(lock);
     return -1;
   }
 
-  if (!(poll_fd.revents & POLLIN)) {
-    pthread_mutex_lock(&lock);
+  if (!(poll_fds[0].revents & POLLIN)) {
+    pthread_mutex_lock(lock);
     return -1;
   }
-
-  pthread_mutex_lock(&lock);
+  pthread_mutex_lock(lock);
   return 0;
 }
 
 // Record pid stream to normal buffer
 // Return recorded data length
-static ssize_t normal_dvr(int dvr_fd, uint8_t *buf, size_t len, pthread_mutex_t lock)
+static ssize_t normal_dvr(int dvr_fd, int event_fd, uint8_t *buf, size_t len, pthread_mutex_t *lock)
 {
   ssize_t rec_len = 0;
 
-  if (dvr_poll(dvr_fd, lock) || dvr_fd < 0) {
+  if (dvr_poll(dvr_fd, event_fd, lock) || dvr_fd < 0) {
     DVR_INFO("%s no poll in, dvr_fd: %d\n", __func__, dvr_fd);
     return rec_len;
   }
@@ -1148,13 +1191,13 @@ static ssize_t normal_dvr(int dvr_fd, uint8_t *buf, size_t len, pthread_mutex_t 
 }
 
 // Record clear pid stream to ringbuffer
-static int normal_dvr_with_rb(int dvr_fd,
+static int normal_dvr_with_rb(int dvr_fd, int event_fd,
     DVR_RecordOutput_t *ringbuf,
-    pthread_mutex_t lock)
+    pthread_mutex_t *lock)
 {
   ssize_t len;
 
-  if (dvr_poll(dvr_fd, lock) || dvr_fd < 0)
+  if (dvr_poll(dvr_fd, event_fd, lock) || dvr_fd < 0)
     return DVR_FAILURE;
 
   DVR_INFO("before read, r_offset: %#x, w_offset: %#x\n",
@@ -1206,11 +1249,12 @@ static ssize_t secure_inject_record2normal(
         size_t sects_sess,
         int inject_fd,
         int dvr_fd,
+        int event_fd,
         uint8_t *sec_buf,
         size_t sec_buf_len,
         uint8_t *rec_buf,
         size_t rec_buf_len,
-        pthread_mutex_t lock)
+        pthread_mutex_t *lock)
 {
   int time = 50;
   int ret = 0;
@@ -1241,7 +1285,7 @@ static ssize_t secure_inject_record2normal(
   }
 
   do {
-    act_rec_len += normal_dvr(dvr_fd,
+    act_rec_len += normal_dvr(dvr_fd, event_fd,
                             rec_buf + act_rec_len,
                             rec_buf_len - act_rec_len,
                             lock);
@@ -1269,11 +1313,12 @@ static ssize_t secure_pusi_read(
     size_t sects_sess,
     int inject_fd,
     int dvr_fd,
+    int event_fd,
     DVR_RecordOutput_t *pusi_rb,
     SECTS_IndexerPusi_t *pusi_inf,
     DVR_RecordOutput_t *non_pusi_rb,
     DVR_RecordReceiveParams_t *params,
-    pthread_mutex_t lock)
+    pthread_mutex_t *lock)
 {
   // Secure inject descrambled stream(rb1) on dmx_dev_id[2] for re-encryption.
   // Record re-encrypted pid stream to receive buffer
@@ -1308,6 +1353,7 @@ static ssize_t secure_pusi_read(
                     sects_sess,
                     inject_fd,
                     dvr_fd,
+                    event_fd,
                     pusi_rb->buffer + pusi->start,
                     pusi_len,
                     params->buf,
@@ -1328,6 +1374,7 @@ static ssize_t secure_pusi_read(
                     sects_sess,
                     inject_fd,
                     dvr_fd,
+                    event_fd,
                     pusi_rb->buffer + pusi->start,
                     inj_len,
                     params->buf,
@@ -1341,6 +1388,7 @@ static ssize_t secure_pusi_read(
                     sects_sess,
                     inject_fd,
                     dvr_fd,
+                    event_fd,
                     pusi_rb->buffer,
                     inj_len,
                     params->buf + rec_len,
@@ -1547,7 +1595,7 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
   {
     // Read away the data of the dvr device directly without using ringbuffer
     // and ts indexer
-    len = normal_dvr(p_ctx->fd[0], params->buf, params->len, p_ctx->lock);
+    len = normal_dvr(p_ctx->fd[0], p_ctx->eventfd, params->buf, params->len, &p_ctx->lock);
     goto exit;
   }
 
@@ -1568,9 +1616,9 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
     if (p_ctx->is_secure_mode) {
       if (p_ctx->sects_sess != -1 & p_ctx->fd[2] >= 0) {
         // TEE ts indexer in secure mode, video is scrambled
-        len = secure_pusi_read(p_ctx->sects_sess, p_ctx->fd[2], p_ctx->fd[3], &p_ctx->rb1,
+        len = secure_pusi_read(p_ctx->sects_sess, p_ctx->fd[2], p_ctx->fd[3], p_ctx->eventfd, &p_ctx->rb1,
                     (SECTS_IndexerPusi_t *)pusi, &p_ctx->rb0,
-                    params, p_ctx->lock);
+                    params, &p_ctx->lock);
       } else {
         // TODO: REE ts indexer in secure moce, video is clear, audio is scrambled
         DVR_ERROR("clear ts indexer in secure mode, not support now!");
@@ -1593,7 +1641,7 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
   do {
     if (p_ctx->is_secure_mode) {
       // Record clear pid stream like PAT/PMT etc. on dmx_dev_id[0]
-      normal_dvr_with_rb(p_ctx->fd[0], &p_ctx->rb0, p_ctx->lock);
+      normal_dvr_with_rb(p_ctx->fd[0], p_ctx->eventfd, &p_ctx->rb0, &p_ctx->lock);
 
       // Record scrambled pid stream like video/audio/subtitle etc. in CAS
       // stream on dmx_dev_id[1]
@@ -1617,7 +1665,7 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
     } else {
       ret = DVR_FAILURE;
 
-      if (normal_dvr_with_rb(p_ctx->fd[0], &p_ctx->rb0, p_ctx->lock))
+      if (normal_dvr_with_rb(p_ctx->fd[0], p_ctx->eventfd, &p_ctx->rb0, &p_ctx->lock))
         break;
 
       if (ts_indexer_parse(&p_ctx->ts_indexer,
