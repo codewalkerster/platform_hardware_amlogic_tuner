@@ -99,16 +99,16 @@ void Demux::setTunerService(std::shared_ptr<Tuner> tuner) {
     bSupportSoftDemuxForSubtitle =  property_get_bool(SUPPORT_SOFTWARE_DEMUX_SUBTITLE, true);
     bSupportSoftDemuxForTemi = property_get_bool(SUPPORT_SOFTWARE_DEMUX_TEMI, true);
     ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d, bSupportSoftDemuxForTemi = %d", mDemuxId, bSupportSoftDemuxForSubtitle, bSupportSoftDemuxForTemi);
-    AmDmxDevice[mDemuxId] = new AM_DMX_Device(mDemuxId);
-    AmDmxDevice[mDemuxId]->AM_DMX_Open();
+    AmDmxDevice = new AM_DMX_Device(mDemuxId);
+    AmDmxDevice->AM_DMX_Open();
 
-    AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTuner->getTsInput());
+    AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTuner->getTsInput());
 
-    mAmCI[mDemuxId] = new AmCI(mDemuxId, mTuner->getTsInput(), INPUT_DEMOD);
+    mAmCI = new AmCI(mDemuxId, mTuner->getTsInput(), INPUT_DEMOD);
 
-    mHwDemuxOps[mDemuxId] = new HwDemuxOpsSCWrap();
-    if (mHwDemuxOps[mDemuxId] != nullptr) {
-        mDemuxHandle[mDemuxId] = mHwDemuxOps[mDemuxId]->AmHwDemux_Create(0, NULL);
+    mHwDemuxOps = new HwDemuxOpsSCWrap();
+    if (mHwDemuxOps != nullptr) {
+        mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
     }
 }
 #else
@@ -130,17 +130,17 @@ Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
     bSupportSoftDemuxForSubtitle =  property_get_bool(SUPPORT_SOFTWARE_DEMUX_SUBTITLE, true);
     bSupportSoftDemuxForTemi = property_get_bool(SUPPORT_SOFTWARE_DEMUX_TEMI, true);
     ALOGD("mDemuxId:%d, bSupportSoftDemuxForSubtitle = %d, bSupportSoftDemuxForTemi = %d", mDemuxId, bSupportSoftDemuxForSubtitle, bSupportSoftDemuxForTemi);
-    AmDmxDevice[mDemuxId] = new AM_DMX_Device(mDemuxId);
-    AmDmxDevice[mDemuxId]->AM_DMX_Open();
+    AmDmxDevice = new AM_DMX_Device(mDemuxId);
+    AmDmxDevice->AM_DMX_Open();
 
     ALOGD("Support PVR Re-encyption");
-    AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTuner->getTsInput());
+    AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, mTuner->getTsInput());
 
-    mHwDemuxOps[mDemuxId] = new HwDemuxOpsSCWrap();
-    if (mHwDemuxOps[mDemuxId] != nullptr) {
-        mDemuxHandle[mDemuxId] = mHwDemuxOps[mDemuxId]->AmHwDemux_Create(0, NULL);
+    mHwDemuxOps = new HwDemuxOpsSCWrap();
+    if (mHwDemuxOps != nullptr) {
+        mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
     }
-    mAmCI[mDemuxId] = new AmCI(mDemuxId, mTuner->getTsInput(), INPUT_DEMOD);
+    mAmCI = new AmCI(mDemuxId, mTuner->getTsInput(), INPUT_DEMOD);
 }
 #endif
 
@@ -187,14 +187,14 @@ void Demux::combinePesData(int64_t filterId) {
     int stream_id = 0;
     vector<uint8_t> pesData;
     int size = 1;
-    while (AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf, &size) == 0) {
+    while (AmDmxDevice->AM_DMX_Read(filterId, tmpbuf, &size) == 0) {
         packetHeader = ((packetHeader<<8) & 0x000000ffffffff00) | tmpbuf[0];
         //ALOGD("[Demux] packetHeader = %llx", packetHeader);
         stream_id = packetHeader & 0xffffffff;
         if (stream_id == PRIVATE_STREAM_1 || stream_id == PRIVATE_STREAM_2) {
             ALOGD("## [Demux] combinePesData %x,%llx,-----------\n", tmpbuf[0], packetHeader & 0xffffffffff);
             size = 2;
-            result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, tmpbuf1, &size);
+            result = AmDmxDevice->AM_DMX_Read(filterId, tmpbuf1, &size);
             packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
             ALOGD("[Demux] packetLen = %d", packetLen);
             if (packetLen >= 3) {
@@ -206,13 +206,13 @@ void Demux::combinePesData(int64_t filterId) {
                 pesData[4] = tmpbuf1[0];
                 pesData[5] = tmpbuf1[1];
                 size = 3;
-                result =  AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6, &size);
+                result =  AmDmxDevice->AM_DMX_Read(filterId, pesData.data() + 6, &size);
                 packetLen -= 3;
                 pesHeaderLen = pesData[8];
                 ALOGD("[Demux] pesHeaderLen = %d", pesHeaderLen);
                 if (packetLen >= pesHeaderLen) {
                     if ((pesData[7] & 0xc0) == 0x80) {
-                        result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + 3, &pesHeaderLen);
+                        result = AmDmxDevice->AM_DMX_Read(filterId, pesData.data() + 6 + 3, &pesHeaderLen);
                         if (result == 0) {
                             tempPts = (int64_t)(pesData[9] & 0xe) << 29;
                             tempPts = tempPts | ((pesData[10] & 0xff) << 22);
@@ -223,7 +223,7 @@ void Demux::combinePesData(int64_t filterId) {
                             packetLen -= pesHeaderLen;
                         }
                     } else if ((pesData[7] & 0xc0) == 0xc0) {
-                        result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + 3, &pesHeaderLen);
+                        result = AmDmxDevice->AM_DMX_Read(filterId, pesData.data() + 6 + 3, &pesHeaderLen);
                         if (result == 0) {
                             tempPts = (int64_t)(pesData[9] & 0xe) << 29;
                             tempPts = tempPts | ((pesData[10] & 0xff) << 22);
@@ -257,7 +257,7 @@ void Demux::combinePesData(int64_t filterId) {
                 int dataLen = 0;
                 do {
                     dataLen = packetLen - readLen;
-                    result = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesData.data() + 6 + 3 + pesHeaderLen +
+                    result = AmDmxDevice->AM_DMX_Read(filterId, pesData.data() + 6 + 3 + pesHeaderLen +
 readLen, &dataLen);
                     //ALOGD("[Demux] result = 0x%x", result);
                     if (result == AM_SUCCESS) {
@@ -296,7 +296,7 @@ void Demux::getSectionData(int64_t filterId) {
     int sectionSize = PSI_MAX_SIZE;
 
     sectionData.resize(sectionSize);
-    int readRet = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, sectionData.data(), &sectionSize);
+    int readRet = AmDmxDevice->AM_DMX_Read(filterId, sectionData.data(), &sectionSize);
     if (readRet != 0) {
         ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
         return;
@@ -330,7 +330,7 @@ void Demux::getPesRawData(int64_t filterId) {
     vector<uint8_t> pesRawData;
     int pesRawDataSize = PES_RAW_DATA_SIZE;
     pesRawData.resize(pesRawDataSize);
-    int readRet = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, pesRawData.data(), &pesRawDataSize);
+    int readRet = AmDmxDevice->AM_DMX_Read(filterId, pesRawData.data(), &pesRawDataSize);
     if (readRet != 0) {
         ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
         return;
@@ -346,7 +346,7 @@ void Demux::getTemiData(int64_t filterId) {
     vector<uint8_t> temiData;
     int temiDataSize = TEMI_DATA_SIZE;
     temiData.resize(temiDataSize);
-    int readRet = AmDmxDevice[mDemuxId]->AM_DMX_Read(filterId, temiData.data(), &temiDataSize);
+    int readRet = AmDmxDevice->AM_DMX_Read(filterId, temiData.data(), &temiDataSize);
     if (readRet != 0) {
         ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
         return;
@@ -540,7 +540,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
                 static_cast<int32_t>(Result::INVALID_ARGUMENT));
     }
     std::lock_guard<std::mutex> lock(mFilterLock);
-    if (AmDmxDevice[mDemuxId]->AM_DMX_AllocateFilter(&dmxFilterIdx) != 0) {
+    if (AmDmxDevice->AM_DMX_AllocateFilter(&dmxFilterIdx) != 0) {
         ALOGE("Allocate filterid fail");
         *_aidl_return = nullptr;
         return ::ndk::ScopedAStatus::fromServiceSpecificError(
@@ -562,9 +562,9 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             || tsFilterType == DemuxTsFilterType::AUDIO
             || tsFilterType == DemuxTsFilterType::PES
             || tsFilterType == DemuxTsFilterType::TEMI) {
-            AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, postData, this);
+            AmDmxDevice->AM_DMX_SetCallback(dmxFilterIdx, postData, this);
         } else if (tsFilterType == DemuxTsFilterType::PCR) {
-            AmDmxDevice[mDemuxId]->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
+            AmDmxDevice->AM_DMX_SetCallback(dmxFilterIdx, NULL, NULL);
         } else if (tsFilterType == DemuxTsFilterType::RECORD) {
             //mAmDvrDevice[mDemuxId]->AM_DVR_SetCallback(postDvrData, this);
         }
@@ -691,9 +691,9 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
         info.demuxId = mDemuxId;
         info.mediasyncId = mAvSyncHwId;
 
-        if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId] && mDvrPlayback) {
+        if (mDemuxHandle && mHwDemuxOps && mDvrPlayback) {
             ALOGD("%s/%d 0x%x 0x%x %u %lld", __FUNCTION__, __LINE__, mVidPid, mAudPid, mDemuxId, mAvSyncHwId);
-            mHwDemuxOps[mDemuxId]->AmHwDemux_Init(mDemuxHandle[mDemuxId], 0, &info);
+            mHwDemuxOps->AmHwDemux_Init(mDemuxHandle, 0, &info);
             mWriteTsSize = 0;
         }
 
@@ -803,21 +803,21 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     bDemuxUsePlayback = false;
     bDemuxUseRecord   = false;
 
-    if (mHwDemuxOps[mDemuxId] != nullptr) {
-        if (mDemuxHandle[mDemuxId]) {
-            mHwDemuxOps[mDemuxId]->AmHwDemux_Destroy(mDemuxHandle[mDemuxId]);
-            mDemuxHandle[mDemuxId] = NULL;
+    if (mHwDemuxOps != nullptr) {
+        if (mDemuxHandle) {
+            mHwDemuxOps->AmHwDemux_Destroy(mDemuxHandle);
+            mDemuxHandle = NULL;
         }
-        mHwDemuxOps[mDemuxId] = nullptr;
+        mHwDemuxOps = nullptr;
         mWriteTsSize = 0;
     }
 
-    if (AmDmxDevice[mDemuxId] != NULL) {
-        AmDmxDevice[mDemuxId]->AM_DMX_Close();
-        AmDmxDevice[mDemuxId] = NULL;
+    if (AmDmxDevice != NULL) {
+        AmDmxDevice->AM_DMX_Close();
+        AmDmxDevice = NULL;
     }
-    if (mAmCI[mDemuxId] != NULL) {
-        mAmCI[mDemuxId] = NULL;
+    if (mAmCI != NULL) {
+        mAmCI = NULL;
     }
     if (mTuner != nullptr) {
         mTuner->removeDemux(mDemuxId);
@@ -845,7 +845,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             mDvrPlayback = ndk::SharedRefBase::make<Dvr>(in_type, in_bufferSize, in_cb,
                                                         this->ref<Demux>(), mTuner);
             ALOGD("[Demux] dmx_dvr_open INPUT_LOCAL demuxId = %d", mDemuxId);
-            AmDmxDevice[mDemuxId]->dmx_dvr_open(INPUT_LOCAL);
+            AmDmxDevice->dmx_dvr_open(INPUT_LOCAL);
             if (!mDvrPlayback->createDvrMQ()) {
                 mDvrPlayback = nullptr;
                 *_aidl_return = mDvrPlayback;
@@ -914,13 +914,13 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             ALOGE("set tso_source erro %p\n",this);
         }
 
-        if (AmDmxDevice[mDemuxId] != NULL) {
+        if (AmDmxDevice != NULL) {
             ALOGD("%s passthough %d %d", __FUNCTION__,in_ciCamId, mDemuxId);
-            AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS1);
+            AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS1);
         }
     } else {
-        mAmCI[mDemuxId]->setDvbSource(0, INPUT_LOCAL, DMA_5);
-        mAmCI[mDemuxId]->CIUsbOpen();
+        mAmCI->setDvbSource(0, INPUT_LOCAL, DMA_5);
+        mAmCI->CIUsbOpen();
     }
 
     return ::ndk::ScopedAStatus::ok();
@@ -930,12 +930,12 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     ALOGD("%s TS change to bypass %d %d", __FUNCTION__, mCiCamId, mDemuxId);
     bCiInsert = false;
     if (mCiCamId < 8) {
-        if (AmDmxDevice[mDemuxId] != NULL) {
-            AmDmxDevice[mDemuxId]->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS2);
+        if (AmDmxDevice != NULL) {
+            AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_DEMOD, FRONTEND_TS2);
         }
     } else {
-        mAmCI[mDemuxId]->setDvbSource(0, INPUT_DEMOD, FRONTEND_TS2);
-        mAmCI[mDemuxId]->CIUsbClose();
+        mAmCI->setDvbSource(0, INPUT_DEMOD, FRONTEND_TS2);
+        mAmCI->CIUsbClose();
     }
     return ::ndk::ScopedAStatus::ok();
 }
@@ -968,9 +968,9 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 
     if (mFilters.size() == 0) {
         destroyMediaSync();
-        if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId] && mDvrPlayback) {
+        if (mDemuxHandle && mHwDemuxOps && mDvrPlayback) {
             ALOGD("%s/%d ", __FUNCTION__, __LINE__);
-            mHwDemuxOps[mDemuxId]->AmHwDemux_ResetStatus(mDemuxHandle[mDemuxId]);
+            mHwDemuxOps->AmHwDemux_ResetStatus(mDemuxHandle);
             mWriteTsSize = 0;
         }
     }
@@ -1035,8 +1035,8 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
      memcpy(udata.data(), data.data(), data.size() * sizeof(uint8_t));
      //clear stream inject
      if (isValidTsPacket(udata)) {
-         if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId]) {
-             while (mHwDemuxOps[mDemuxId]->AmHwDemux_GetStreamControlStatus(mDemuxHandle[mDemuxId], NULL, mWriteTsSize,
+         if (mDemuxHandle && mHwDemuxOps) {
+             while (mHwDemuxOps->AmHwDemux_GetStreamControlStatus(mDemuxHandle, NULL, mWriteTsSize,
                  mVidPid, mAudPid) != AM_DEMUX_OK) {
                  usleep(10 * 1000);
                  if (mDvrPlayback) {
@@ -1109,8 +1109,8 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
 
 void Demux::notifyDvrFlushed() {
     ALOGD("notifyDvrFlushed, demuxId: %d", mDemuxId);
-    if (mDemuxHandle[mDemuxId] && mHwDemuxOps[mDemuxId]) {
-        mHwDemuxOps[mDemuxId]->AmHwDemux_Flush(mDemuxHandle[mDemuxId]);
+    if (mDemuxHandle && mHwDemuxOps) {
+        mHwDemuxOps->AmHwDemux_Flush(mDemuxHandle);
     }
 }
 
@@ -1410,7 +1410,7 @@ void Demux::detachDescrambler(int32_t descramblerId) {
 }
 
 sp<AM_DMX_Device> Demux::getAmDmxDevice(void) {
-    return AmDmxDevice[mDemuxId];
+    return AmDmxDevice;
 }
 
 //sp<AmDvr> Demux::getAmDvrDevice() {

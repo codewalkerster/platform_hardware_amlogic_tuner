@@ -272,7 +272,7 @@ class Demux : public BnDemux {
     bool mInUse = false;
 #endif
     bool bSupportSoftDemuxForSubtitle = false;
-    sp<AM_DMX_Device> AmDmxDevice[DMX_COUNT] = { NULL };
+    sp<AM_DMX_Device> AmDmxDevice = NULL;
     //sp<AmDvr> mAmDvrDevice[DMX_COUNT]        = { NULL };
     sp<AmPesFilter> mAmPesFilter             = NULL;
     //sp<AmTsIndexer> mAmTsIndexer[DMX_COUNT]  = { NULL };
@@ -282,8 +282,8 @@ class Demux : public BnDemux {
     int64_t mAvSyncHwId = -1;
 
     // add stream speed control variable
-    sp<HwDemuxOpsSCWrap> mHwDemuxOps[DMX_COUNT] = { NULL };
-    void* mDemuxHandle[DMX_COUNT] = { NULL };
+    sp<HwDemuxOpsSCWrap> mHwDemuxOps = NULL;
+    void* mDemuxHandle = NULL;
     uint64_t mWriteTsSize = 0;
     int mVidPid = 0x1FFF;
     int mAudPid = 0x1FFF;
@@ -293,7 +293,7 @@ class Demux : public BnDemux {
     int mTemiFid = -1;
     int mTemiRecordFid = -1;
     bool bSupportSoftDemuxForTemi = false;
-    sp<AmCI> mAmCI[DMX_COUNT] = { NULL };
+    sp<AmCI> mAmCI = NULL;
     DVR_RecordHandle_t mTemiRecHandle = NULL;
     DVR_RecordReceiveParams_t mTemiReceiveParam;
 

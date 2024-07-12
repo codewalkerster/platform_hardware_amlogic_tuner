@@ -253,7 +253,7 @@ class Demux : public IDemux {
     // TODO handle mulptiple Pes filters
     int mPesSizeLeft = 0;
     vector<uint8_t> mPesOutput;
-    sp<AM_DMX_Device> AmDmxDevice[DMX_COUNT] = { NULL };
+    sp<AM_DMX_Device> AmDmxDevice = NULL;
     const bool DEBUG_DEMUX = false;
     sp<MediaSyncWrap> mMediaSync = nullptr;
     //sp<AmDvr> mAmDvrDevice[DMX_COUNT] = { NULL };
@@ -267,8 +267,8 @@ class Demux : public IDemux {
     vector<uint8_t> mClearCache;
 
     // add stream speed control variable
-    sp<HwDemuxOpsSCWrap> mHwDemuxOps[DMX_COUNT] = { NULL };
-    void* mDemuxHandle[DMX_COUNT] = { NULL };
+    sp<HwDemuxOpsSCWrap> mHwDemuxOps = NULL;
+    void* mDemuxHandle = NULL;
     uint64_t mWriteTsSize = 0;
     int mVidPid = 0x1FFF;
     int mAudPid = 0x1FFF;
