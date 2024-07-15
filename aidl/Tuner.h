@@ -24,6 +24,7 @@
 #include "Frontend.h"
 #include "Lnb.h"
 #include "HwFeState.h"
+#include "AmCI.h"
 
 using namespace std;
 
@@ -96,6 +97,9 @@ class Tuner : public BnTuner {
     int allocateDemuxResource();
     void removeDemuxResource(int internalDemuxId);
     uint32_t getEncryptPvrSetting();
+    void addCiCam(int32_t CamId, sp<AmCI> amCI);
+    void removeCiCam(int32_t CamId);
+    sp<AmCI> findCiCambyCamId(int32_t CamId);
 
     typedef struct {
         int id;
@@ -140,6 +144,9 @@ class Tuner : public BnTuner {
     //Demux resource internal manager
     uint32_t mInternalDemuxId = -1;
     vector<int> mInterDmxIdManager;
+
+    //CI variable
+    map<int32_t, sp<AmCI>> mAmCI;
  };
 
 }  // namespace tuner

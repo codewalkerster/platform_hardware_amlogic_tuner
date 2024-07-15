@@ -904,6 +904,22 @@ void Tuner::removeDemuxResource(int internalDemuxId) {
 uint32_t Tuner::getEncryptPvrSetting() {
     return mEncryptPvr;
 }
+
+void Tuner::addCiCam(int32_t CamId, sp<AmCI> amCI) {
+    mAmCI[CamId] = amCI;
+}
+
+void Tuner::removeCiCam(int32_t CamId) {
+    mAmCI.erase(CamId);
+}
+
+sp<AmCI> Tuner::findCiCambyCamId(int32_t CamId) {
+    if (mAmCI.find(CamId) != mAmCI.end()) {
+        return mAmCI.at(CamId);
+    } else {
+        return nullptr;
+    }
+}
 }  // namespace tuner
 }  // namespace tv
 }  // namespace hardware

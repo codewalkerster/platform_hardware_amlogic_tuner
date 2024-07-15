@@ -579,12 +579,10 @@ int AmCI::CIUsbOpen()
     init_mutex();
 
     module_inserted = true;
-
     if (thread_init == false) {
         pthread_create(&tMediaWRTaskId, NULL, CIUsbMonitorMediaWRTread, this);
         thread_init = true;
     }
-
     return true;
 }
 
