@@ -89,6 +89,7 @@ class Tuner : public BnTuner {
 
     uint32_t getTsInput();
     void setTsnSource();
+    void setTsnSourceNoTsClone();
     uint32_t getDscMode();
     vector<FrontendStatusType> getstatusCaps(int32_t frontendId);
     int allocateDemuxResource();

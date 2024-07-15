@@ -34,6 +34,7 @@ namespace implementation {
 
 #define TUNER_CONFIG_FILE "/vendor/etc/tuner_hal/frontendinfos.json"
 #define FRONTEND_DEVICE "/dev/dvb0.frontend0"
+#define TS_CLONE "/sys/class/dmx/ts_clone"
 
 //check device exist or not
 static bool isDeviceExist(const char *file_name)
@@ -692,6 +693,28 @@ uint32_t Tuner::getTsInput() {
 }
 
 void Tuner::setTsnSource() {
+    char ts_clone_str[32] = {0};
+    if (access(TS_CLONE, F_OK) == 0) {
+        FileSystem_create();
+        if (!FileSystem_readFile(TS_CLONE, ts_clone_str, sizeof(ts_clone_str))) {
+            ALOGI("ts_clone is %s", ts_clone_str);
+        } else {
+            ALOGW("can't read ts_clone! %s", strerror(errno));
+        }
+        if (strstr(ts_clone_str, "ts clone 1")) {
+            ALOGD("set tsn_source to local");
+            return;
+        } else {
+            ALOGD("ts clone is not 1!");
+            setTsnSourceNoTsClone();
+        }
+    } else {
+        ALOGW("ts_clone node does not exist! %s", strerror(errno));
+        setTsnSourceNoTsClone();
+    }
+}
+
+void Tuner::setTsnSourceNoTsClone() {
     mDscMode = CA_DSC_COMMON_TYPE;
     char dmx_ver[32] = {0};
     char tsn_source[32] = {0};

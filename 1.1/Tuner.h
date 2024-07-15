@@ -95,6 +95,7 @@ class Tuner : public ITuner {
 
     uint32_t getTsInput();
     void setTsnSource();
+    void setTsnSourceNoTsClone();
     uint32_t getDscMode();
 
     typedef struct {
