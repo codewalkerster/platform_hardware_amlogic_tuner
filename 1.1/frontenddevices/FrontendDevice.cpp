@@ -883,7 +883,7 @@ e_signal_status_t FrontendDevice::getsignalStatus(int fd, uint32_t &locked_freq)
     if (ioctl(fd, FE_GET_EVENT, &fe_event) >= 0) {
       if ((fe_event.status & FE_HAS_LOCK) != 0) {
          sig_status = FE_SIGNAL_LOCKED;
-         locked_freq = fe_event.parameters.frequency;
+         locked_freq = mDev.tuneFreq;
       } else if ((fe_event.status & FE_TIMEDOUT) != 0) {
          sig_status = FE_SIGNAL_TIMEOUT;
       } else {
