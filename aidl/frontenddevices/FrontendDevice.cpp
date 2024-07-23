@@ -489,7 +489,7 @@ uint16_t FrontendDevice::getFeSnr() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
-    ALOGD("%s:%u", __FUNCTION__, snr);
+    ALOGV("%s:%u", __FUNCTION__, snr);
     return snr;
 }
 
@@ -504,7 +504,7 @@ uint32_t FrontendDevice::getFeBer() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
-    ALOGD("%s:%u", __FUNCTION__, ber);
+    ALOGV("%s:%u", __FUNCTION__, ber);
     return ber;
 }
 
@@ -519,7 +519,7 @@ uint16_t FrontendDevice::getSignalStrength() {
         ALOGE("%s error(%d):%s", __FUNCTION__, errno, strerror(errno));
     }
 
-    ALOGD("%s:%u", __FUNCTION__, strength);
+    ALOGV("%s:%u", __FUNCTION__, strength);
     return strength;
 }
 
