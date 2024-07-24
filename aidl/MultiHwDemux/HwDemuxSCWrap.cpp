@@ -17,6 +17,7 @@ typedef int (*AmHwDemux_Destroy_func)(void* handle);
 typedef int (*AmHwDemux_Init_func)(void* handle,int mode,void* arg);
 typedef int (*AmHwDemux_ResetStatus_func)(void* handle);
 typedef int (*AmHwDemux_GetStreamControlStatus_func)(void* handle,void* arg,int64_t WriteTsSize,int vPid,int aPid);
+typedef int (*AmHwDemux_GetMultiStreamControlStatus_func)(void* handle, const StreamControlArgs& args);
 typedef int (*AmHwDemux_Flush_func)(void* handle);
 
 static AmHwDemux_Create_func gAmHwDemux_Create = NULL;
@@ -24,6 +25,7 @@ static AmHwDemux_Destroy_func gAmHwDemux_Destroy = NULL;
 static AmHwDemux_Init_func gAmHwDemux_Init = NULL;
 static AmHwDemux_ResetStatus_func gAmHwDemux_ResetStatus = NULL;
 static AmHwDemux_GetStreamControlStatus_func gAmHwDemux_GetStreamControlStatus = NULL;
+static AmHwDemux_GetMultiStreamControlStatus_func gAmHwDemux_GetMultiStreamControlStatus = NULL;
 static AmHwDemux_Flush_func gAmHwDemux_Flush = NULL;
 
 HwDemuxOpsSCWrap::HwDemuxOpsSCWrap() {
@@ -88,7 +90,15 @@ bool HwDemuxOpsSCWrap::DmxLibInit()
     gAmHwDemux_GetStreamControlStatus =
         (getStreamControlStatus)dlsym(libHandle, "AmHwDemux_GetStreamControlStatus");
     if (gAmHwDemux_GetStreamControlStatus == NULL) {
-        ALOGE("dlsym AmHwDemux_ResetStatus failed, err=%s \n", dlerror());
+        ALOGE("dlsym AmHwDemux_GetStreamControlStatus failed, err=%s \n", dlerror());
+        return err;
+    }
+
+    typedef int (*getMultiStreamControlStatus)(void* handle, const StreamControlArgs& args);
+    gAmHwDemux_GetMultiStreamControlStatus =
+            (getMultiStreamControlStatus)dlsym(libHandle, "AmHwDemux_GetMultiStreamControlStatus");
+    if (gAmHwDemux_GetMultiStreamControlStatus == NULL) {
+        ALOGE("dlsym AmHwDemux_GetMultiStreamControlStatus failed, err=%s \n", dlerror());
         return err;
     }
 
@@ -165,6 +175,14 @@ int HwDemuxOpsSCWrap::AmHwDemux_GetStreamControlStatus(void* handle, void* arg,
     }
 }
 
+int HwDemuxOpsSCWrap::AmHwDemux_GetMultiStreamControlStatus(void* handle, const StreamControlArgs& args) {
+    if (handle != NULL && gAmHwDemux_GetMultiStreamControlStatus) {
+        return gAmHwDemux_GetMultiStreamControlStatus(handle, args);
+    } else {
+        ALOGE("[%s] no handle\n", __func__);
+        return -1;
+    }
+}
 int HwDemuxOpsSCWrap::AmHwDemux_Flush(void *handle) {
     if (handle != NULL && gAmHwDemux_Flush) {
         return gAmHwDemux_Flush(handle);

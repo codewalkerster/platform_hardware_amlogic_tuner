@@ -285,9 +285,11 @@ class Demux : public BnDemux {
     // add stream speed control variable
     sp<HwDemuxOpsSCWrap> mHwDemuxOps = NULL;
     void* mDemuxHandle = NULL;
-    uint64_t mWriteTsSize = 0;
-    int mVidPid = 0x1FFF;
-    int mAudPid = 0x1FFF;
+    StreamControlArgs mStreamControlArgs;
+    StreamPidInfo *pStreamPidInfo;
+    //uint64_t mWriteTsSize = 0;
+    //int mVidPid = 0x1FFF;
+    //int mAudPid = 0x1FFF;
 
     std::thread mTemiRecordThread;
     std::atomic<bool> mTemiRecordThreadRunning;

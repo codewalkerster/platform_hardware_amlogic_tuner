@@ -15,7 +15,6 @@ using namespace android;
 extern "C"  {
 #include "AmHwDemuxInterface.h"
 }
-
 class HwDemuxOpsSCWrap : public RefBase {
 public:
     HwDemuxOpsSCWrap();
@@ -25,6 +24,7 @@ public:
     int AmHwDemux_Init(void* handle, int mode, void* arg);
     int AmHwDemux_ResetStatus(void* handle);
     int AmHwDemux_GetStreamControlStatus(void* handle, void* arg, int64_t WriteTsSize, int vPid, int aPid);
+    int AmHwDemux_GetMultiStreamControlStatus(void* handle, const StreamControlArgs& args);
     int AmHwDemux_Flush(void* handle);
 
 private:

@@ -103,6 +103,8 @@ void Demux::setTunerService(std::shared_ptr<Tuner> tuner) {
     mHwDemuxOps = new HwDemuxOpsSCWrap();
     if (mHwDemuxOps != nullptr) {
         mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
+        memset(&mStreamControlArgs, 0, sizeof(StreamControlArgs));
+        pStreamPidInfo = new StreamPidInfo();
     }
 }
 #else
@@ -130,6 +132,8 @@ Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
     mHwDemuxOps = new HwDemuxOpsSCWrap();
     if (mHwDemuxOps != nullptr) {
         mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
+        memset(&mStreamControlArgs, 0, sizeof(StreamControlArgs));
+        pStreamPidInfo = new StreamPidInfo();
     }
 }
 #endif
@@ -659,18 +663,25 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     set<int64_t>::iterator it;
     if (mDvrPlayback != nullptr) {
        uint16_t avPid;
+       int i = 0;
        for (it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
            avPid = mFilters[*it]->getTpid();
            DemuxFilterType type = mFilters[*it]->getFilterType();
            ALOGD("%s/%d avPid = %u", __FUNCTION__, __LINE__, avPid);
            if (type.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::VIDEO) {
-               mVidPid = avPid;
+               pStreamPidInfo->videoPid = avPid;
            }
 
            if (type.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::AUDIO) {
-               mAudPid = avPid;
+               ALOGD("%s/%d how many audio pids: %d", __FUNCTION__, __LINE__, i + 1);
+               pStreamPidInfo->numAudioPids = i + 1;
+               pStreamPidInfo->audioPids[i] = avPid;
+               i++;
            }
        }
+
+       mStreamControlArgs.pidInfo = pStreamPidInfo;
+       mStreamControlArgs.pidInfoSize = sizeof(StreamPidInfo);
     }
     if (mFilters[fid] != nullptr && mFilters[fid]->isMediaFilter() && !mPlaybackFilterIds.empty()) {
         uint16_t avPid = getFilterTpid(*mPlaybackFilterIds.begin());
@@ -698,9 +709,9 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
         info.mediasyncId = mAvSyncHwId;
 
         if (mDemuxHandle && mHwDemuxOps && mDvrPlayback) {
-            ALOGD("%s/%d 0x%x 0x%x %u %" PRIu64 "", __FUNCTION__, __LINE__, mVidPid, mAudPid, mDemuxId, mAvSyncHwId);
+            //ALOGD("%s/%d 0x%x 0x%x %u %lld", __FUNCTION__, __LINE__, mVidPid, mAudPid, mDemuxId, mAvSyncHwId);
             mHwDemuxOps->AmHwDemux_Init(mDemuxHandle, 0, &info);
-            mWriteTsSize = 0;
+            mStreamControlArgs.writeTsSize = 0;
         }
 
         ALOGD("[Demux] mAvFilterId:%" PRIu64 " avPid:0x%x avSyncHwId:%" PRIu64 "", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
@@ -815,7 +826,11 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
             mDemuxHandle = NULL;
         }
         mHwDemuxOps = nullptr;
-        mWriteTsSize = 0;
+        mStreamControlArgs.writeTsSize = 0;
+        if (pStreamPidInfo) {
+            delete pStreamPidInfo;
+            pStreamPidInfo = NULL;
+        }
     }
 
     if (AmDmxDevice != NULL) {
@@ -869,8 +884,8 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
                 }
             }
 
-            mVidPid = 0x1FFF;
-            mAudPid = 0x1FFF;
+            //mVidPid = 0x1FFF;
+            //mAudPid = 0x1FFF;
             bDemuxUsePlayback = true;
             *_aidl_return = mDvrPlayback;
             return ::ndk::ScopedAStatus::ok();
@@ -991,7 +1006,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
         if (mDemuxHandle && mHwDemuxOps && mDvrPlayback) {
             ALOGD("%s/%d ", __FUNCTION__, __LINE__);
             mHwDemuxOps->AmHwDemux_ResetStatus(mDemuxHandle);
-            mWriteTsSize = 0;
+            mStreamControlArgs.writeTsSize = 0;
         }
     }
     return ::ndk::ScopedAStatus::ok();
@@ -1056,8 +1071,7 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
      //clear stream inject
      if (isValidTsPacket(udata)) {
          if (mDemuxHandle && mHwDemuxOps) {
-             while (mHwDemuxOps->AmHwDemux_GetStreamControlStatus(mDemuxHandle, NULL, mWriteTsSize,
-                 mVidPid, mAudPid) != AM_DEMUX_OK) {
+             while (mHwDemuxOps->AmHwDemux_GetMultiStreamControlStatus(mDemuxHandle, mStreamControlArgs) != AM_DEMUX_OK) {
                  usleep(10 * 1000);
                  if (mDvrPlayback) {
                      if (mDvrPlayback->stopInjectTs()) {
@@ -1120,10 +1134,10 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
      } else {
          ALOGD("[Demux] data[0] = 0x%x", data[0]);
      }
-    if (mWriteTsSize < UINT64_MAX) {
-        mWriteTsSize += data.size();
+    if (mStreamControlArgs.writeTsSize < UINT64_MAX) {
+        mStreamControlArgs.writeTsSize += data.size();
     } else {
-        mWriteTsSize = 0;
+        mStreamControlArgs.writeTsSize = 0;
     }
 }
 
