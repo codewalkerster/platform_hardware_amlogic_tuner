@@ -217,7 +217,7 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
         settings->analog().sifStandard = FrontendAnalogSifStandard::AUTO;
     }
 
-    set_tvafe((unsigned long)settings->analog().type);
+    //set_tvafe((unsigned long)settings->analog().type);
 
     p_fe_params->audmode = tmpAudStd;
     p_fe_params->soundsys = 0xff;
@@ -258,6 +258,21 @@ e_signal_status_t FrontendAnalogDevice::getsignalStatus(int fd, uint32_t &locked
       } else {
           sig_status = FE_SIGNAL_WAIT;
       }
+    } else {
+        ALOGD("atv V4L2_GET_EVENT error");
+        int  fe_status = 0;
+        if (ioctl(fd, V4L2_READ_STATUS, &fe_status) >= 0) {
+            ALOGD("atv V4L2_READ_STATUS, status:0x%x",fe_status);
+            if ((fe_status & V4L2_HAS_LOCK) != 0) {
+                sig_status = FE_SIGNAL_LOCKED;
+            } else if ((fe_status & V4L2_TIMEDOUT) != 0) {
+                sig_status = FE_SIGNAL_TIMEOUT;
+            } else {
+                sig_status = FE_SIGNAL_WAIT;
+            }
+        } else {
+            ALOGD("atv V4L2_READ_STATUS error");
+        }
     }
     return sig_status;
 }

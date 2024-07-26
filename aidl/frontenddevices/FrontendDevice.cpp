@@ -30,7 +30,7 @@
 
 #define FE_POLL_TIMEOUT_MS 50
 #define FE_STATE_DTV_TIMEOUT_MS 3000
-#define FE_STATE_ATV_TIMEOUT_MS 10
+#define FE_STATE_ATV_TIMEOUT_MS 500
 #define FE_SIGNAL_CHECK_INTERVAL_MS 10
 #define MAX_PLP_NUMBER 256
 #define FEND_WAIT_TIMEOUT           (500)
@@ -976,15 +976,17 @@ bool FrontendDevice::threadLoop() {
             }
 
             if (mDev.type == FrontendType::ANALOG)
-                fe_timeout = FE_STATE_DTV_TIMEOUT_MS;
-            else
                 fe_timeout = FE_STATE_ATV_TIMEOUT_MS;
+            else
+                fe_timeout = FE_STATE_DTV_TIMEOUT_MS;
 
             pfd.events = POLLIN;
             pfd.revents = 0;
             for (start_time = getClockMilliSeconds();
                  !stop && ((getClockMilliSeconds() - start_time) < fe_timeout);) {
-                if (poll(&pfd, 1, FE_POLL_TIMEOUT_MS) == 1) {
+                //ATV tune will not trigger this poll event.
+                if (poll(&pfd, 1, FE_POLL_TIMEOUT_MS) == 1 ||
+                 (mDev.type == FrontendType::ANALOG && state == FrontendDevice::STATE_TUNE_START)) {//ATV tune will not trigger this poll event.
                     sig_st = getsignalStatus(mDev.devFd, locked_freq);
                     if (sig_st == FE_SIGNAL_LOCKED ||
                         sig_st == FE_SIGNAL_TIMEOUT) {

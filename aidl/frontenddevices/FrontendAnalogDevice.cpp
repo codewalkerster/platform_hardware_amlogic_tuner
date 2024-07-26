@@ -31,17 +31,18 @@ namespace tuner {
 
 FrontendAnalogDevice::FrontendAnalogDevice(uint32_t hwId, FrontendType type, const sp<Frontend>& context)
     : FrontendDevice(hwId, type, context), fd_tvafe(-1),fd_vdin(-1) {
-    open_tvafe();
+    //open_tvafe();
 }
 
 FrontendAnalogDevice::~FrontendAnalogDevice() {
-    close_tvafe();
+    //close_tvafe();
 
 }
 
 int FrontendAnalogDevice::open_tvafe()
 {
     int ret = -1;
+
     struct tvin_parm_s vdinParam;
 
     if (fd_vdin == -1) {
@@ -219,7 +220,7 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
         settings->get<FrontendSettings::Tag::analog>().sifStandard = FrontendAnalogSifStandard::AUTO;
     }
 
-    set_tvafe((unsigned long)settings->get<FrontendSettings::Tag::analog>().type);
+    //set_tvafe((unsigned long)settings->get<FrontendSettings::Tag::analog>().type);
 
     p_fe_params->audmode = tmpAudStd;
     p_fe_params->soundsys = 0xff;
@@ -252,6 +253,7 @@ e_signal_status_t FrontendAnalogDevice::getsignalStatus(int fd, uint32_t &locked
     e_signal_status_t sig_status = FE_SIGNAL_WAIT;
 
     if (ioctl(fd, V4L2_GET_EVENT, &v4l2_evt) >= 0) {
+        ALOGD("atv V4L2_GET_EVENT, status:0x%x, freq:%d",v4l2_evt.status, v4l2_evt.parameters.frequency);
       if ((v4l2_evt.status & V4L2_HAS_LOCK) != 0) {
           sig_status = FE_SIGNAL_LOCKED;
           locked_freq = v4l2_evt.parameters.frequency;
@@ -260,6 +262,22 @@ e_signal_status_t FrontendAnalogDevice::getsignalStatus(int fd, uint32_t &locked
       } else {
           sig_status = FE_SIGNAL_WAIT;
       }
+    } else {
+        ALOGD("atv V4L2_GET_EVENT error");
+        int  fe_status = 0;
+        if (ioctl(fd, V4L2_READ_STATUS, &fe_status) >= 0) {
+            ALOGD("atv V4L2_READ_STATUS, status:0x%x",fe_status);
+            if ((fe_status & V4L2_HAS_LOCK) != 0) {
+                sig_status = FE_SIGNAL_LOCKED;
+            } else if ((fe_status & V4L2_TIMEDOUT) != 0) {
+                sig_status = FE_SIGNAL_TIMEOUT;
+            } else {
+                sig_status = FE_SIGNAL_WAIT;
+            }
+        } else {
+            ALOGD("atv V4L2_READ_STATUS error");
+        }
+
     }
     return sig_status;
 }
