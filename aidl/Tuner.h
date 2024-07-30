@@ -88,6 +88,7 @@ class Tuner : public BnTuner {
     std::shared_ptr<Demux> getDemuxById(uint32_t demuxId);
 
     uint32_t getTsInput(uint32_t frontendId);
+    uint32_t getTsInput();
     void setTsnSource();
     void setTsnSourceNoTsClone();
     uint32_t getDscMode();

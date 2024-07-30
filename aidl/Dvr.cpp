@@ -62,8 +62,10 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>&
                 else
                     mOpenParams.src = DVB_DEMUX_SOURCE_DMA4;
             }
-            else
-                mOpenParams.src = getDemuxSourceByTsInput(mDemux->getTsInput());
+            else {
+                //do recording, no Feclient in Jtuner, get ts input from tuner;
+                mOpenParams.src = getDemuxSourceByTsInput(mTuner->getTsInput());
+            }
         }
         mOpenParams.dmx_dev_id[0] = mDemux->getDemuxId();
         mOpenParams.dmx_dev_id[1] = mTuner->allocateDemuxResource(); //keep demux4 is idle(unused)

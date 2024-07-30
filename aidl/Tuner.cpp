@@ -795,6 +795,15 @@ uint32_t Tuner::getTsInput(uint32_t frontendId) {
     ALOGD("[frontendId] = %d, tsInput = %d, hwId = %d", frontendId, tsInput, mFrontendInfos[frontendId].hwId);
     return tsInput;
 }
+// use for record
+uint32_t Tuner::getTsInput() {
+    if (mFrontendId != -1) {
+        return mHwFes[mFrontendInfos[mFrontendId].hwId]->getTsInput();
+    } else {
+        ALOGD("mFrontendId = %d", mFrontendId);
+        return -1;
+    }
+}
 
 void Tuner::setTsnSource() {
     char ts_clone_str[32] = {0};
