@@ -463,7 +463,7 @@ Return<void> Tuner::openFrontendById(uint32_t frontendId, openFrontendById_cb _h
 }
 
 Return<void> Tuner::openDemux(openDemux_cb _hidl_cb) {
-    ALOGD("%s/%d mDemuxes size = %d", __FUNCTION__, __LINE__, mDemuxes.size());
+    ALOGD("%s/%d mDemuxes size = %zu", __FUNCTION__, __LINE__, mDemuxes.size());
     std::lock_guard<std::mutex> lock(mLock);
     mLastUsedId = 0;
     std::map<uint32_t, sp<Demux>>::iterator it = mDemuxes.find(mLastUsedId);

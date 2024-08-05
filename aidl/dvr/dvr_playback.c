@@ -501,7 +501,7 @@ size_t dvr_playback_write(
     }
     ret = 0;
   } else {
-    DVR_INFO("%s %#x bytes written", __func__, ret);
+    DVR_INFO("%s %#zx bytes written", __func__, ret);
   }
 #endif
 #ifdef DVR_DUMP_INJECT

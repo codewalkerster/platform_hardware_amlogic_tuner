@@ -8,6 +8,8 @@
  */
 
 #define LOG_TAG "TIME_TRACE"
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include "stbtrace.h"
 #include <utils/Log.h>
 #include <stdlib.h>
@@ -27,7 +29,7 @@ void table_time_trace_log(stbtrace_info* trace_info, const char* step_str, uint8
         return;
     }
 
-    ALOGD("[%s]: %s: tableId = %d, fid = %llu, demuxId = %d, consume time: %ld ms \n",trace_info->module_name, step_str, table_id, filter_id, demux_id, elapsed_time.tv_sec * 1000 + elapsed_time.tv_usec / 1000);
+    ALOGD("[%s]: %s: tableId = %d, fid = %" PRId64 ", demuxId = %d, consume time: %ld ms \n",trace_info->module_name, step_str, table_id, filter_id, demux_id, elapsed_time.tv_sec * 1000 + elapsed_time.tv_usec / 1000);
 }
 
 void tune_time_trace_log(stbtrace_info* trace_info, const char* step_str, timeval elapsed_time) {

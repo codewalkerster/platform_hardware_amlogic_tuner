@@ -61,7 +61,7 @@ int ca_open(int devno)
     }
     if (dvb_dsc_dev[devno].use_count > 0) {
         dvb_dsc_dev[devno].use_count += 1;
-        ALOGD("devno: %d use_count: %d", devno, dvb_dsc_dev[devno].use_count);
+        ALOGD("devno: %d use_count: %zu", devno, dvb_dsc_dev[devno].use_count);
         ret = CA_DSC_OK;
         goto ERROR_EXIT;
     }
@@ -196,7 +196,7 @@ int ca_close(int devno)
     }
 
     dvb_dsc_dev[devno].use_count -= 1;
-    ALOGI("ca_close use_count:%d", dvb_dsc_dev[devno].use_count);
+    ALOGI("ca_close use_count:%zu", dvb_dsc_dev[devno].use_count);
     fd = dvb_dsc_dev[devno].fd;
 
     if (dvb_dsc_dev[devno].use_count == 0) {

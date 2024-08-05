@@ -178,18 +178,18 @@ static void find_mpeg(uint8_t *data, int len, TS_Indexer_t *indexer, TSParser *s
       switch (frame_type) {
         case 1:
             indexer->pusi[indexer->pusi_cur_idx].flags |= DVR_INDEX_IFRAME;
-            DVR_INFO("I frame found, offset: %x, pusi[%d] flags: %d\n",
+            DVR_INFO("I frame found, offset: %zx, pusi[%d] flags: %d\n",
                 stream->offset,
                 indexer->pusi_cur_idx,
                 indexer->pusi[indexer->pusi_cur_idx].flags);
             break;
 
         case 2:
-            DVR_INFO("P frame found, offset: %x\n", stream->offset);
+            DVR_INFO("P frame found, offset: %zx\n", stream->offset);
             break;
 
         case 3:
-            DVR_INFO("B frame found, offset: %x\n", stream->offset);
+            DVR_INFO("B frame found, offset: %zx\n", stream->offset);
             break;
 
         default:
@@ -340,7 +340,7 @@ static void find_h264(uint8_t *data, size_t len, TS_Indexer_t *indexer, TSParser
           DVR_ERROR("0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n",
                 nalu[0], nalu[1], nalu[2], nalu[3],
                 nalu[4], nalu[5], nalu[6], nalu[7]);
-          DVR_ERROR("%s line%d invalid slice_type: %d, offset: %x, first_mb: %d\n",
+          DVR_ERROR("%s line%d invalid slice_type: %d, offset: %zx, first_mb: %d\n",
                 __func__,
                 __LINE__,
                 slice_type,
@@ -401,7 +401,7 @@ static void find_h265(uint8_t *data, int len, TS_Indexer_t *indexer, TSParser *s
 
     if (nalu[0] == 0x00 && nalu[1] == 0x00 && nalu[2] == 0x01) {
       int nalu_type = (nalu[3] & 0x7E) >> 1;
-      DVR_INFO("0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x, nalu_type: %d, offset: %#x\n",
+      DVR_INFO("0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x, nalu_type: %d, offset: %#zx\n",
           nalu[3], nalu[4], nalu[5], nalu[6], nalu[7], nalu[8], nalu_type, stream->offset);
       switch (nalu_type) {
         case HEVC_NALU_BLA_W_LP:
@@ -529,7 +529,7 @@ pes_packet(TS_Indexer_t *ts_indexer, uint8_t *data, int len, TSParser *stream)
         //event.type = TS_INDEXER_EVENT_TYPE_AUDIO_PTS;
       }
       pi->pusi[pi->pusi_cur_idx].pts = stream->PES.pts;
-      DVR_INFO("pts = %lld in dvr\n", stream->PES.pts);
+      DVR_INFO("pts = %" PRIu64 " in dvr\n", stream->PES.pts);
     }
     if (stream->format != -1) {
       stream->PES.state = TS_INDEXER_STATE_PES_PTS;
@@ -623,7 +623,7 @@ ts_packet(TS_Indexer_t *ts_indexer, uint8_t *data, size_t rp)
       }
 
       pi->pusi[pi->pusi_cur_idx].flags = DVR_INDEX_PUSI;
-      DVR_INFO("pusi[%d] found, pos: %#x\n", pi->pusi_cur_idx, rp);
+      DVR_INFO("pusi[%d] found, pos: %#zx\n", pi->pusi_cur_idx, rp);
 
       // Ringbuffer's read offset is the position of lastest PUSI
       // Don't care audio
@@ -674,12 +674,12 @@ ringbuf_parse(
   uint8_t *p = data;
   size_t left = size;
 
-  DVR_INFO("ts parse %#x ~ %#x, size: %#x\n", *rp , wp, size);
+  DVR_INFO("ts parse %#zx ~ %#zx, size: %#zx\n", *rp , wp, size);
   while (left) {
     // Find the sync byte
     if (*p == 0x47) {
       if (left < TS_PKT_SIZE) {
-        DVR_ERROR("%s data length may not be 188-byte aligned. rp: %#x, wp: %#x\n",
+        DVR_ERROR("%s data length may not be 188-byte aligned. rp: %#zx, wp: %#zx\n",
                __func__, *rp, wp);
         return left;
       }
@@ -737,7 +737,7 @@ ts_indexer_parse (
   ts_indexer->pusi_max_cnt = pusi_max_cnt;
   ts_indexer->pusi_cur_idx = -1;
 
-  DVR_INFO("%s parse: %#x ~ %#x, end: %#x, size: %#x\n",
+  DVR_INFO("%s parse: %#zx ~ %#zx, end: %#zx, size: %#zx\n",
       __func__, rp, wp, end, left);
   if (left <= 0) {
     DVR_ERROR("%s data size is zero\n", __func__);
@@ -749,7 +749,7 @@ ts_indexer_parse (
     // Find the sync byte
     if (*p == 0x47) {
       if (left < TS_PKT_SIZE) {
-        DVR_ERROR("%s data length may not be 188-byte aligned. rp: %#x, wp: %#x\n",
+        DVR_ERROR("%s data length may not be 188-byte aligned. rp: %#zx, wp: %#zx\n",
                __func__, rp, wp);
         break;
       }
@@ -776,7 +776,7 @@ ts_indexer_parse (
     }
   }
 #endif
-  DVR_INFO("%s pusi count: %d. rp: %#x, wp: %#x, size: %#x\n",
+  DVR_INFO("%s pusi count: %d. rp: %#zx, wp: %#zx, size: %#zx\n",
 		__func__,
 		ts_indexer->pusi_cur_idx,
 		rp, wp, left);

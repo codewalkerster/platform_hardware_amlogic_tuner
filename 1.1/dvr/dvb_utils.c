@@ -117,7 +117,7 @@ int dvb_set_secure_buffer(int dmx_idx, uint8_t *sec_buf, size_t len)
       DVR_ERROR("%s ioctl DMX_SET_SEC_MEM error: %d", __func__, errno);
       return -1;
     } else {
-      DVR_INFO("%s ioctl DMX_SET_SEC_MEM succeed. sec_mem: %#x, size: %#x",
+      DVR_INFO("%s ioctl DMX_SET_SEC_MEM succeed. sec_mem: %#zx, size: %#zx",
         __func__, (size_t)sec_buf, len);
       return 0;
     }
@@ -176,12 +176,12 @@ int dvb_dvr_set_ringbuffer(int fd, size_t len)
   }
 
   if (ioctl(fd, DMX_SET_BUFFER_SIZE, len) == -1) {
-    DVR_ERROR("%s set dvr ringbuf size failed (%s) buf_size:%d",
+    DVR_ERROR("%s set dvr ringbuf size failed (%s) buf_size:%zd",
       __func__, strerror(errno), len);
     return -1;
   }
 
-  DVR_INFO("%s set fd: %d ringbuf size success buf_size:%#x",
+  DVR_INFO("%s set fd: %d ringbuf size success buf_size:%#zx",
       __func__, fd, len);
 
   return 0;

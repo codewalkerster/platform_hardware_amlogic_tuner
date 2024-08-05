@@ -147,7 +147,7 @@ void Demux::combinePesData(uint64_t filterId) {
         //ALOGD("[Demux] packetHeader = %llx", packetHeader);
         stream_id = packetHeader & 0xffffffff;
         if (stream_id == PRIVATE_STREAM_1 || stream_id == PRIVATE_STREAM_2) {
-            ALOGD("## [Demux] combinePesData %x,%llx,-----------\n", tmpbuf[0], packetHeader & 0xffffffffff);
+            //ALOGD("## [Demux] combinePesData %x,%llx,-----------\n", tmpbuf[0], packetHeader & 0xffffffffff);
             size = 2;
             result = AmDmxDevice->AM_DMX_Read(filterId, tmpbuf1, &size);
             packetLen = (tmpbuf1[0] << 8) | tmpbuf1[1];
@@ -258,7 +258,7 @@ void Demux::getSectionData(uint64_t filterId) {
         ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
         return;
     } else {
-        ALOGV("fid =%llu section data size:%d", filterId, sectionSize);
+        ALOGV("fid =%" PRIu64 " section data size:%d", filterId, sectionSize);
         sectionData.resize(sectionSize);
         /*gettimeofday(&mTable_end, NULL);
         timeval table_start;
@@ -299,7 +299,7 @@ void Demux::getPesRawData(uint64_t filterId) {
         ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
         return;
     } else {
-        ALOGD("fid =%llu pes raw data size:%d", filterId, pesRawDataSize);
+        ALOGD("fid =%" PRIu64 " pes raw data size:%d", filterId, pesRawDataSize);
         pesRawData.resize(pesRawDataSize);
         updateFilterOutput(filterId, pesRawData);
         startFilterHandler(filterId);
@@ -315,7 +315,7 @@ void Demux::getTemiData(uint64_t filterId) {
         ALOGE("AM_DMX_Read failed! readRet:0x%x", readRet);
         return;
     } else {
-        ALOGD("fid =%llu Temi data size:%d", filterId, temiDataSize);
+        ALOGD("fid =%" PRIu64 " Temi data size:%d", filterId, temiDataSize);
         temiData.resize(temiDataSize);
         updateFilterOutput(filterId, temiData);
         startFilterHandler(filterId);
@@ -509,7 +509,7 @@ Return<void> Demux::openFilter(const DemuxFilterType& type, uint32_t bufferSize,
 
     //Use demux fd as the tuner hal filter id
     sp<Filter> filter = new Filter(type, filterId, bufferSize, cb, this);
-    ALOGD("[%s/%d] Allocate filter subType:%d filterIdx:%llu, bufferSize:%d KB", __FUNCTION__, __LINE__, tsFilterType, filterId, bufferSize/1024);
+    ALOGD("[%s/%d] Allocate filter subType:%d filterIdx:%" PRIu64 ", bufferSize:%d KB", __FUNCTION__, __LINE__, tsFilterType, filterId, bufferSize/1024);
 
     if (!filter->createFilterMQ()) {
         ALOGE("[Demux] filter %d createFilterMQ error!", dmxFilterIdx);
@@ -619,7 +619,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
         mMediaSync = new MediaSyncWrap();
     }
 
-    ALOGD("%s/%d fid = %llu", __FUNCTION__, __LINE__, fid);
+    ALOGD("%s/%d fid = %" PRIu64 "", __FUNCTION__, __LINE__, fid);
     std::lock_guard<std::mutex> lock(mFilterLock);
     set<uint64_t>::iterator it;
     if (mDvrPlayback != nullptr) {
@@ -644,7 +644,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
             if (mAvSyncHwId == -1) {
                  if (!mPcrFilterIds.empty()) {
                     mAvSyncHwId = *mPcrFilterIds.begin();
-                    ALOGD("%s/%d mAvSyncHwId = %llu", __FUNCTION__, __LINE__, *mPcrFilterIds.begin());
+                    ALOGD("%s/%d mAvSyncHwId = %" PRIu64 "", __FUNCTION__, __LINE__, *mPcrFilterIds.begin());
                     mMediaSync->setParameter(MEDIASYNC_KEY_ISOMXTUNNELMODE, &mode);
                     //mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
                  } else {
@@ -664,7 +664,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
             mWriteTsSize = 0;
         }
 
-        ALOGD("[Demux] mAvFilterId:%llu avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
+        ALOGD("[Demux] mAvFilterId:%" PRIu64 " avPid:0x%x avSyncHwId:%d", *mPlaybackFilterIds.begin(), avPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
     } else if (mFilters[fid] != nullptr && mFilters[fid]->isPcrFilter() && !mPcrFilterIds.empty()) {
@@ -677,7 +677,7 @@ Return<void> Demux::getAvSyncHwId(const sp<IFilter>& filter, getAvSyncHwId_cb _h
                 //mMediaSync->bindStaticAvSyncId(mAvSyncHwId);
             }
         }
-        ALOGD("[Demux] mPcrFilterId:%llu pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
+        ALOGD("[Demux] mPcrFilterId:%" PRIu64 " pcrPid:0x%x avSyncHwId:%d", *mPcrFilterIds.begin(), pcrPid, mAvSyncHwId);
         _hidl_cb(Result::SUCCESS, mAvSyncHwId);
         return Void();
     } else {
@@ -844,7 +844,7 @@ Return<Result> Demux::disconnectCiCam() {
 }
 
 Result Demux::removeFilter(uint64_t filterId) {
-    ALOGD("%s/%d filterId = %llu", __FUNCTION__, __LINE__, filterId);
+    ALOGD("%s/%d filterId = %" PRIu64 "", __FUNCTION__, __LINE__, filterId);
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (mFilters[filterId] != nullptr) {
         mFilters[filterId]->clear();
@@ -856,7 +856,7 @@ Result Demux::removeFilter(uint64_t filterId) {
         if (bSupportSoftDemuxForSubtitle) {
             closePesRecordFilter();
         }
-        ALOGD("remove PES filter mPesFid = %llu", filterId);
+        ALOGD("remove PES filter mPesFid = %" PRIu64 "", filterId);
         mPesFilterIds.erase(filterId);
     }
 
@@ -885,7 +885,7 @@ Result Demux::removeFilter(uint64_t filterId) {
 void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
         bool isDscReady = false;
         if (1)
-            ALOGD("write to dvr %d size:%d", mDemuxId, data.size());
+            ALOGD("write to dvr %d size:%zd", mDemuxId, data.size());
 
         {
             std::lock_guard<std::mutex> lock(mFilterLock);
@@ -907,21 +907,21 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
                              descramblerIt++) {
                             if (descramblerIt->second && descramblerIt->second->isPidSupported(pid)) {
                                 if (mScrambledCache.size() > MAX_SCRAMBLED_CACHE_SIZE) {
-                                    ALOGW("reset scrambled cache! cache size:%d", mScrambledCache.size());
+                                    ALOGW("reset scrambled cache! cache size:%zu", mScrambledCache.size());
                                     vector<uint8_t>().swap(mScrambledCache);
                                 }
                                 mScrambledCache.insert(mScrambledCache.end(), data.begin() + tsDataIdx, data.begin() + tsDataIdx + 188);
-                                ALOGV("scrambled cache idx:%d pid:0x%x size:%d", tsDataIdx, pid, mScrambledCache.size());
+                                ALOGV("scrambled cache idx:%d pid:0x%x size:%zu", tsDataIdx, pid, mScrambledCache.size());
                             } else {
                                 mClearCache.insert(mClearCache.end(), data.begin() + tsDataIdx, data.begin() + tsDataIdx + 188);
-                                ALOGV("clear cache idx:%d pid:0x%x size:%d", tsDataIdx, pid, mClearCache.size());
+                                ALOGV("clear cache idx:%d pid:0x%x size:%zu", tsDataIdx, pid, mClearCache.size());
                                 break;
                             }
                         }
                     }
                     if (!mClearCache.empty()) {
                         int writeRetry = 0;
-                        ALOGD("write clear cache size:%d", mClearCache.size());
+                        ALOGD("write clear cache size:%zu", mClearCache.size());
                         while (dvr_playback_write(mPlaybackhandle, data.data(), data.size()) == -1 &&  writeRetry <= 100) {
                             usleep(100 * 1000);
                             writeRetry ++;
@@ -951,7 +951,7 @@ void Demux::startBroadcastTsFilter(vector<uint8_t> data) {
 
             if (isDscReady && !mScrambledCache.empty()) {
                 int writeRetry = 0;
-                ALOGD("write scrambled cache size:%d", mScrambledCache.size());
+                ALOGD("write scrambled cache size:%zu", mScrambledCache.size());
                 while (dvr_playback_write(mPlaybackhandle, data.data(), data.size()) == -1 &&  writeRetry <= 100) {
                     usleep(100 * 1000);
                     writeRetry ++;
@@ -1011,7 +1011,7 @@ void Demux::sendFrontendInputToRecord(vector<uint8_t> data) {
 
     set<uint64_t>::iterator it = mRecordFilterIds.begin();
     if (DEBUG_DEMUX) {
-        ALOGW("[Demux] update record filter output data size = %d", data.size());
+        ALOGW("[Demux] update record filter output data size = %zu", data.size());
     }
     //mFilters[*it]->updateRecordOutput(data);
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
@@ -1112,12 +1112,12 @@ bool Demux::startRecordFilterDispatcher() {
 Result Demux::startFilterHandler(uint64_t filterId) {
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (DEBUG_DEMUX)
-        ALOGD("%s/%d filterId:%llu", __FUNCTION__, __LINE__, filterId);
+        ALOGD("%s/%d filterId:%" PRIu64 "", __FUNCTION__, __LINE__, filterId);
     //Create mFilterEvent with mFilterOutput
     if (mFilters[filterId] != nullptr) {
         mFilters[filterId]->startFilterHandler();
     } else {
-        ALOGW("%s/%d filterId = %llu may be removed", __FUNCTION__, __LINE__, filterId);
+        ALOGW("%s/%d filterId = %" PRIu64 " may be removed", __FUNCTION__, __LINE__, filterId);
     }
     return Result::SUCCESS;
 }
@@ -1125,12 +1125,12 @@ Result Demux::startFilterHandler(uint64_t filterId) {
 void Demux::updateFilterOutput(uint64_t filterId, vector<uint8_t> data, void * priv) {
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (DEBUG_DEMUX)
-        ALOGD("%s/%d filterId:%llu", __FUNCTION__, __LINE__, filterId);
+        ALOGD("%s/%d filterId:%" PRIu64 "", __FUNCTION__, __LINE__, filterId);
     //Copy data to mFilterOutput
     if (mFilters[filterId] != nullptr) {
         mFilters[filterId]->updateFilterOutput(data, priv);
     } else {
-        ALOGW("%s/%d filterId = %llu may be removed", __FUNCTION__, __LINE__, filterId);
+        ALOGW("%s/%d filterId = %" PRIu64 " may be removed", __FUNCTION__, __LINE__, filterId);
     }
 }
 

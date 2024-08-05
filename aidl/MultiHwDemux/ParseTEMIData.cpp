@@ -1,3 +1,5 @@
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include <bitset>
 #include "ParseTEMIData.h"
 
@@ -426,7 +428,7 @@ PTS_VALUE GetPTSValueFromPESPacket(uint8_t *pidData, PES_PACKET_DATA pes_packet_
                     PTS.PTSExist  = true;
                     PARSETEMI_LOGI("PTS_hour is %u, PTS_minute is %u, PTS_second is %u", PESHeaderPTS.PTS_hour, PESHeaderPTS.PTS_minute, PESHeaderPTS.PTS_second);
                     PTS.PTS_value = (((uint64_t)PESHeaderPTS.PTS_hour) << 30) | (PESHeaderPTS.PTS_minute << 15) | PESHeaderPTS.PTS_second;
-                    PARSETEMI_LOGI("PTS value is %llu", PTS.PTS_value);
+                    PARSETEMI_LOGI("PTS value is %" PRId64 "", PTS.PTS_value);
                 }
                 else
                 {
@@ -465,7 +467,7 @@ PTS_VALUE GetPTSValueFromPESPacket(uint8_t *pidData, PES_PACKET_DATA pes_packet_
                     PTS.PTS_3     = PESHeaderPTSandDTS.PTS_second;
                     PTS.PTSExist  = true;
                     PTS.PTS_value = (((uint64_t)PESHeaderPTSandDTS.PTS_hour) << 30) | (PESHeaderPTSandDTS.PTS_minute << 15) | PESHeaderPTSandDTS.PTS_second;
-                    PARSETEMI_LOGI("PTS value is %llu", PTS.PTS_value);
+                    PARSETEMI_LOGI("PTS value is %" PRId64 "", PTS.PTS_value);
                 }
                 else
                 {
@@ -530,7 +532,7 @@ TEMI_VALUE GetTEMIFromAFDescriptor(uint8_t *pidData, AF_DESC_DATA af_desc_data)
                     TEMI.timescale       = timescale;
                     TEMI.media_timestamp = media_timestamp;
                     TEMI.TEMI            = (double)media_timestamp/(double)timescale;
-                    PARSETEMI_LOGI("media_timestamp is %llu", TEMI.media_timestamp);
+                    PARSETEMI_LOGI("media_timestamp is %" PRId64 "", TEMI.media_timestamp);
                 }
                 else
                 {
@@ -543,7 +545,7 @@ TEMI_VALUE GetTEMIFromAFDescriptor(uint8_t *pidData, AF_DESC_DATA af_desc_data)
                     TEMI.timescale       = timescale;
                     TEMI.media_timestamp = media_timestamp;
                     TEMI.TEMI            = (double)media_timestamp/(double)timescale;
-                    PARSETEMI_LOGI("media_timestamp is %llu", TEMI.media_timestamp);
+                    PARSETEMI_LOGI("media_timestamp is %" PRId64 "", TEMI.media_timestamp);
                 }
                 TEMI.TEMIExist = true;
             }

@@ -452,7 +452,7 @@ int AmLinuxDvb::dvr_data_write(uint8_t *buf, int size,uint64_t timeout) {
         left -= ret;
         p += ret;
         if (TSPLooper::GetNowUs() - nowUs > timeout) {
-            ALOGE("dvr_data_write timeout(%lld) \n",timeout);
+            //ALOGE("dvr_data_write timeout(%" PRIu64 ") \n",timeout);
             break;
         }
     }

@@ -704,7 +704,7 @@ AM_ErrorCode_t AM_DMX_Device::AM_DMX_GetFilterFd(int fhandle, int *fd) {
     ret = dmx_get_used_filter(fhandle, &filter);
 
     if (ret == AM_SUCCESS && fd) {
-        *fd = (int)filter->drv_data;
+        *fd = (uintptr_t)filter->drv_data;
         ret = AM_SUCCESS;
     }
     pthread_mutex_unlock(&lock);

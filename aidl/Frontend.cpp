@@ -1104,7 +1104,7 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd, uint32
     if (mType == FrontendType::ATSC3 && mIsLocked) {
         vector<atsc3_plp_list_entry_t> plpList = mFeDev->getAtsc3MPLPIDList();
         vector<FrontendScanAtsc3PlpInfo> tunerPlpInfos;
-        ALOGV("%s plpList.size() =%d", __FUNCTION__, plpList.size());
+        ALOGV("%s plpList.size() =%zd", __FUNCTION__, plpList.size());
         for (int i = 0; i < plpList.size(); i++) {
             ALOGV("%s plpList[i].id is =%d", __FUNCTION__, plpList[i].id);
             ALOGV("%s plpEntry.lls_flg is =%d", __FUNCTION__, static_cast<bool>(plpList[i].lls_flg));

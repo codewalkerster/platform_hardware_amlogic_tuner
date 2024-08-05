@@ -575,7 +575,7 @@ Tuner::~Tuner() {}
 
     mDescramblers[dscId] = ndk::SharedRefBase::make<Descrambler>(dscId, this->ref<Tuner>());
     *_aidl_return = mDescramblers[dscId];
-    ALOGD("%s/%d dscId:%d dscNum:%d", __FUNCTION__, __LINE__, dscId, mDescramblers.size());
+    ALOGD("%s/%d dscId:%d dscNum:%zd", __FUNCTION__, __LINE__, dscId, mDescramblers.size());
 
     return ndk::ScopedAStatus::ok();
 }
@@ -751,7 +751,7 @@ void Tuner::removeDescrambler(int32_t dscId) {
     std::lock_guard<std::mutex> lock(mLock);
 
     mDescramblers.erase(dscId);
-    ALOGD("%s/%d dscId:%d dscNum:%d", __FUNCTION__, __LINE__, dscId, mDescramblers.size());
+    ALOGD("%s/%d dscId:%d dscNum:%zd", __FUNCTION__, __LINE__, dscId, mDescramblers.size());
 }
 
 void Tuner::frontendStopTune(int32_t frontendId) {

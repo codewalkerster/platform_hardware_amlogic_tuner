@@ -350,7 +350,7 @@ void Dvr::DvrRecordThreadLoop() {
             mIframeIndex = mReceiveParams.flags & DVR_INDEX_IFRAME;
             mPts         = mReceiveParams.pts;
             if (videoPid != -1) {
-                ALOGD("[Dvr][demuxId = %d] offset = %llu, read pid = %d, dvr data size = %d, flag = %d, pts = %llu", mDemux->getDemuxId(), mOffset, videoPid, len, mReceiveParams.flags, mReceiveParams.pts);
+                ALOGD("[Dvr][demuxId = %d] offset = %" PRId64 ", read pid = %d, dvr data size = %zd, flag = %d, pts = %" PRId64 "", mDemux->getDemuxId(), mOffset, videoPid, len, mReceiveParams.flags, mReceiveParams.pts);
                 if (mDemux->getDemuxId() == 3) {
                     if (recordFile == NULL) {
                         recordFile = fopen("/data/local/tmp/recordData.ts", "wb+");
@@ -363,7 +363,7 @@ void Dvr::DvrRecordThreadLoop() {
                 mDemux->startRecordFilterDispatcher();
             } else {
                 if (audioPid != -1) {
-                    ALOGD("[Dvr][demuxId = %d] read pid = %d dvr data size = %d flag = %d, pts = %llu",  mDemux->getDemuxId(), audioPid, len, mReceiveParams.flags, mReceiveParams.pts);
+                    ALOGD("[Dvr][demuxId = %d] read pid = %d dvr data size = %zd flag = %d, pts = %" PRId64 "",  mDemux->getDemuxId(), audioPid, len, mReceiveParams.flags, mReceiveParams.pts);
                     mDemux->sendFrontendInputToRecord(data, audioPid, mOffset, mPts, mIframeIndex, mPusiIndex);
                     mDemux->startRecordFilterDispatcher();
                 }
@@ -494,7 +494,7 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
     }
     size_t leftSize = size - tmpSize;
     if (leftSize > 0 && !mFlushing && mDvrThreadRunning) {
-        ALOGD("[Dvr] inject data left size = %d", leftSize);
+        ALOGD("[Dvr] inject data left size = %zd", leftSize);
         dataOutputBuffer.resize(leftSize);
         if (!mDvrMQ->read(dataOutputBuffer.data(), leftSize)) {
             ALOGD("%s/%d read data fail", __FUNCTION__, __LINE__);

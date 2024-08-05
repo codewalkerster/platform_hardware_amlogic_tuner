@@ -233,7 +233,7 @@ static int secure_resource_prepare(DVR_RecordContext_t *p_ctx)
       return -1;
     }
 
-    DVR_INFO("%s sects alloc secure buffer success, addr: %#x, size: %#x",
+    DVR_INFO("%s sects alloc secure buffer success, addr: %#zx, size: %#zx",
         __func__, (size_t)buf, p_ctx->rb1.len);
   } else {
     DVR_ERROR("%s SECTS_AllocSecureBuffer_Func is null", __func__);
@@ -1200,7 +1200,7 @@ static int normal_dvr_with_rb(int dvr_fd, int event_fd,
   if (dvr_poll(dvr_fd, event_fd, lock) || dvr_fd < 0)
     return DVR_FAILURE;
 
-  DVR_INFO("before read, r_offset: %#x, w_offset: %#x\n",
+  DVR_INFO("before read, r_offset: %#zx, w_offset: %#zx\n",
         ringbuf->r_offset, ringbuf->w_offset);
 
   // If the write offset is greater than or equal to the read offset,
@@ -1222,7 +1222,7 @@ static int normal_dvr_with_rb(int dvr_fd, int event_fd,
             ringbuf->w_offset + len;
   }
   if (len <= 0 || (len % 188) != 0) {
-    DVR_ERROR("%s read failed: %s. fd: %d, r: %#x, w: %#x, len: %#x\n",
+    DVR_ERROR("%s read failed: %s. fd: %d, r: %#zx, w: %#zx, len: %#zx\n",
             __func__, strerror(errno), dvr_fd,
             ringbuf->r_offset,
             ringbuf->w_offset,
@@ -1234,7 +1234,7 @@ static int normal_dvr_with_rb(int dvr_fd, int event_fd,
           (ringbuf->w_offset + len) %
           ringbuf->len;
 
-  DVR_INFO("%s record %#x bytes. r: %#x, w: %#x, size: %#x\n",
+  DVR_INFO("%s record %#zx bytes. r: %#zx, w: %#zx, size: %#zx\n",
         __func__, len,
         ringbuf->r_offset,
         ringbuf->w_offset,
@@ -1277,7 +1277,7 @@ static ssize_t secure_inject_record2normal(
 
   sec_ts_data.buf_start = inj_buf;
   sec_ts_data.buf_end = (size_t) (sec_ts_data.buf_start + sec_buf_len);
-  DVR_INFO("secure inject %#x bytes, addr: %p\n",  sec_buf_len, (void *)sec_ts_data.buf_start);
+  DVR_INFO("secure inject %#zx bytes, addr: %p\n",  sec_buf_len, (void *)(uintptr_t)sec_ts_data.buf_start);
   ret = write(inject_fd, (uint8_t *)&sec_ts_data, sizeof(struct dmx_sec_ts_data));
   if (ret <= 0) {
     DVR_ERROR("error!!!inject to dvr failed: %d, inj_fd: %d", errno, inject_fd);
@@ -1297,11 +1297,11 @@ static ssize_t secure_inject_record2normal(
   } while (time-- > 0);
 
   if (act_rec_len < sec_buf_len) {
-      DVR_ERROR("error!!! secure inject len: %#x, actual record len: %#x",
+      DVR_ERROR("error!!! secure inject len: %#zx, actual record len: %#zx",
         sec_buf_len, act_rec_len);
   }
 
-  DVR_INFO("%#x bytes read\n",  act_rec_len);
+  DVR_INFO("%#zx bytes read\n",  act_rec_len);
   return act_rec_len;
 }
 
@@ -1330,13 +1330,13 @@ static ssize_t secure_pusi_read(
   if (pusi->start == pusi->end
         || pusi->start >= pusi_rb->len
         || pusi->end >= pusi_rb->len ) {
-    DVR_ERROR("%s wrong pusi. pusi_start: %#x, pusi_end: %#x, output len: %#x",
+    DVR_ERROR("%s wrong pusi. pusi_start: %#zx, pusi_end: %#zx, output len: %#zx",
             __func__, pusi->start, pusi->end, pusi_rb->len);
     return -1;
   }
 
   if (pusi->flags & DVR_INDEX_IFRAME) {
-    DVR_INFO("pusi read %#x ~ %#x, flags: %d",
+    DVR_INFO("pusi read %#zx ~ %#zx, flags: %d",
              pusi->start, pusi->end, pusi->flags);
   }
 
@@ -1344,7 +1344,7 @@ static ssize_t secure_pusi_read(
     // Buffer length MUST be enough
     pusi_len = pusi->end - pusi->start + 1;
     if (pusi_len > params->len) {
-      DVR_ERROR("buffer is not enough! buffer len: %#x, data len:%#x. %#x-%#x",
+      DVR_ERROR("buffer is not enough! buffer len: %#zx, data len:%#zx. %#zx-%#zx",
             params->len, pusi_len, pusi->start, pusi->end);
       return -1;
     }
@@ -1363,7 +1363,7 @@ static ssize_t secure_pusi_read(
   } else {
     pusi_len = (pusi_rb->len - pusi->start) + pusi->end + 1;
     if (pusi_len > params->len) {
-      DVR_ERROR("buffer is not enough! buffer len: %#x, data len:%#x. %#x-%#x",
+      DVR_ERROR("buffer is not enough! buffer len: %#zx, data len:%#zx. %#zx-%#zx",
             params->len, pusi_len, pusi->start, pusi->end);
       return -1;
     }
@@ -1406,7 +1406,7 @@ static ssize_t secure_pusi_read(
     size_t wanna_len = (left < non_pusi_rb->size) ? left : non_pusi_rb->size;
     uint8_t *src = non_pusi_rb->buffer + non_pusi_rb->r_offset;
 
-    DVR_INFO("none pusi rp: %#x, wp: %#x, size: %#x", non_pusi_rb->r_offset,
+    DVR_INFO("none pusi rp: %#zx, wp: %#zx, size: %#zx", non_pusi_rb->r_offset,
                 non_pusi_rb->w_offset, non_pusi_rb->size);
     // If non_pusi_rb have data and memory space in receive buffer, then fill
     // the data in non_pusi_rb to the tail of the receive buffer.
@@ -1430,7 +1430,7 @@ static ssize_t secure_pusi_read(
       non_pusi_rb->r_offset += wanna_len;
     }
     non_pusi_rb->r_offset %= non_pusi_rb->len;
-    DVR_INFO("%#x bytes non pusi data picked. 0x%02x 0x%02x 0x%02x 0x%02x",
+    DVR_INFO("%#zx bytes non pusi data picked. 0x%02x 0x%02x 0x%02x 0x%02x",
           wanna_len, src[0], src[1], src[2], src[3]);
 
     non_pusi_rb->size -= wanna_len;
@@ -1457,13 +1457,13 @@ static ssize_t normal_pusi_read(
   if (pusi->start == pusi->end
         || pusi->start >= pusi_rb->len
         || pusi->end >= pusi_rb->len ) {
-    DVR_ERROR("%s wrong pusi. pusi_start: %#x, pusi_end: %#x, output len: %#x",
+    DVR_ERROR("%s wrong pusi. pusi_start: %#zx, pusi_end: %#zx, output len: %#zx",
             __func__, pusi->start, pusi->end, pusi_rb->len);
     return -1;
   }
 
   if (pusi->flags & DVR_INDEX_IFRAME) {
-    DVR_ERROR("pusi read %#x ~ %#x, flags: %d",
+    DVR_ERROR("pusi read %#zx ~ %#zx, flags: %d",
             pusi->start, pusi->end, pusi->flags);
   }
 
@@ -1471,7 +1471,7 @@ static ssize_t normal_pusi_read(
     // Buffer length MUST be enough
     pusi_len = pusi->end - pusi->start + 1;
     if (pusi_len > params->len) {
-      DVR_ERROR("buffer is not enough! buffer len: %#x, data len:%#x. %#x-%#x",
+      DVR_ERROR("buffer is not enough! buffer len: %#zx, data len:%#zx. %#zx-%#zx",
             params->len, pusi_len, pusi->start, pusi->end);
       return -1;
     }
@@ -1483,7 +1483,7 @@ static ssize_t normal_pusi_read(
   } else {
     pusi_len = (pusi_rb->len - pusi->start) + pusi->end + 1;
     if (pusi_len > params->len) {
-      DVR_ERROR("buffer is not enough! buffer len: %#x, data len:%#x. %#x-%#x",
+      DVR_ERROR("buffer is not enough! buffer len: %#zx, data len:%#zx. %#zx-%#zx",
             params->len, pusi_len, pusi->start, pusi->end);
       return -1;
     }
@@ -1526,7 +1526,7 @@ static TS_Indexer_Pusi_t *pusi_get(DVR_RecordContext_t *p_ctx)
   // Find the first valid PUSI
   for (i = 0; i < DVR_MAX_RECORD_PUSI_CNT; i++) {
     if (p_ctx->pusi[i].state == TS_INDEXER_PUSI_DONE) {
-      DVR_INFO("get pusi[%d]: %#x ~ %#x, flags: %d\n",
+      DVR_INFO("get pusi[%d]: %#zx ~ %#zx, flags: %d\n",
             i, p_ctx->pusi[i].start,
             p_ctx->pusi[i].end, p_ctx->pusi[i].flags);
       break;
@@ -1555,7 +1555,7 @@ static int pusi_move(DVR_RecordContext_t *p_ctx)
   if (i < DVR_MAX_RECORD_PUSI_CNT && i != 0) {
     memcpy(&p_ctx->pusi[0], &p_ctx->pusi[i], sizeof(TS_Indexer_Pusi_t));
     memset(&p_ctx->pusi[i], 0, sizeof(TS_Indexer_Pusi_t));
-    DVR_INFO("move the %d pusi to head, %#x ~ %#x",
+    DVR_INFO("move the %d pusi to head, %#zx ~ %#zx",
         i, p_ctx->pusi[0].start, p_ctx->pusi[0].end);
   }
 
@@ -1650,13 +1650,13 @@ ssize_t dvr_record_read(DVR_RecordHandle_t handle, DVR_RecordReceiveParams_t *pa
         break;
 
       // Secure ts indexer
-      DVR_INFO("sects parse, wp: %#x, rp: %#x, size: %#x\n",
+      DVR_INFO("sects parse, wp: %#zx, rp: %#zx, size: %#zx\n",
             p_ctx->rb1.w_offset, p_ctx->rb1.r_offset, p_ctx->rb1.size);
       ret = SECTS_IndexerParse_Func(p_ctx->sects_sess,
                                 (SECTS_IndexerRingBuffer_t *)&p_ctx->rb1,
                                 (SECTS_IndexerPusi_t *)&p_ctx->pusi[0],
                                 max_pusi_cnt);
-      DVR_INFO("sects parse done, wp: %#x, rp: %#x, size: %#x\n",
+      DVR_INFO("sects parse done, wp: %#zx, rp: %#zx, size: %#zx\n",
             p_ctx->rb1.w_offset, p_ctx->rb1.r_offset, p_ctx->rb1.size);
       if (ret != 0) {
         DVR_ERROR("%s sects parse failed", __func__);
