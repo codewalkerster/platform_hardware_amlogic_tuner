@@ -225,11 +225,13 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
     if (settings->analog().type == FrontendAnalogType::AUTO) {
         ALOGD("search , afc set true");
         p_fe_params->flag  |= ANALOG_FLAG_ENABLE_AFC;
+        p_fe_params->afc_range = 1000000;
     } else {
         ALOGD("play , afc set fasle");
         p_fe_params->flag  &= ~ANALOG_FLAG_ENABLE_AFC;
+        p_fe_params->afc_range = 0;
     }
-    p_fe_params->afc_range = 1000000;
+
     return 0;
 }
 
