@@ -463,7 +463,7 @@ Filter::~Filter() {
 ::ndk::ScopedAStatus Filter::getQueueDesc(MQDescriptor<int8_t, SynchronizedReadWrite>* out_queue) {
     ALOGV("%s", __FUNCTION__);
 
-    mIsUsingFMQ = mIsRecordFilter ? false : true;
+    mIsUsingFMQ = mIsMediaFilter ? false : true;
 
     *out_queue = mFilterMQ->dupeDesc();
     return ::ndk::ScopedAStatus::ok();

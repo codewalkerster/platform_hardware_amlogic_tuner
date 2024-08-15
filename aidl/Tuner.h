@@ -121,7 +121,7 @@ class Tuner : public BnTuner {
   private:
     vector<FrontendInfos_t> mFrontendInfos;
     // Static mFrontends array to maintain local frontends information
-    map<int32_t, std::shared_ptr<Frontend>> mFrontends;
+    //map<int32_t, std::shared_ptr<Frontend>> mFrontends;
     map<int32_t, int32_t> mFrontendToDemux;
     map<int32_t, std::shared_ptr<Demux>> mDemuxes;  // use demuxId as the key in
                                                     // this sample implementation

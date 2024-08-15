@@ -684,11 +684,13 @@ std::shared_ptr<Frontend> Tuner::getFrontendById(int32_t frontendId) {
 #endif
 
 binder_status_t Tuner::dump(int fd, const char** args, uint32_t numArgs) {
-    ALOGV("%s", __FUNCTION__);
+    ALOGV("%s/%d mFrontendSize = %d fd = %d", __FUNCTION__, __LINE__, mFrontendSize, fd);
     {
         dprintf(fd, "Frontends:\n");
         for (int i = 0; i < mFrontendSize; i++) {
-            mFrontends[i]->dump(fd, args, numArgs);
+            if (mFrontendInfos[i].mFrontend != nullptr) {
+                mFrontendInfos[i].mFrontend->dump(fd, args, numArgs);
+            }
         }
     }
     {
@@ -709,7 +711,7 @@ binder_status_t Tuner::dump(int fd, const char** args, uint32_t numArgs) {
 
 void Tuner::setFrontendAsDemuxSource(int32_t frontendId, int32_t demuxId) {
     mFrontendToDemux[frontendId] = demuxId;
-    if (mFrontends[frontendId] != nullptr && mFrontends[frontendId]->isLocked()) {
+    if (mFrontendInfos[frontendId].mFrontend != nullptr && mFrontendInfos[frontendId].mFrontend->isLocked()) {
         mDemuxes[demuxId]->startFrontendInputLoop();
     }
 }
