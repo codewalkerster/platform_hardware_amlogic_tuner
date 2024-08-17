@@ -135,6 +135,8 @@ class Dvr : public BnDvr {
     void DvrRecordThreadLoop();
     DVB_DemuxSource_t getDemuxSourceByTsInput(int tsInput);
     void initDvrRecordParams();
+    bool checkIsSecureBuffer();
+    bool injectSecureBuffer();
 
     std::shared_ptr<Tuner> mTuner;
     unique_ptr<DvrMQ> mDvrMQ;
@@ -185,6 +187,10 @@ class Dvr : public BnDvr {
     int videoPid = -1;
     int audioPid = -1;
     FILE *recordFile = NULL;
+
+    bool mNeedCheckFirstPacket = false;
+    bool mIsSecureBuffer = false;
+    bool mSupportAES128Data = false;
 };
 
 }  // namespace tuner

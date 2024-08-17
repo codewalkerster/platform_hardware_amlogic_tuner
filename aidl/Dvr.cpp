@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-//#define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 #define LOG_TAG "tunerhal2.0-Dvr"
 
 #include <aidl/android/hardware/tv/tuner/DemuxQueueNotifyBits.h>
@@ -22,6 +22,7 @@
 
 #include <utils/Log.h>
 #include <sys/prctl.h>
+#include <cutils/properties.h>
 #include "Dvr.h"
 
 namespace aidl {
@@ -31,6 +32,8 @@ namespace tv {
 namespace tuner {
 
 #define WAIT_TIMEOUT 3000000000
+#define SUPPORT_AES128_DATA_INJECT "vendor.tunerhal.AES128.data.inject"
+using namespace std;
 
 Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>& cb,
          std::shared_ptr<Demux> demux, std::shared_ptr<Tuner> in_tuner) {
@@ -41,7 +44,12 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>&
     mTuner = in_tuner;
 
     if (mType == DvrType::PLAYBACK) {
-        ALOGD("%s/%d dvr_playback_open dmxid = %d", __FUNCTION__, __LINE__, mDemux->getDemuxId());
+        mSupportAES128Data = property_get_bool(SUPPORT_AES128_DATA_INJECT, false);
+        ALOGD("%s/%d dvr_playback_open dmxid = %d, mSupportAES128Data = %d", __FUNCTION__, __LINE__, mDemux->getDemuxId(), mSupportAES128Data);
+        if (mSupportAES128Data) {
+            mNeedCheckFirstPacket = true;
+            mIsSecureBuffer = false;
+        }
         mPlaybackParams.dmx_dev_id = mDemux->getDemuxId();
         DVR_Result_t ret = dvr_playback_open(&mPlaybackhandle, &mPlaybackParams);
         if (ret != DVR_SUCCESS) {
@@ -425,7 +433,7 @@ void Dvr::playbackThreadLoop() {
                 mDvrEventFlag->wait(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY),
                                     &efState, WAIT_TIMEOUT, true /* retry on spurious wake */);
         if (status != ::android::OK) {
-            ALOGD("[Dvr] wait for data ready on the playback FMQ");
+            ALOGD("[Dvr] wait for data ready on the playback FMQ, demux id: %d", mDemux->getDemuxId());
             continue;
         }
 
@@ -476,7 +484,9 @@ void Dvr::maySendPlaybackStatusCallback() {
             checkPlaybackStatusChange(availableToWrite, availableToRead,
                                       mDvrSettings.get<DvrSettings::Tag::playback>().highThreshold,
                                       mDvrSettings.get<DvrSettings::Tag::playback>().lowThreshold);
-    if (mPlaybackStatus != newStatus) {
+    if ((mPlaybackStatus != newStatus)
+        || (mIsSecureBuffer
+        && (newStatus == PlaybackStatus::SPACE_ALMOST_EMPTY || newStatus == PlaybackStatus::SPACE_EMPTY))) {
         mCallback->onPlaybackStatus(newStatus);
         mPlaybackStatus = newStatus;
     }
@@ -496,13 +506,128 @@ PlaybackStatus Dvr::checkPlaybackStatusChange(uint32_t availableToWrite, uint32_
     return mPlaybackStatus;
 }
 
+bool Dvr::checkIsSecureBuffer() {
+    size_t size = mDvrMQ->availableToRead();
+    ALOGD("%s fmq size: %u", __FUNCTION__, size);
+    if (size == 0) {
+        return true;
+    }
+
+    if (size > 188) {
+        size = 188;
+    }
+    DvrMQ::MemTransaction tx;
+    uint8_t *firstPacket = new uint8_t[size];
+    memset(firstPacket, 0, size);
+    if (mDvrMQ->beginRead(size, &tx)) {
+        auto first = tx.getFirstRegion();
+        auto data = first.getAddress();
+        int64_t length = first.getLength();
+        if (length < 10) {
+            delete [] firstPacket;
+            ALOGD("%s fmq first region too small, length: %" PRId64 "", __FUNCTION__, length);
+            return false;
+        }
+
+        memcpy(firstPacket, (uint8_t *)data, size);
+
+        if (firstPacket[0] == 0xFF && firstPacket[1] == 0xFF && firstPacket[2] == 0xFE
+            && firstPacket[3] == 0xFE) {
+            mIsSecureBuffer = true;
+        } else {
+            mIsSecureBuffer = false;
+        }
+
+        ALOGI("%s fmq header: [%x %x %x %x]", __FUNCTION__,
+            firstPacket[0], firstPacket[1], firstPacket[2], firstPacket[3]);
+
+        ALOGI("%s mIsSecureBuffer: %s", __FUNCTION__, mIsSecureBuffer ? "true" : "false");
+        mDemux->setUseSecureBuffer(mIsSecureBuffer);
+
+        delete [] firstPacket;
+        mNeedCheckFirstPacket = false;
+
+        if (mIsSecureBuffer) {
+            if (!mDvrMQ->commitRead(size)) {
+                ALOGD("%s fmq size: %u, commit read failed", __FUNCTION__, size);
+                return false;
+            } else {
+                ALOGD("%s fmq read %u bytes", __FUNCTION__, size);
+            }
+        }
+
+        return true;
+    } else {
+        delete [] firstPacket;
+        return false;
+    }
+}
+
+bool Dvr::injectSecureBuffer() {
+    size_t size = mDvrMQ->availableToRead();
+    ALOGD("%s isSecureBuffer fmq size: %u", __FUNCTION__, size);
+    if (size == 0) {
+        return true;
+    }
+    vector<int8_t> buffer;
+    buffer.resize(size);
+    DvrMQ::MemTransaction tx;
+    if (!mDvrMQ->beginRead(size, &tx)) {
+        ALOGE("%s can not read from fmq", __FUNCTION__);
+        return false;
+    }
+
+    auto first = tx.getFirstRegion();
+    auto data = first.getAddress();
+    size_t length = first.getLength();
+    size_t toRead = std::min(size, length);
+    memcpy(buffer.data(), data, toRead);
+    ALOGD("%s isSucureBuffer firstRegion length: %u, totalSize: %u", __FUNCTION__, length, size);
+
+    if (toRead < size) {
+        auto second = tx.getSecondRegion();
+        auto secondData = second.getAddress();
+        size_t secondLength = second.getLength();
+        size_t secondRead = std::min(secondLength, size - toRead);
+        memcpy(buffer.data() + toRead, secondData, secondRead);
+        ALOGD("%s isSucureBuffer secondRegion length: %u, read: %u", __FUNCTION__, secondLength, secondRead);
+    }
+
+    if (!mDemux->broadcastSecureBuffer(buffer)) {
+        ALOGE("%s failed to write secure buffer", __FUNCTION__);
+        return false;
+    }
+
+    if (!mDvrMQ->commitRead(size)) {
+        ALOGE("%s commit read secure buffer failed", __FUNCTION__);
+        return false;
+    }
+
+    return true;
+}
+
 bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
     if (mDvrMQ.get() == NULL) {
         ALOGD("DvrMQ is null");
         return false;
     }
+
     // Read playback data from the input FMQ
     std::lock_guard<std::mutex> lock(mReadLock);
+    if (mSupportAES128Data) {
+        if (mNeedCheckFirstPacket && !mFlushing && mDvrThreadRunning) {
+            bool success = checkIsSecureBuffer();
+            if (!success) {
+                return false;
+            }
+        }
+
+        if (mIsSecureBuffer && !mFlushing && mDvrThreadRunning) {
+            bool ret = injectSecureBuffer();
+            return ret;
+        }
+    }
+
     size_t size = mDvrMQ->availableToRead();
     int64_t playbackPacketSize = mDvrSettings.get<DvrSettings::Tag::playback>().packetSize * 100; //188 bytes
     size_t tmpSize = 0;

@@ -491,15 +491,18 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_source(int id, int input, int source) {
             r = 0;
         }
 
-        if (ioctl(fd, DMX_SET_HW_SOURCE, source) == -1)
+        if (source >= 0)
         {
-            ALOGD("dvb_set_source ioctl DMX_SET_HW_SOURCE:%d error:%d", source, errno);
-            r = -1;
-        }
-        else
-        {
-            ALOGE("dvb_set_source ioctl succeeded DMX_SET_HW_SOURCE:%d dmx_idx:%d", source, id);
-            r = 0;
+            if (ioctl(fd, DMX_SET_HW_SOURCE, source) == -1)
+            {
+                ALOGD("dvb_set_source ioctl DMX_SET_HW_SOURCE:%d error:%d", source, errno);
+                r = -1;
+            }
+            else
+            {
+                ALOGE("dvb_set_source ioctl succeeded DMX_SET_HW_SOURCE:%d dmx_idx:%d", source, id);
+                r = 0;
+            }
         }
      }
      close(fd);

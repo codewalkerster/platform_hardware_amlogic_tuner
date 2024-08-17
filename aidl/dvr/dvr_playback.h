@@ -80,6 +80,16 @@ DVR_Result_t dvr_playback_set_key_token(DVR_PlaybackHandle_t handle, int pid, ui
  */
 size_t dvr_playback_write(DVR_PlaybackHandle_t handle, uint8_t *data, size_t len);
 
+/**
+ * @brief Read dvr data from the DVR playback session
+ *
+ * @param handle The DVR playback session
+ * @param data The data secure buffer
+ * @param len The buffer length
+ * @return size_t -1 if failed, else the actual written length
+ */
+size_t dvr_playback_write_secure_ts(DVR_PlaybackHandle_t handle, uint8_t *data, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

@@ -24,6 +24,7 @@
 #include "Demux.h"
 #include <cutils/properties.h>
 #include <sys/prctl.h>
+#include <json/json.h>
 #include "FileSystemIo.h"
 
 namespace aidl {
@@ -108,6 +109,8 @@ void Demux::setTunerService(std::shared_ptr<Tuner> tuner) {
         for (int i = 0; i < 4; i++) {
             pStreamPidInfo->audioPids[i] = 0x1fff;
         }
+        mStreamControlArgs.pidInfo = pStreamPidInfo;
+        mStreamControlArgs.pidInfoSize = sizeof(StreamPidInfo);
     }
 }
 #else
@@ -1170,6 +1173,78 @@ void Demux::notifyDvrFlushed() {
     if (mDemuxHandle && mHwDemuxOps) {
         mHwDemuxOps->AmHwDemux_Flush(mDemuxHandle);
     }
+}
+
+bool Demux::setUseSecureBuffer(bool secure) {
+    AM_ErrorCode_t ret = AM_SUCCESS;
+    if (secure) {
+        ret = AmDmxDevice->AM_DMX_SetSource(mDemuxId, INPUT_LOCAL_SEC, mTuner->getTsInput());
+    }
+    ALOGD("%s result: %s", __FUNCTION__, (ret == AM_SUCCESS ? "true" : "false"));
+    return true;
+}
+
+bool Demux::broadcastSecureBuffer(vector<int8_t> data) {
+    Json::Value root;
+    Json::Reader reader;
+
+    ALOGI("%s start, size: %u", __FUNCTION__, data.size());
+
+    if (!reader.parse((char*)(data.data()), root)) {
+        ALOGE("%s parse secure buffer info failed", __FUNCTION__);
+        return false;
+    }
+
+    uint64_t address = 0;
+    uint64_t offset = 0;
+    uint64_t size = 0;
+    if (root.isMember("address") && root["address"].isInt()) {
+        address = root["address"].asInt();
+    }
+    if (root.isMember("offset") && root["offset"].isInt()) {
+        offset = root["offset"].asInt();
+    }
+    if (root.isMember("size") && root["size"].isInt()) {
+        size = root["size"].asInt();
+    }
+
+    ALOGI("%s address: %" PRIu64 ", offset: %" PRIu64 ", size: %" PRIu64 "", __FUNCTION__, address, offset, size);
+
+    if (address == 0 || size == 0) {
+        root.clear();
+        return false;
+    }
+
+    if (mDemuxHandle && mHwDemuxOps) {
+        while (mHwDemuxOps->AmHwDemux_GetMultiStreamControlStatus(mDemuxHandle, mStreamControlArgs) != AM_DEMUX_OK) {
+            usleep(10 * 1000);
+            if (mDvrPlayback) {
+                if (mDvrPlayback->stopInjectTs()) {
+                   ALOGD("[dvr] exit Inject, break!");
+                   break;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    struct dmx_sec_ts_data sec_ts_data;
+    sec_ts_data.buf_start = (__u32)(address + offset);
+    sec_ts_data.buf_end = (__u32)(address + offset + size);
+
+    while (dvr_playback_write_secure_ts(mPlaybackhandle, (uint8_t *)(&sec_ts_data), sizeof(struct dmx_sec_ts_data)) == -1) {
+        usleep(100 * 1000);
+        if (mDvrPlayback && mDvrPlayback->stopInjectTs()) {
+            ALOGD("[demux] stop Inject secure buffer, break!");
+            break;
+        }
+        ALOGD("[Demux] wait for 100ms to write secure buffer to dvr device demuxId = %d", mDemuxId);
+    }
+
+    root.clear();
+
+    return true;
 }
 
 void Demux::sendFrontendInputToRecord(vector<int8_t> data) {

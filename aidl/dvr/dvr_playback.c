@@ -531,3 +531,48 @@ size_t dvr_playback_write(
   pthread_mutex_unlock(&p_ctx->lock);
   return ret;
 }
+
+size_t dvr_playback_write_secure_ts(
+    DVR_PlaybackHandle_t handle,
+    uint8_t *data,
+     size_t len)
+{
+  DVR_PlaybackContext_t *p_ctx = (DVR_PlaybackContext_t *)handle;
+
+  DVR_CHECK(p_ctx != NULL);
+  DVR_CHECK(data != NULL);
+  DVR_CHECK(len > 0);
+  pthread_mutex_lock(&p_ctx->lock);
+  DVR_CHECK_WITH_UNLOCK(
+        p_ctx->state == DVR_PLAYBACK_STATE_STARTED,
+        &p_ctx->lock);
+
+  ssize_t ret = 0;
+
+  // Cuz the kte maybe not ready when dvr_playback_set_key_token called, we need
+  // check the ca ready status every time before inject ts. And try to prepare
+  // ca resource if ca channel is not ready
+  for (int i = 0; i < DVR_MAX_PLAYBACK_ENCRYPT_CNT; i++) {
+    if (p_ctx->streams[i].key_token != -1 && !p_ctx->streams[i].ca_ready) {
+      ca_prepare(p_ctx, &p_ctx->streams[i]);
+    }
+  }
+
+#ifndef DEBUG_ON_PC
+  DVR_INFO("%s write dvr size: %u", __func__, len);
+  ret = write(p_ctx->fd, data, len);
+  if (ret == -1) {
+    if (errno != EINTR) {
+      DVR_ERROR("%s write dvr failed, %s", __func__, strerror(errno));
+      pthread_mutex_unlock(&p_ctx->lock);
+      return DVR_FAILURE;
+    }
+    ret = 0;
+  } else {
+    DVR_INFO("%s %#x bytes written", __func__, ret);
+  }
+#endif
+
+  pthread_mutex_unlock(&p_ctx->lock);
+  return ret;
+}
