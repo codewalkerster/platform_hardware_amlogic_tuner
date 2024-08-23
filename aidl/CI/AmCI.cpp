@@ -30,6 +30,9 @@
 #define MEDIA_INPUT_ENABLE 1
 #define MEDIA_OUTPUT_ENABLE 1
 
+#define USBCAM_UNPLUG (-71)
+#define USBCAM_NODEVICE (-19)
+
 enum aml_usbcam_device_state device_state;
 
 static int getTsInputById(uint32_t tsInputId) {
@@ -68,7 +71,7 @@ AmCI::~AmCI() {
     delete mpCIApi;
 }
 
-AmCIModuleApi* AmCI::getCIModuelApi() {
+AmCIModuleApi* AmCI::getCIModuleApi() {
     return mpCIApi;
 }
 
@@ -213,7 +216,7 @@ void* AmCI::cimodule_media_read_task(void *args)
     //int save_fd = -1;
     prctl(PR_SET_NAME, "cimodule_media_read_task");
     struct pollfd fds[1];
-    int timeout_ms = 500;
+    // int timeout_ms = 500;
     ALOGD("entry");
     fdMedia = pAmCI->ci_ts_read_open();
     fds[0].fd = fdMedia;
@@ -234,7 +237,7 @@ void* AmCI::cimodule_media_read_task(void *args)
 
         ALOGD("open usb media interface successfully,read handle:%d", fdMedia);
 
-        ret = pAmCI->getCIModuelApi()->cimodule_get_usb_cimodule_info(fdMedia, &tUsbCiModuleInfo);
+        ret = pAmCI->getCIModuleApi()->cimodule_get_usb_cimodule_info(fdMedia, &tUsbCiModuleInfo);
         if (ret < 0)
         {
             ALOGD("(handle: %d),get device info error,error code:%d", fdMedia, ret);
@@ -256,7 +259,7 @@ void* AmCI::cimodule_media_read_task(void *args)
             }
         }
 
-        pbMediaReadBuf = pAmCI->getCIModuelApi()->cimodule_media_intf_readbuf(fdMedia, USB_CIMODULE_MEDIA_MAX_SIZE);
+        pbMediaReadBuf = pAmCI->getCIModuleApi()->cimodule_media_intf_readbuf(fdMedia, USB_CIMODULE_MEDIA_MAX_SIZE);
         if (NULL == pbMediaReadBuf)
         {
             ALOGD("(handle: %d),media read buffer mmap failed", fdMedia);
@@ -266,13 +269,9 @@ void* AmCI::cimodule_media_read_task(void *args)
         }
         while (pAmCI->thread_running)
         {
-            ALOGD("read pAmCI->thread_running %d", pAmCI->thread_running);
-            ret = poll(fds, 1, timeout_ms);
-            ALOGD("read ret %d fds[0].revents %d", ret,fds[0].revents);
-            if (ret == 1)//&& (fds[0].revents & POLLIN)
-                ret = pAmCI->getCIModuelApi()->cimodule_media_intf_read(fdMedia, pbMediaReadBuf, USB_CIMODULE_MEDIA_MAX_SIZE, &read_len, -1);
-            ALOGD("read pAmCI->thread_running %d read_len %d", pAmCI->thread_running ,read_len);
-            if (read_len > 0)
+            ret = pAmCI->getCIModuleApi()->cimodule_media_intf_read(fdMedia, pbMediaReadBuf, USB_CIMODULE_MEDIA_MAX_SIZE, &read_len, -1);
+            ALOGD("read ret %d pAmCI->thread_running %d read_len %d", ret, pAmCI->thread_running ,read_len);
+            if (ret == 0)
             {
                 if (read_len == 10)
                 {
@@ -293,17 +292,17 @@ void* AmCI::cimodule_media_read_task(void *args)
             else
             {
                 ALOGD("read len %d ret %d", read_len, ret);
-                // goto EXIT;
+                goto EXIT;
             }
         }
 
         pAmCI->ci_ts_read_close(fdMedia, pbMediaReadBuf);
         fdMedia = -1;
     }
-// EXIT:
+EXIT:
     ALOGD("usbcam unplug, media read task exit.");
-    // pAmCI->ci_ts_read_close(fdMedia, pbMediaReadBuf);
-    // fdMedia = -1;
+    pAmCI->ci_ts_read_close(fdMedia, pbMediaReadBuf);
+    fdMedia = -1;
 
     return NULL;
 }
@@ -346,7 +345,7 @@ void* AmCI::cimodule_media_write_task(void *args)
 
         ALOGD("open usb cimodlue media interface successfully,write handle:%d", fdMedia);
 
-        ret = pAmCI->getCIModuelApi()->cimodule_get_usb_cimodule_info(fdMedia, &tUsbCiModuleInfo);
+        ret = pAmCI->getCIModuleApi()->cimodule_get_usb_cimodule_info(fdMedia, &tUsbCiModuleInfo);
         if (ret < 0)
         {
             ALOGD("(handle: %d),get device info error,error code:%d", fdMedia, ret);
@@ -370,7 +369,7 @@ void* AmCI::cimodule_media_write_task(void *args)
         }
         ALOGD("ci20 detected ok");
 
-        pbMediaWriteBuf = pAmCI->getCIModuelApi()->cimodule_media_intf_writebuf(fdMedia, USB_CIMODULE_MEDIA_MAX_SIZE);
+        pbMediaWriteBuf = pAmCI->getCIModuleApi()->cimodule_media_intf_writebuf(fdMedia, USB_CIMODULE_MEDIA_MAX_SIZE);
         if (NULL == pbMediaWriteBuf)
         {
             ALOGD("(handle: %d),media write buffer mmap failed", fdMedia);
@@ -378,7 +377,7 @@ void* AmCI::cimodule_media_write_task(void *args)
             fdMedia = -1;
             continue;
         }
-        ALOGD("ready to inject ts, buf %p", pbMediaWriteBuf);
+
         while (pAmCI->thread_running)
         {
 #ifndef INJECT_FROM_FILE
@@ -391,21 +390,19 @@ void* AmCI::cimodule_media_write_task(void *args)
             if (rec_len > 0)
                 threshold += rec_len;
 
-            ALOGD("record_from_tsin rec_len %d threshold %d", rec_len,threshold);
             while ((threshold >= USB_CIMODULE_MEDIA_MAX_SIZE) && pAmCI->thread_running)
             {
-                ALOGD("(threshold >= USB_CIMODULE_MEDIA_MAX_SIZE) && pAmCI->thread_running");
                 count++;
-                // DMX_USB_DBG("write dummy first");
+
                 memcpy(pbMediaWriteBuf, arDummyTsHdr, 10);
-                ret = pAmCI->getCIModuelApi()->cimodule_media_intf_write(fdMedia, pbMediaWriteBuf, 10, &write_len, -1);
-// #ifdef DEMUX_USB_MODULE_DEBUG
+                ret = pAmCI->getCIModuleApi()->cimodule_media_intf_write(fdMedia, pbMediaWriteBuf, 10, &write_len, -1);
+
                 ALOGD("write dummy len %d ret %d", write_len, ret);
-// #endif
+
                 memcpy(pbMediaWriteBuf, buffer, USB_CIMODULE_MEDIA_MAX_SIZE);
                 if (ret == 0)
                 {
-                    ret = pAmCI->getCIModuelApi()->cimodule_media_intf_write(fdMedia, pbMediaWriteBuf, USB_CIMODULE_MEDIA_MAX_SIZE, &write_len
+                    ret = pAmCI->getCIModuleApi()->cimodule_media_intf_write(fdMedia, pbMediaWriteBuf, USB_CIMODULE_MEDIA_MAX_SIZE, &write_len
 , -1);
                     if (ret != 0)
                     {
@@ -414,17 +411,19 @@ void* AmCI::cimodule_media_write_task(void *args)
                         //  pAmCI->thread_running = false;
                         // break;
                     }
-// #ifdef DEMUX_USB_MODULE_DEBUG
+
                     ALOGD("write ts len %d ret %d", write_len, ret);
-                    ALOGD("write count %d", count);
-// #endif
+
                     memmove(buffer, buffer + write_len, threshold - write_len);
                     threshold -= write_len;
                 }
-#ifdef DEMUX_USB_MODULE_DEBUG
-                else
-                    ALOGD("write dummy failed %d!!!!", ret);
-#endif
+                else if (ret < 0)
+                {
+                    ALOGD("write error: ret = %d, [%d]%s", ret, -errno, strerror(errno));
+                    if (((-errno) == USBCAM_UNPLUG) || ((-errno) == USBCAM_NODEVICE))
+                        goto EXIT;
+                }
+
             }
         }
 
@@ -482,18 +481,14 @@ int AmCI::record_from_tsin(void* buff, int buff_len)
     ret = poll(fds, 2, 300);
     if (ret <= 0)
     {
-#ifdef DEMUX_USB_MODULE_DEBUG
         ALOGD("poll ret %d rec_dvr_fd %d rec_dmx_fd %d", ret, rec_dvr_fd, rec_dmx_fd);
-#endif
         return -1;
     }
 
     if (!(fds[0].revents & POLLIN))
     {
-#ifdef DEMUX_USB_MODULE_DEBUG
         ALOGD("fds revents %d", fds[0].revents);
-#endif
-        // return -1;
+        return -1;
     }
     ret = read(rec_dvr_fd, buff, buff_len);
     if (ret < 0)
@@ -550,12 +545,12 @@ void* AmCI::CIUsbMonitorMediaWRTread(void *args)
                 {
                     ALOGD("media read task join failed =======");
                 }
-
+                ALOGD("media read task join  =======");
                 if (pthread_join(pAmCI->tMediaWriteTaskId, &status) != 0)
                 {
                     ALOGD("media write task join failed ======");
                 }
-
+                ALOGD("media write task join  =======");
                 pAmCI->setDvbSource(pAmCI->rec_dev_id, INPUT_DEMOD, FRONTEND_TS0);
                 pAmCI->setDvbSource(pAmCI->inj_dev_id, INPUT_DEMOD, FRONTEND_TS0);
                 ioctl(pAmCI->rec_dmx_fd, DMX_STOP, 0);

@@ -80,7 +80,7 @@ public:
     static void *cimodule_media_write_task(void *args);
     static void *cimodule_cmd_read_task(void *args);
     static void *CIUsbMonitorMediaWRTread(void *args);
-    AmCIModuleApi* getCIModuelApi();
+    AmCIModuleApi* getCIModuleApi();
     int setDvbSource(int dmxId, int input, int source);
     int getUsbcamDriverStatus();
 
