@@ -23,9 +23,6 @@ size_t FileSystem_create();
 size_t FileSystem_readFile(const char *name, char *value, size_t len);
 size_t FileSystem_writeFile(const char *name, const char *value);
 size_t FileSystem_getPropertyInt(const char *name, int32_t def);
-
-size_t FileSystem_setAudioParam(int param1, int param2, int param3);
-
 size_t FileSystem_release();
 
 #ifdef __cplusplus

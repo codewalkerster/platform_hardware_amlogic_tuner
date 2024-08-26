@@ -32,7 +32,6 @@ size_t FileSystem_readFile(const char *name, char *value, size_t len) {
     return 0;
 }
 
-
 size_t FileSystem_writeFile(const char *name, const char *value) {
     if (mSystemControl == NULL || name == NULL || value == NULL)
         return -1;
@@ -45,14 +44,6 @@ size_t FileSystem_getPropertyInt(const char *name, int32_t def) {
     if (mSystemControl == NULL || name == NULL)
         return -1;
     return mSystemControl->getPropertyInt(name, def);
-}
-
-size_t FileSystem_setAudioParam(int param1, int param2, int param3) {
-    if (mSystemControl == NULL)
-        return -1;
-
-    mSystemControl->setAudioParam(param1, param2, param3);
-    return 0;
 }
 
 size_t FileSystem_release() {

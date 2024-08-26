@@ -47,14 +47,6 @@ size_t FileSystem_getPropertyInt(const char *name, int32_t def) {
     return mSystemControl->getPropertyInt(name, def);
 }
 
-size_t FileSystem_setAudioParam(int param1, int param2, int param3) {
-    if (mSystemControl == NULL)
-        return -1;
-
-    mSystemControl->setAudioParam(param1, param2, param3);
-    return 0;
-}
-
 size_t FileSystem_release() {
     if (mSystemControl == NULL)
         return -1;
