@@ -299,17 +299,22 @@ int FrontendDevice::interAnalogTune(const FrontendSettings & settings) {
         sem_post(&threadSemaphore);
         return UNAVAILABLE;
     }
-    ALOGD("%s, frequency = %d, audmode:%d, soundsys:0x%x, std:0x%llx, flag:%d, afc_range:%d", __FUNCTION__,
-        mDev.tuneFreq,
-        v4l2_para.audmode,
-        v4l2_para.soundsys,
-        v4l2_para.std,
-        v4l2_para.flag,
-        v4l2_para.afc_range);
-    if (ioctl(mDev.devFd, V4L2_SET_FRONTEND, &v4l2_para) == -1) {
-         ALOGE("tune failed, (%s)", strerror(errno));
-         sem_post(&threadSemaphore);
-         return UNAVAILABLE;
+    if (FrontendAnalogAftFlag::UNDEFINED != tuneSettings.get<FrontendSettings::Tag::analog>().aftFlag) {
+        ALOGD("%s,mts func", __FUNCTION__);
+        analogMTS((int)tuneSettings.get<FrontendSettings::Tag::analog>().aftFlag, tuneSettings.get<FrontendSettings::Tag::analog>().frequency);
+    } else {
+        ALOGD("%s, frequency = %d, audmode:%d, soundsys:0x%x, std:0x%llx, flag:%d, afc_range:%d", __FUNCTION__,
+            mDev.tuneFreq,
+            v4l2_para.audmode,
+            v4l2_para.soundsys,
+            v4l2_para.std,
+            v4l2_para.flag,
+            v4l2_para.afc_range);
+        if (ioctl(mDev.devFd, V4L2_SET_FRONTEND, &v4l2_para) == -1) {
+             ALOGE("tune failed, (%s)", strerror(errno));
+             sem_post(&threadSemaphore);
+             return UNAVAILABLE;
+        }
     }
     sem_post(&threadSemaphore);
     return 0;
@@ -913,6 +918,10 @@ bool FrontendDevice::threadLoop() {
     struct pollfd pfd;
     e_signal_status_t sig_st = FE_SIGNAL_WAIT;
     memset(&mStbTrace_info, 0, sizeof(stbtrace_info));
+    ALOGD("%s:%d state = %d", __FUNCTION__, __LINE__, (int)state);
+    int newState = mtsCallBack(state);
+    updateThreadState(newState);
+    ALOGD("%s:%d state = %d", __FUNCTION__, __LINE__, (int)newState);
 
     if (state == FrontendDevice::STATE_TUNE_START
        || state == FrontendDevice::STATE_SCAN_START
@@ -1280,6 +1289,177 @@ int FrontendDevice::setDvbsBlindScanParams(bool start) {
 
     return SUCCESS;
 }
+
+void FrontendDevice::analogMTS(int mode, int value) {
+    ALOGE("%s: mode:%d, value:%d", __FUNCTION__, mode, value);
+    if (1 == mode) {
+        setAudioOutmode(value);
+        mMtsEvent = SET_MTS_MODE;
+    } else {
+        mMtsEvent = GET_MTS_MODE;
+    }
+}
+
+int FrontendDevice::mtsCallBack(int state) {
+    std::lock_guard<std::mutex> lock(mThreadStatLock);
+    int ret = state;
+    if (mDev.type == FrontendType::ANALOG) {
+        ALOGD("%s-(id:%d):  MTS event(%d).", __FUNCTION__, mDev.id, mMtsEvent);
+        if (SET_MTS_MODE == mMtsEvent) {
+            ret = FrontendDevice::STATE_STOP;
+        } else if (GET_MTS_MODE == mMtsEvent) {
+            uint32_t mode = (uint32_t)getAudioOutmode();
+            mContext->sendScanCallBack(0, true, false, mode);
+            ret = FrontendDevice::STATE_STOP;
+        }
+        mMtsEvent = MTS_NONE;
+    }
+
+    return ret;
+}
+
+int FrontendDevice::setAudioOutmode(int mode) {
+    struct dtv_properties props;
+    struct dtv_property prop;
+
+    memset(&props, 0, sizeof(props));
+    memset(&prop, 0, sizeof(prop));
+
+    prop.cmd = V4L2_SOUND_SYS;
+    prop.u.data = mode;
+
+    props.num = 1;
+    props.props = &prop;
+
+    if (v4l2_set_prop(mDev.devFd, &props)  != SUCCESS) {
+         ALOGE("setAudioOutmode failed, (%s)", strerror(errno));
+         return 0;
+    }
+
+    ALOGE("%s:mode:%d SUCCESS!", __FUNCTION__, mode);
+    return 0;
+
+}
+
+int FrontendDevice::getAudioOutmode(void) {
+    int ret = 0;
+    struct dtv_properties props;
+    struct dtv_property prop;
+
+    memset(&props, 0, sizeof(props));
+    memset(&prop, 0, sizeof(prop));
+
+    prop.cmd = V4L2_SOUND_SYS;
+    prop.u.data = 0;
+
+    props.num = 1;
+    props.props = &prop;
+
+    if (v4l2_get_prop(mDev.devFd, &props) != SUCCESS) {
+         ALOGE("getAudioOutmode failed");
+         return ret;
+    }
+
+    ret = prop.u.data;
+    ALOGE("%s:mode:0x%x", __FUNCTION__, ret);
+    return ret;
+
+}
+
+int FrontendDevice:: v4l2_set_prop (int fd, const struct dtv_properties *prop)
+{
+
+    struct v4l2_properties v4l2_prop;
+    struct v4l2_property *property = NULL;
+    int i = 0;
+
+    property = (struct v4l2_property *) malloc(prop->num * sizeof(struct v4l2_property));
+
+    if (property == NULL)
+    {
+        ALOGE("malloc failed, error:%s", strerror(errno));
+        return UNAVAILABLE;
+    }
+
+    memset(&v4l2_prop, 0, sizeof(struct v4l2_properties));
+
+    v4l2_prop.num = prop->num;
+    v4l2_prop.props = property;
+
+    for (i = 0; i < prop->num; ++i)
+    {
+        (v4l2_prop.props + i)->cmd = (prop->props + i)->cmd;
+        (v4l2_prop.props + i)->data = (prop->props + i)->u.data;
+    }
+
+    ALOGD("V4L2_SET_PROPERTY cmd = 0x%x", prop->props->cmd);
+
+    if (ioctl(fd, V4L2_SET_PROPERTY, &v4l2_prop) == -1)
+    {
+        ALOGE("ioctl V4L2_SET_PROPERTY failed, error:%s", strerror(errno));
+        return UNAVAILABLE;
+    }
+
+    for (i = 0; i < prop->num; ++i)
+    {
+        (prop->props + i)->result = (v4l2_prop.props + i)->result;
+    }
+
+    if (property != NULL)
+    {
+        free(property);
+    }
+
+    return SUCCESS;
+}
+
+int FrontendDevice::v4l2_get_prop(int fd, struct dtv_properties *prop)
+{
+    struct v4l2_properties v4l2_prop;
+    struct v4l2_property *property = NULL;
+    int i = 0;
+
+    property = (struct v4l2_property *)malloc(prop->num * sizeof(struct v4l2_property));
+
+    if (property == NULL)
+    {
+        ALOGE("malloc failed, error:%s", strerror(errno));
+        return UNAVAILABLE;
+    }
+
+    memset(&v4l2_prop, 0, sizeof(struct v4l2_properties));
+
+    v4l2_prop.num = prop->num;
+    v4l2_prop.props = property;
+
+    for (i = 0; i < prop->num; ++i)
+    {
+        (v4l2_prop.props + i)->cmd = (prop->props + i)->cmd;
+        (v4l2_prop.props + i)->data = (prop->props + i)->u.data;
+    }
+
+    ALOGD("V4L2_GET_PROPERTY cmd = 0x%x", prop->props->cmd);
+
+    if (ioctl(fd, V4L2_GET_PROPERTY, &v4l2_prop) == -1)
+    {
+        ALOGE("ioctl V4L2_GET_PROPERTY failed, error:%s", strerror(errno));
+        free(property);
+        return UNAVAILABLE;
+    }
+
+    for (i = 0; i < prop->num; ++i)
+    {
+        (prop->props + i)->result = (v4l2_prop.props + i)->result;
+        (prop->props + i)->u.data = (v4l2_prop.props + i)->data;
+    }
+
+    free(property);
+    v4l2_prop.props = NULL;
+
+    return SUCCESS;
+}
+
+
 }  // namespace tuner
 }  // namespace tv
 }  // namespace hardware
