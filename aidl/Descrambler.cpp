@@ -525,7 +525,11 @@ void* Descrambler::caSetKey(void *arg) {
       mDemuxSet = false;
     }
   }
-  pthread_join(mCaSetKeyThread, NULL);
+  if (mCaSetKeyThread != 0) {
+    TUNER_DSC_INFO(mDescramblerId, "close set key thread");
+    pthread_join(mCaSetKeyThread, NULL);
+    mCaSetKeyThread = 0;
+  }
 
   return ::ndk::ScopedAStatus::ok();
 }
