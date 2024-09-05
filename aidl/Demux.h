@@ -286,7 +286,7 @@ class Demux : public BnDemux {
     sp<HwDemuxOpsSCWrap> mHwDemuxOps = NULL;
     void* mDemuxHandle = NULL;
     StreamControlArgs mStreamControlArgs;
-    StreamPidInfo *pStreamPidInfo;
+    StreamPidInfo *pStreamPidInfo = NULL;
     //uint64_t mWriteTsSize = 0;
     //int mVidPid = 0x1FFF;
     //int mAudPid = 0x1FFF;

@@ -105,6 +105,7 @@ void Demux::setTunerService(std::shared_ptr<Tuner> tuner) {
         mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
         memset(&mStreamControlArgs, 0, sizeof(StreamControlArgs));
         pStreamPidInfo = new StreamPidInfo();
+        memset(pStreamPidInfo, 0, sizeof(StreamPidInfo));
     }
 }
 #else
@@ -134,6 +135,7 @@ Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
         mDemuxHandle = mHwDemuxOps->AmHwDemux_Create(0, NULL);
         memset(&mStreamControlArgs, 0, sizeof(StreamControlArgs));
         pStreamPidInfo = new StreamPidInfo();
+        memset(pStreamPidInfo, 0, sizeof(StreamPidInfo));
     }
 }
 #endif
@@ -1069,7 +1071,8 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
      udata.resize(data.size());
      memcpy(udata.data(), data.data(), data.size() * sizeof(uint8_t));
      //clear stream inject
-     if (isValidTsPacket(udata)) {
+     if ((isValidTsPacket(udata) && pStreamPidInfo != NULL && pStreamPidInfo->videoPid != 0) ||
+        (isValidTsPacket(udata) && pStreamPidInfo != NULL && pStreamPidInfo->numAudioPids != 0)) {
          if (mDemuxHandle && mHwDemuxOps) {
              while (mHwDemuxOps->AmHwDemux_GetMultiStreamControlStatus(mDemuxHandle, mStreamControlArgs) != AM_DEMUX_OK) {
                  usleep(10 * 1000);
