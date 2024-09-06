@@ -918,10 +918,9 @@ bool FrontendDevice::threadLoop() {
     struct pollfd pfd;
     e_signal_status_t sig_st = FE_SIGNAL_WAIT;
     memset(&mStbTrace_info, 0, sizeof(stbtrace_info));
-    ALOGD("%s:%d state = %d", __FUNCTION__, __LINE__, (int)state);
+
     int newState = mtsCallBack(state);
     updateThreadState(newState);
-    ALOGD("%s:%d state = %d", __FUNCTION__, __LINE__, (int)newState);
 
     if (state == FrontendDevice::STATE_TUNE_START
        || state == FrontendDevice::STATE_SCAN_START
@@ -1366,7 +1365,7 @@ int FrontendDevice::getAudioOutmode(void) {
 
 }
 
-int FrontendDevice:: v4l2_set_prop (int fd, const struct dtv_properties *prop)
+int FrontendDevice:: v4l2_set_prop(int fd, const struct dtv_properties *prop)
 {
 
     struct v4l2_properties v4l2_prop;

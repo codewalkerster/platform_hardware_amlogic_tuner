@@ -173,7 +173,7 @@ private:
     int setAudioOutmode(int mode);
     int getAudioOutmode(void);
     int mtsCallBack(int state);
-    int v4l2_set_prop (int fd, const struct dtv_properties *prop);
+    int v4l2_set_prop(int fd, const struct dtv_properties *prop);
     int v4l2_get_prop(int fd, struct dtv_properties *prop);
 };
 
