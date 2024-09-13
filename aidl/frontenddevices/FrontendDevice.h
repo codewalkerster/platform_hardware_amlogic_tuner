@@ -122,12 +122,6 @@ public:
         UNKNOWN_ERROR,
     }e_return_ret_t;
 
-    typedef enum {
-        MTS_NONE = 0,
-        SET_MTS_MODE,
-        GET_MTS_MODE,
-    }mts_event_t;
-
     fe_dev_t* getFeDevice();
     virtual e_signal_status_t getsignalStatus(int fd, uint32_t &locked_freq);
     int getAnalogPara(FrontendAnalogType & at, FrontendAnalogSifStandard & ast);
@@ -149,7 +143,6 @@ private:
     int32_t          mPlpId;
     FrontendScanType mScanType = FrontendScanType::SCAN_UNDEFINED;
     FrontendSettings userFeSettings;
-    int mMtsEvent = MTS_NONE;
 
     virtual bool     threadLoop(void);
     virtual status_t readyToRun(void);
@@ -172,7 +165,6 @@ private:
     void analogMTS(int mode, int value);
     int setAudioOutmode(int mode);
     int getAudioOutmode(void);
-    int mtsCallBack(int state);
     int v4l2_set_prop(int fd, const struct dtv_properties *prop);
     int v4l2_get_prop(int fd, struct dtv_properties *prop);
 };

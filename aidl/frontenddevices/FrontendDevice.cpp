@@ -299,23 +299,20 @@ int FrontendDevice::interAnalogTune(const FrontendSettings & settings) {
         sem_post(&threadSemaphore);
         return UNAVAILABLE;
     }
-    if (FrontendAnalogAftFlag::UNDEFINED != tuneSettings.get<FrontendSettings::Tag::analog>().aftFlag) {
-        ALOGD("%s,mts func", __FUNCTION__);
-        analogMTS((int)tuneSettings.get<FrontendSettings::Tag::analog>().aftFlag, tuneSettings.get<FrontendSettings::Tag::analog>().frequency);
-    } else {
-        ALOGD("%s, frequency = %d, audmode:%d, soundsys:0x%x, std:0x%llx, flag:%d, afc_range:%d", __FUNCTION__,
-            mDev.tuneFreq,
-            v4l2_para.audmode,
-            v4l2_para.soundsys,
-            v4l2_para.std,
-            v4l2_para.flag,
-            v4l2_para.afc_range);
-        if (ioctl(mDev.devFd, V4L2_SET_FRONTEND, &v4l2_para) == -1) {
-             ALOGE("tune failed, (%s)", strerror(errno));
-             sem_post(&threadSemaphore);
-             return UNAVAILABLE;
-        }
+
+    ALOGD("%s, frequency = %d, audmode:%d, soundsys:0x%x, std:0x%llx, flag:%d, afc_range:%d", __FUNCTION__,
+        mDev.tuneFreq,
+        v4l2_para.audmode,
+        v4l2_para.soundsys,
+        v4l2_para.std,
+        v4l2_para.flag,
+        v4l2_para.afc_range);
+    if (ioctl(mDev.devFd, V4L2_SET_FRONTEND, &v4l2_para) == -1) {
+         ALOGE("tune failed, (%s)", strerror(errno));
+         sem_post(&threadSemaphore);
+         return UNAVAILABLE;
     }
+
     sem_post(&threadSemaphore);
     return 0;
 }
@@ -612,6 +609,13 @@ int FrontendDevice::scan(const FrontendSettings & settings, FrontendScanType typ
     int ret = 0;
 
     if (!checkOpen(true)) return UNAVAILABLE;
+
+    if ((mDev.type == FrontendType::ANALOG) && (FrontendAnalogAftFlag::UNDEFINED != settings.get<FrontendSettings::Tag::analog>().aftFlag)) {
+         ALOGD("%s,mts func", __FUNCTION__);
+         analogMTS((int)settings.get<FrontendSettings::Tag::analog>().aftFlag, settings.get<FrontendSettings::Tag::analog>().frequency);
+         return ret;
+    }
+
     if (type == FrontendScanType::SCAN_BLIND && settings.getTag() == FrontendSettings::Tag::dvbs) {
         mScanType = FrontendScanType::SCAN_BLIND;
         ret = blindTune(settings);
@@ -918,9 +922,6 @@ bool FrontendDevice::threadLoop() {
     struct pollfd pfd;
     e_signal_status_t sig_st = FE_SIGNAL_WAIT;
     memset(&mStbTrace_info, 0, sizeof(stbtrace_info));
-
-    int newState = mtsCallBack(state);
-    updateThreadState(newState);
 
     if (state == FrontendDevice::STATE_TUNE_START
        || state == FrontendDevice::STATE_SCAN_START
@@ -1293,28 +1294,10 @@ void FrontendDevice::analogMTS(int mode, int value) {
     ALOGE("%s: mode:%d, value:%d", __FUNCTION__, mode, value);
     if (1 == mode) {
         setAudioOutmode(value);
-        mMtsEvent = SET_MTS_MODE;
     } else {
-        mMtsEvent = GET_MTS_MODE;
+        uint32_t mode = (uint32_t)getAudioOutmode();
+        mContext->sendScanCallBack(0, true, false, mode);
     }
-}
-
-int FrontendDevice::mtsCallBack(int state) {
-    std::lock_guard<std::mutex> lock(mThreadStatLock);
-    int ret = state;
-    if (mDev.type == FrontendType::ANALOG) {
-        ALOGD("%s-(id:%d):  MTS event(%d).", __FUNCTION__, mDev.id, mMtsEvent);
-        if (SET_MTS_MODE == mMtsEvent) {
-            ret = FrontendDevice::STATE_STOP;
-        } else if (GET_MTS_MODE == mMtsEvent) {
-            uint32_t mode = (uint32_t)getAudioOutmode();
-            mContext->sendScanCallBack(0, true, false, mode);
-            ret = FrontendDevice::STATE_STOP;
-        }
-        mMtsEvent = MTS_NONE;
-    }
-
-    return ret;
 }
 
 int FrontendDevice::setAudioOutmode(int mode) {
