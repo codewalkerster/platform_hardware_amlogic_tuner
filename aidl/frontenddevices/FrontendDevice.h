@@ -139,7 +139,7 @@ private:
     e_event_stat_t   mThreadState;
     fe_dev_t         mDev;
     bool             unsupportSystem;
-    bool             mRequestTuningStop;
+    volatile  bool   mRequestTuningStop;
     int32_t          mPlpId;
     FrontendScanType mScanType = FrontendScanType::SCAN_UNDEFINED;
     FrontendSettings userFeSettings;

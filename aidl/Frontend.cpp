@@ -476,13 +476,23 @@ void Frontend::scanThreadLoop() {
                 status.set<FrontendStatus::isDemodLocked>(mIsLocked);
                 break;
             }
-            case FrontendStatusType::SNR: {
-                status.set<FrontendStatus::snr>(mFeDev->getFeSnr());
-                break;
-            }
-            case FrontendStatusType::BER: {
-                status.set<FrontendStatus::ber>(mFeDev->getFeBer());
-                break;
+            if (mType != FrontendType::ANALOG) {
+                case FrontendStatusType::SNR: {
+                    status.set<FrontendStatus::snr>(mFeDev->getFeSnr());
+                    break;
+                }
+                case FrontendStatusType::BER: {
+                    status.set<FrontendStatus::ber>(mFeDev->getFeBer());
+                    break;
+                }
+                case FrontendStatusType::SIGNAL_QUALITY: {
+                     status.set<FrontendStatus::signalQuality>(mFeDev->getFeSnr());
+                    break;
+                }
+                case FrontendStatusType::SIGNAL_STRENGTH: {
+                    status.set<FrontendStatus::signalStrength>(mFeDev->getSignalStrength());
+                    break;
+                }
             }
             case FrontendStatusType::PER: {
                 status.set<FrontendStatus::per>(2);
@@ -490,14 +500,6 @@ void Frontend::scanThreadLoop() {
             }
             case FrontendStatusType::PRE_BER: {
                 status.set<FrontendStatus::preBer>(3);
-                break;
-            }
-            case FrontendStatusType::SIGNAL_QUALITY: {
-                status.set<FrontendStatus::signalQuality>(mFeDev->getFeSnr());
-                break;
-            }
-            case FrontendStatusType::SIGNAL_STRENGTH: {
-                status.set<FrontendStatus::signalStrength>(mFeDev->getSignalStrength());
                 break;
             }
             case FrontendStatusType::SYMBOL_RATE: {

@@ -481,7 +481,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
 }
 
 uint16_t FrontendDevice::getFeSnr() {
-    uint16_t snr = 0;;
+    uint16_t snr = 0;
 
     if (!checkOpen(true)) {
         return snr;
@@ -496,7 +496,7 @@ uint16_t FrontendDevice::getFeSnr() {
 }
 
 uint32_t FrontendDevice::getFeBer() {
-    uint32_t ber = 0;;
+    uint32_t ber = 0;
 
     if (!checkOpen(true)) {
         return ber;
@@ -511,7 +511,7 @@ uint32_t FrontendDevice::getFeBer() {
 }
 
 uint16_t FrontendDevice::getSignalStrength() {
-    uint16_t strength = 0;;
+    uint16_t strength = 0;
 
     if (!checkOpen(true)) {
         return strength;
