@@ -209,7 +209,7 @@ Frontend::~Frontend() {
 }
 
 ::ndk::ScopedAStatus Frontend::close() {
-    ALOGV("%s", __FUNCTION__);
+    ALOGD("%s", __FUNCTION__);
     // Reset callback
     mCallback = nullptr;
     mIsLocked = false;
@@ -1057,6 +1057,11 @@ int Frontend::setLna(bool bEnable) {
 
 void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd, uint32_t symbol) {
     ALOGD("%s", __FUNCTION__);
+    if (mCallback == nullptr) {
+        ALOGD("%s mCallback is null", __FUNCTION__);
+        return;
+    }
+
     mIsLocked = isLocked;
     FrontendScanMessage msg;
     if (freq >= 0xC0000000) {
@@ -1124,6 +1129,10 @@ void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd, uint32
 
 void Frontend::sendEventCallBack(FrontendEventType locked) {
     ALOGD("%s", __FUNCTION__);
+    if (mCallback == nullptr) {
+        ALOGD("%s mCallback is null", __FUNCTION__);
+        return;
+    }
     mCallback->onEvent(locked);
     if (locked == FrontendEventType::LOCKED) {
       mIsLocked = true;
