@@ -188,29 +188,53 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
     if ( settings->get<FrontendSettings::Tag::analog>().type >= FrontendAnalogType::PAL
     && settings->get<FrontendSettings::Tag::analog>().type <= FrontendAnalogType::PAL_60) {
         tmpTVidStd |= V4L2_COLOR_STD_PAL;
+        if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::PAL_M) {
+            tmpTVidStd |= V4L2_STD_PAL_M;
+        } else if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::PAL_N) {
+            tmpTVidStd |= V4L2_STD_PAL_Nc;
+        } else if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::PAL_60) {
+            tmpTVidStd |= V4L2_STD_PAL_60;
+        }
     } else if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::NTSC
               || settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::NTSC_443) {
         tmpTVidStd |= V4L2_COLOR_STD_NTSC;
+        if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::NTSC_443) {
+            tmpTVidStd |= V4L2_STD_NTSC_443;
+        } else {
+            tmpTVidStd |= V4L2_STD_NTSC_M;
+        }
     } else if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::SECAM) {
         tmpTVidStd |= V4L2_COLOR_STD_SECAM;
     }
 
     if (settings->get<FrontendSettings::Tag::analog>().sifStandard >= FrontendAnalogSifStandard::BG
     && settings->get<FrontendSettings::Tag::analog>().sifStandard <= FrontendAnalogSifStandard::BG_NICAM) {
-        tmpAudStd |= V4L2_STD_PAL_BG;
+        if ((tmpTVidStd & 0x0f000000) == V4L2_COLOR_STD_SECAM) {
+            tmpAudStd |= (V4L2_STD_SECAM_B| V4L2_STD_SECAM_G);
+        } else {
+            tmpAudStd |= V4L2_STD_PAL_BG;
+        }
     } else if (settings->get<FrontendSettings::Tag::analog>().sifStandard == FrontendAnalogSifStandard::I
           || settings->get<FrontendSettings::Tag::analog>().sifStandard == FrontendAnalogSifStandard::I_NICAM) {
         tmpAudStd |= V4L2_STD_PAL_I;
     } else if (settings->get<FrontendSettings::Tag::analog>().sifStandard >= FrontendAnalogSifStandard::DK
           && settings->get<FrontendSettings::Tag::analog>().sifStandard <= FrontendAnalogSifStandard::DK_NICAM) {
-        tmpAudStd |= V4L2_STD_PAL_DK;
+        if ((tmpTVidStd & 0x0f000000) == V4L2_COLOR_STD_SECAM) {
+            tmpAudStd |= V4L2_STD_SECAM_DK;
+        } else {
+            tmpAudStd |= V4L2_STD_PAL_DK;
+        }
     } else if (settings->get<FrontendSettings::Tag::analog>().sifStandard == FrontendAnalogSifStandard::L
           ||settings->get<FrontendSettings::Tag::analog>().sifStandard == FrontendAnalogSifStandard::L_NICAM
           ||settings->get<FrontendSettings::Tag::analog>().sifStandard == FrontendAnalogSifStandard::L_PRIME) {
         tmpAudStd |= V4L2_STD_SECAM_L;
     } else if (settings->get<FrontendSettings::Tag::analog>().sifStandard >= FrontendAnalogSifStandard::M
           && settings->get<FrontendSettings::Tag::analog>().sifStandard <= FrontendAnalogSifStandard::M_EIAJ) {
-        tmpAudStd |= V4L2_STD_NTSC_M;
+        if ((tmpTVidStd & 0x0f000000) == V4L2_COLOR_STD_PAL) {
+            tmpAudStd |= V4L2_STD_PAL_M;
+        } else {
+            tmpAudStd |= V4L2_STD_NTSC_M;
+        }
     }
 
     if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::UNDEFINED) {
@@ -224,7 +248,8 @@ int FrontendAnalogDevice::getFrontendSettings(FrontendSettings *settings, void* 
 
     p_fe_params->audmode = tmpAudStd;
     p_fe_params->soundsys = 0xff;
-    p_fe_params->std = tmpTVidStd | tmpAudStd;
+    p_fe_params->std = tmpTVidStd;
+
     if (settings->get<FrontendSettings::Tag::analog>().type == FrontendAnalogType::AUTO) {
         ALOGD("search , afc set true");
         p_fe_params->flag  |= ANALOG_FLAG_ENABLE_AFC;

@@ -248,6 +248,8 @@ int FrontendDevice::getAnalogPara(FrontendAnalogType & at, FrontendAnalogSifStan
         else if((v4l2_para.std & V4L2_STD_PAL_Nc) == V4L2_STD_PAL_Nc
             || (v4l2_para.std & V4L2_STD_PAL_N) == V4L2_STD_PAL_N)
             at = FrontendAnalogType::PAL_N;
+        else if((v4l2_para.std & V4L2_STD_PAL_Nc) == V4L2_STD_PAL_60)
+            at = FrontendAnalogType::PAL_60;
         else
             at = FrontendAnalogType::PAL;
     } else if ((v4l2_para.std & V4L2_COLOR_STD_NTSC) == V4L2_COLOR_STD_NTSC) {
@@ -300,7 +302,7 @@ int FrontendDevice::interAnalogTune(const FrontendSettings & settings) {
         return UNAVAILABLE;
     }
 
-    ALOGD("%s, frequency = %d, audmode:%d, soundsys:0x%x, std:0x%llx, flag:%d, afc_range:%d", __FUNCTION__,
+    ALOGD("%s, frequency = %d, audmode:0x%x, soundsys:0x%x, std:0x%llx, flag:%d, afc_range:%d", __FUNCTION__,
         mDev.tuneFreq,
         v4l2_para.audmode,
         v4l2_para.soundsys,
