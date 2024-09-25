@@ -522,12 +522,7 @@ pes_packet(TS_Indexer_t *ts_indexer, uint8_t *data, int len, TSParser *stream)
                                     ((uint64_t)(p[2] & 0xFE) << 14) |
                                     ((uint64_t)p[3] << 7) |
                                     (((uint64_t)p[4] & 0xFE) >> 1));
-      if (stream == &pi->video_parser) {
-        //event.type = TS_INDEXER_EVENT_TYPE_VIDEO_PTS;
-        pi->pusi[pi->pusi_cur_idx].flags |= DVR_INDEX_PTS;
-      } else {
-        //event.type = TS_INDEXER_EVENT_TYPE_AUDIO_PTS;
-      }
+      pi->pusi[pi->pusi_cur_idx].flags |= DVR_INDEX_PTS;
       pi->pusi[pi->pusi_cur_idx].pts = stream->PES.pts;
       DVR_INFO("pts = %" PRIu64 " in dvr\n", stream->PES.pts);
     }
