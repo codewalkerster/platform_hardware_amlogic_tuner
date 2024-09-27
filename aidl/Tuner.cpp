@@ -850,7 +850,7 @@ void Tuner::setTsnSourceNoTsClone() {
         return;
     }
     if (!strncmp(dmx_ver, "sc2-d", 5)) {
-        #ifdef SUPPORT_CBS
+        #ifdef SUPPORT_CBS_V3
         if (!strstr(tsn_source, TSN_LOCAL)) {
             ALOGD("set tsn_source to local");
             FileSystem_writeFile(TSN_SOURCE, TSN_LOCAL);

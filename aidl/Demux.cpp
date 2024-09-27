@@ -1519,7 +1519,11 @@ int Demux::recordTsPacketForPesData(int64_t         filterId) {
 
     DVR_RecordOpenParams_t openParams;
     memset(&openParams, 0, sizeof(DVR_RecordOpenParams_t));
+#ifdef SUPPORT_CBS_V3
     openParams.src = static_cast<DVB_DemuxSource_t>(DVB_DEMUX_SOURCE_DMA0 + mDemuxId);
+#else
+    openParams.src = static_cast<DVB_DemuxSource_t>(DVB_DEMUX_SOURCE_TS0 + mDemuxId);
+#endif
     openParams.dmx_dev_id[0] = mDemuxId;
     openParams.non_sec_ringbuf_size = DVR_BUFFER_LEN;
     DVR_Result_t ret = dvr_record_open(&mSubtitleRecHandle, &openParams);
