@@ -647,8 +647,13 @@ std::shared_ptr<Frontend> Tuner::getFrontendById(int32_t frontendId) {
     return ::ndk::ScopedAStatus::ok();
 }
 
-::ndk::ScopedAStatus Tuner::setLna(bool /* in_bEnable */) {
+::ndk::ScopedAStatus Tuner::setLna(bool in_bEnable) {
     ALOGV("%s", __FUNCTION__);
+    if (mFrontendId != -1 && mFrontendInfos[mFrontendId].mFrontend != nullptr) {
+        mFrontendInfos[mFrontendId].mFrontend->setLna(in_bEnable);
+     } else {
+        ALOGE("%s, frontend is not ready", __FUNCTION__);
+     }
 
     return ::ndk::ScopedAStatus::ok();
 }

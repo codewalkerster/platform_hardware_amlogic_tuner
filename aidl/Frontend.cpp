@@ -1049,6 +1049,10 @@ void Frontend::getFrontendInfo(FrontendInfo* _aidl_return) {
     };
 }
 
+int Frontend::setLna(bool bEnable) {
+    return mFeDev->setLna(bEnable);
+}
+
 void Frontend::sendScanCallBack(uint32_t freq, bool isLocked, bool isEnd, uint32_t symbol) {
     ALOGD("%s", __FUNCTION__);
     mIsLocked = isLocked;
