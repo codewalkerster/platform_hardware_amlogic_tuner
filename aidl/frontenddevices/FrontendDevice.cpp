@@ -1191,6 +1191,9 @@ int FrontendDevice::dvbsx_blindscan_getscanevent(struct dvbsx_blindscanevent *pb
             ALOGE("[%s]: %d  event.status = 0x%x, frequency = %d\n", __FUNCTION__, __LINE__, event.status, event.parameters.frequency);
             //pbsevent->status = BLINDSCAN_UPDATERESULT_OTHERS;
         }
+    }else {
+        ALOGE("[%s]:%d ret = %d\n", __FUNCTION__, __LINE__, ret);
+        mContext->sendScanCallBack(0, false, false);
     }
 
     return ret;
