@@ -1146,25 +1146,26 @@ void Demux::sendFrontendInputToRecord(vector<int8_t> data) {
     }
     //mFilters[*it]->updateRecordOutput(data);
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-        if (mFilters[*it]->getRecordVideoPid() != -1) {
+        if (mFilters[*it] != nullptr && mFilters[*it]->getRecordVideoPid() != -1) {
              break;
         }
     }
 
-    if (it != mRecordFilterIds.end()) {
+    if (it != mRecordFilterIds.end() && mFilters[*it] != nullptr) {
         mFilters[*it]->updateRecordOutput(data);
     } else {
         for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-            if (mFilters[*it]->getRecordAudioPid() != -1) {
+            if (mFilters[*it] != nullptr && mFilters[*it]->getRecordAudioPid() != -1) {
                  //ALOGD("[demuxid = %d]find record audio pid = %d", mDemuxId, mFilters[*it]->getRecordAudioPid());
                  break;
             }
         }
-        if (it != mRecordFilterIds.end()) {
+        if (it != mRecordFilterIds.end() && mFilters[*it] != nullptr) {
             mFilters[*it]->updateRecordOutput(data);
         } else {
             it = mRecordFilterIds.begin();
-            mFilters[*it]->updateRecordOutput(data);
+            if (mFilters[*it] != nullptr)
+                mFilters[*it]->updateRecordOutput(data);
         }
     }
 }
@@ -1208,28 +1209,28 @@ bool Demux::startRecordFilterDispatcher() {
     //    return false;
     //}
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-        if (mFilters[*it]->getRecordVideoPid() != -1) {
+        if (mFilters[*it] != nullptr && mFilters[*it]->getRecordVideoPid() != -1) {
             break;
         }
     }
 
     if (it != mRecordFilterIds.end()) {
-        if (!mFilters[*it]->startRecordFilterHandler().isOk()) {
+        if (mFilters[*it] != nullptr && !mFilters[*it]->startRecordFilterHandler().isOk()) {
             return false;
         }
     } else {
         for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-            if (mFilters[*it]->getRecordAudioPid() != -1) {
+            if (mFilters[*it] != nullptr && mFilters[*it]->getRecordAudioPid() != -1) {
                 break;
             }
         }
         if (it != mRecordFilterIds.end()) {
-            if (!mFilters[*it]->startRecordFilterHandler().isOk()) {
+            if (mFilters[*it] != nullptr && !mFilters[*it]->startRecordFilterHandler().isOk()) {
                 return false;
             }
         } else {
             it = mRecordFilterIds.begin();
-            if (!mFilters[*it]->startRecordFilterHandler().isOk()) {
+            if (mFilters[*it] != nullptr && !mFilters[*it]->startRecordFilterHandler().isOk()) {
                 return false;
             }
         }
@@ -1392,6 +1393,7 @@ binder_status_t Demux::dump(int fd, const char** args, uint32_t numArgs) {
 }
 
 bool Demux::attachRecordFilter(int64_t filterId) {
+    std::lock_guard<std::mutex> lock(mFilterLock);
     uint64_t dmxFilterId = findFilterIdByfakeFilterId(filterId);
     if (mFilters[dmxFilterId] == nullptr || mDvrRecord == nullptr ||
         !mFilters[dmxFilterId]->isRecordFilter()) {
@@ -1405,6 +1407,7 @@ bool Demux::attachRecordFilter(int64_t filterId) {
 }
 
 bool Demux::detachRecordFilter(int64_t filterId) {
+    std::lock_guard<std::mutex> lock(mFilterLock);
     uint64_t dmxFilterId = findFilterIdByfakeFilterId(filterId);
     if (mFilters[dmxFilterId] == nullptr || mDvrRecord == nullptr) {
         return false;
@@ -1599,8 +1602,10 @@ int Demux::getRecordVideoPid() {
     std::lock_guard<std::mutex> lock(mFilterLock);
     set<int64_t>::iterator it;
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-        if (mFilters[*it]->getRecordVideoPid() != -1) {
-            return mFilters[*it]->getRecordVideoPid();
+        if (mFilters[*it] != nullptr) {
+            int videoPid = mFilters[*it]->getRecordVideoPid();
+            if (videoPid != -1)
+                return videoPid;
         }
     }
     return -1;
@@ -1610,8 +1615,10 @@ int Demux::getRecordAudioPid() {
     std::lock_guard<std::mutex> lock(mFilterLock);
     set<int64_t>::iterator it;
     for (it = mRecordFilterIds.begin(); it != mRecordFilterIds.end(); it++) {
-        if (mFilters[*it]->getRecordAudioPid() != -1) {
-            return mFilters[*it]->getRecordAudioPid();
+        if (mFilters[*it] != nullptr) {
+            int audioPid =  mFilters[*it]->getRecordAudioPid();
+            if (audioPid != -1)
+                return audioPid;
         }
     }
     return -1;

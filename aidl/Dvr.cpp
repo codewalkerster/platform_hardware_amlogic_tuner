@@ -311,12 +311,10 @@ bool Dvr::createDvrMQ() {
 }
 
 void Dvr::initDvrRecordParams() {
-    if (mDemux != NULL && mDemux->getRecordVideoPid() != -1) {
+    if (mDemux != NULL) {
         videoPid = mDemux->getRecordVideoPid();
-        mReceiveParams.mode = DVR_PUSI_RECORD_MODE;
-    } else {
-        if (mDemux != NULL && mDemux->getRecordAudioPid() != -1) {
-            audioPid = mDemux->getRecordAudioPid();
+        audioPid = mDemux->getRecordAudioPid();
+        if (videoPid != -1 || audioPid != -1) {
             mReceiveParams.mode = DVR_PUSI_RECORD_MODE;
         } else {
             mReceiveParams.mode = DVR_DIRECT_RECORD_MODE;
@@ -343,14 +341,16 @@ void Dvr::DvrRecordThreadLoop() {
 
         if (mReceiveParams.mode == DVR_DIRECT_RECORD_MODE) {
             //ALOGD("[Dvr][demuxId = %d] read dvr data size = %d flag = %d, pts = %llu", mDemux->getDemuxId(), mReceiveParams.len, mReceiveParams.flags, mReceiveParams.pts);
-            mDemux->sendFrontendInputToRecord(data);
-            mDemux->startRecordFilterDispatcher();
+            if (mDemux != NULL) {
+                mDemux->sendFrontendInputToRecord(data);
+                mDemux->startRecordFilterDispatcher();
+            }
         } else if (mReceiveParams.mode == DVR_PUSI_RECORD_MODE) {
             mPusiIndex  = mReceiveParams.flags & DVR_INDEX_PUSI;
             mIframeIndex = mReceiveParams.flags & DVR_INDEX_IFRAME;
             mPts         = mReceiveParams.pts;
             if (videoPid != -1) {
-                ALOGD("[Dvr][demuxId = %d] offset = %" PRId64 ", read pid = %d, dvr data size = %zd, flag = %d, pts = %" PRId64 "", mDemux->getDemuxId(), mOffset, videoPid, len, mReceiveParams.flags, mReceiveParams.pts);
+                ALOGD("[Dvr][demuxId = %d] offset = %" PRId64 ", read video pid = %d, dvr data size = %zd, flag = %d, pts = %" PRId64 "", mDemux->getDemuxId(), mOffset, videoPid, len, mReceiveParams.flags, mReceiveParams.pts);
                 if (mDemux->getDemuxId() == 3) {
                     if (recordFile == NULL) {
                         recordFile = fopen("/data/local/tmp/recordData.ts", "wb+");
@@ -359,13 +359,17 @@ void Dvr::DvrRecordThreadLoop() {
                         fwrite(data.data(), 1, data.size(), recordFile);
                     }
                 }
-                mDemux->sendFrontendInputToRecord(data, videoPid, mOffset, mPts, mIframeIndex, mPusiIndex);
-                mDemux->startRecordFilterDispatcher();
+                if (mDemux != NULL) {
+                    mDemux->sendFrontendInputToRecord(data, videoPid, mOffset, mPts, mIframeIndex, mPusiIndex);
+                    mDemux->startRecordFilterDispatcher();
+                }
             } else {
                 if (audioPid != -1) {
-                    ALOGD("[Dvr][demuxId = %d] read pid = %d dvr data size = %zd flag = %d, pts = %" PRId64 "",  mDemux->getDemuxId(), audioPid, len, mReceiveParams.flags, mReceiveParams.pts);
-                    mDemux->sendFrontendInputToRecord(data, audioPid, mOffset, mPts, mIframeIndex, mPusiIndex);
-                    mDemux->startRecordFilterDispatcher();
+                    ALOGD("[Dvr][demuxId = %d] read audio pid = %d dvr data size = %zd flag = %d, pts = %" PRId64 "",  mDemux->getDemuxId(), audioPid, len, mReceiveParams.flags, mReceiveParams.pts);
+                    if (mDemux != NULL) {
+                        mDemux->sendFrontendInputToRecord(data, audioPid, mOffset, mPts, mIframeIndex, mPusiIndex);
+                        mDemux->startRecordFilterDispatcher();
+                    }
                 }
             }
             mOffset += len;
