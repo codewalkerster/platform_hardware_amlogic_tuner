@@ -1087,7 +1087,7 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
      udata.resize(data.size());
      memcpy(udata.data(), data.data(), data.size() * sizeof(uint8_t));
      //clear stream inject
-     if ((isValidTsPacket(udata) && pStreamPidInfo != NULL && pStreamPidInfo->videoPid != 0) ||
+     if ((isValidTsPacket(udata) && pStreamPidInfo != NULL && pStreamPidInfo->videoPid != 0x1fff) ||
         (isValidTsPacket(udata) && pStreamPidInfo != NULL && pStreamPidInfo->numAudioPids != 0)) {
          if (mDemuxHandle && mHwDemuxOps) {
              while (mHwDemuxOps->AmHwDemux_GetMultiStreamControlStatus(mDemuxHandle, mStreamControlArgs) != AM_DEMUX_OK) {

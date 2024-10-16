@@ -635,9 +635,10 @@ std::shared_ptr<Frontend> Tuner::getFrontendById(int32_t frontendId) {
         return ::ndk::ScopedAStatus::fromServiceSpecificError(
                 static_cast<int32_t>(Result::INVALID_ARGUMENT));
     } else {
-        ALOGD("%s/%d new lnb success!", __FUNCTION__, __LINE__);
+        mLnbs.resize(id + 1);
         mLnbs[id] = ndk::SharedRefBase::make<Lnb>(id, mHwFes[0], in_lnbName.c_str());
         *_aidl_return = mLnbs[id];
+        ALOGD("%s/%d new lnb success!", __FUNCTION__, __LINE__);
     }
 
     return ::ndk::ScopedAStatus::ok();
