@@ -744,19 +744,18 @@ Filter::~Filter() {
         ALOGD("start IP Filter");
         return ::ndk::ScopedAStatus::ok();
     }
-    if (mDemux->getAmDmxDevice()
-        ->AM_DMX_StartFilter(mFilterId) != 0) {
-        bool isPassthrough = false;
-        if (mIsMediaFilter)
-            isPassthrough = mFilterSettings.get<DemuxFilterSettings::Tag::ts>().filterSettings.get<DemuxTsFilterSettingsFilterSettings::av>().isPassthrough;
+
+    if (mIsMediaFilter) {
+        bool isPassthrough = mFilterSettings.get<DemuxFilterSettings::Tag::ts>().filterSettings.get<DemuxTsFilterSettingsFilterSettings::av>().isPassthrough;
         if (isPassthrough) {
-            ALOGD("av filter will start in mediahal");
+            ALOGD("av filter will start in mediahal and audiohal");
             return ::ndk::ScopedAStatus::ok();
-        } else {
-            ALOGE("Start filter (0x%" PRIx64":%" PRIu64 ") failed!", mExtendId, mFilterId);
-            return ::ndk::ScopedAStatus::fromServiceSpecificError(
-                                        static_cast<int32_t>(Result::UNAVAILABLE));
         }
+    }
+    if (mDemux->getAmDmxDevice()->AM_DMX_StartFilter(mFilterId) != 0) {
+        ALOGE("Start filter (0x%" PRIx64":%" PRIu64 ") failed!", mExtendId, mFilterId);
+        return ::ndk::ScopedAStatus::fromServiceSpecificError(
+                                    static_cast<int32_t>(Result::UNAVAILABLE));
     }
     mFilterThreadRunning = true;
     return ::ndk::ScopedAStatus::ok();
