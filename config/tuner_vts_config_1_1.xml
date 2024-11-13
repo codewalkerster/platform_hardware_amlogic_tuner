@@ -52,7 +52,7 @@
                     config only to the hal.
         -->
         <frontends>
-            <frontend id="FE_DEFAULT" type="DVBT" isSoftwareFrontend="false"
+            <frontend id="FE_DEFAULT" type="DVBT" isSoftwareFrontend="false" supportBlindScan="false"
                       connectToCicamId="0" frequency="578000000" endFrequency="800000000">
                 <dvbtFrontendSettings bandwidth="8" transmissionMode="128" isHighPriority="1"/>
             </frontend>
