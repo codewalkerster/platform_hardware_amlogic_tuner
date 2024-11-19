@@ -91,6 +91,7 @@ cc_defaults {
         "frontenddevices/FrontendDvbsDevice.cpp",
         "frontenddevices/FrontendIsdbtDevice.cpp",
         "frontenddevices/FrontendDtmbDevice.cpp",
+        "analog/analogInterface.cpp",
         "MultiHwDemux/AmDmx.cpp",
         "MultiHwDemux/AmLinuxDvb.cpp",
         "MultiHwDemux/AmPesFilter.cpp",
@@ -140,6 +141,7 @@ cc_defaults {
     ],
 
     local_include_dirs: [
+        "analog",
         "MultiHwDemux",
         "mediasync",
         "dvr",

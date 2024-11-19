@@ -166,7 +166,7 @@ void FrontendDevice::stopByHw() {
 }
 
 bool FrontendDevice::checkOpen(bool autoOpen) {
-    ALOGD("%s-(id:%d)", __FUNCTION__, mDev.id);
+    //ALOGD("%s-(id:%d)", __FUNCTION__, mDev.id);
     bool ret=  true;
 
     if (unsupportSystem) return false;
@@ -330,14 +330,7 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
         return INVALID_ARGUMENT;
     }
 
-    if (mDev.type == FrontendType::DVBS) {
-        mDev.tuneFreq = adjustFrequencyOffSet(tuneSettings.get<FrontendSettings::Tag::dvbs>().frequency);
-    } else if (mDev.type == FrontendType::DVBT && mScanType == FrontendScanType::SCAN_BLIND) {
-        mScanType = FrontendScanType::SCAN_AUTO;
-        mDev.tuneFreq = adjustFrequencyOffSet(tuneSettings.get<FrontendSettings::Tag::dvbt>().frequency);
-    } else {
-        mDev.tuneFreq = fe_params.frequency;
-    }
+    mDev.tuneFreq = fe_params.frequency;
 
     if (!checkOpen(true)) {
         ALOGE("Open fe failed.");
@@ -484,6 +477,8 @@ int FrontendDevice::internalTune(const FrontendSettings & settings) {
 
 uint16_t FrontendDevice::getFeSnr() {
     uint16_t snr = 0;
+    if (mDev.type == FrontendType::ANALOG)
+        return snr;
 
     if (!checkOpen(true)) {
         return snr;
@@ -499,6 +494,8 @@ uint16_t FrontendDevice::getFeSnr() {
 
 uint32_t FrontendDevice::getFeBer() {
     uint32_t ber = 0;
+    if (mDev.type == FrontendType::ANALOG)
+        return ber;
 
     if (!checkOpen(true)) {
         return ber;
@@ -514,6 +511,9 @@ uint32_t FrontendDevice::getFeBer() {
 
 uint16_t FrontendDevice::getSignalStrength() {
     uint16_t strength = 0;
+    if (mDev.type == FrontendType::ANALOG)
+        return strength;
+
 
     if (!checkOpen(true)) {
         return strength;
@@ -1298,154 +1298,12 @@ int FrontendDevice::setDvbsBlindScanParams(bool start) {
 void FrontendDevice::analogMTS(int mode, int value) {
     ALOGE("%s: mode:%d, value:%d", __FUNCTION__, mode, value);
     if (1 == mode) {
-        setAudioOutmode(value);
+        setAudioOutmode(mDev.devFd, value);
     } else {
-        uint32_t mode = (uint32_t)getAudioOutmode();
+        uint32_t mode = (uint32_t)getAudioOutmode(mDev.devFd);
         mContext->sendScanCallBack(0, true, false, mode);
     }
 }
-
-int FrontendDevice::setAudioOutmode(int mode) {
-    struct dtv_properties props;
-    struct dtv_property prop;
-
-    memset(&props, 0, sizeof(props));
-    memset(&prop, 0, sizeof(prop));
-
-    prop.cmd = V4L2_SOUND_SYS;
-    prop.u.data = mode;
-
-    props.num = 1;
-    props.props = &prop;
-
-    if (v4l2_set_prop(mDev.devFd, &props)  != SUCCESS) {
-         ALOGE("setAudioOutmode failed, (%s)", strerror(errno));
-         return 0;
-    }
-
-    ALOGE("%s:mode:%d SUCCESS!", __FUNCTION__, mode);
-    return 0;
-
-}
-
-int FrontendDevice::getAudioOutmode(void) {
-    int ret = 0;
-    struct dtv_properties props;
-    struct dtv_property prop;
-
-    memset(&props, 0, sizeof(props));
-    memset(&prop, 0, sizeof(prop));
-
-    prop.cmd = V4L2_SOUND_SYS;
-    prop.u.data = 0;
-
-    props.num = 1;
-    props.props = &prop;
-
-    if (v4l2_get_prop(mDev.devFd, &props) != SUCCESS) {
-         ALOGE("getAudioOutmode failed");
-         return ret;
-    }
-
-    ret = prop.u.data;
-    ALOGE("%s:mode:0x%x", __FUNCTION__, ret);
-    return ret;
-
-}
-
-int FrontendDevice:: v4l2_set_prop(int fd, const struct dtv_properties *prop)
-{
-
-    struct v4l2_properties v4l2_prop;
-    struct v4l2_property *property = NULL;
-    int i = 0;
-
-    property = (struct v4l2_property *) malloc(prop->num * sizeof(struct v4l2_property));
-
-    if (property == NULL)
-    {
-        ALOGE("malloc failed, error:%s", strerror(errno));
-        return UNAVAILABLE;
-    }
-
-    memset(&v4l2_prop, 0, sizeof(struct v4l2_properties));
-
-    v4l2_prop.num = prop->num;
-    v4l2_prop.props = property;
-
-    for (i = 0; i < prop->num; ++i)
-    {
-        (v4l2_prop.props + i)->cmd = (prop->props + i)->cmd;
-        (v4l2_prop.props + i)->data = (prop->props + i)->u.data;
-    }
-
-    ALOGD("V4L2_SET_PROPERTY cmd = 0x%x", prop->props->cmd);
-
-    if (ioctl(fd, V4L2_SET_PROPERTY, &v4l2_prop) == -1)
-    {
-        ALOGE("ioctl V4L2_SET_PROPERTY failed, error:%s", strerror(errno));
-        return UNAVAILABLE;
-    }
-
-    for (i = 0; i < prop->num; ++i)
-    {
-        (prop->props + i)->result = (v4l2_prop.props + i)->result;
-    }
-
-    if (property != NULL)
-    {
-        free(property);
-    }
-
-    return SUCCESS;
-}
-
-int FrontendDevice::v4l2_get_prop(int fd, struct dtv_properties *prop)
-{
-    struct v4l2_properties v4l2_prop;
-    struct v4l2_property *property = NULL;
-    int i = 0;
-
-    property = (struct v4l2_property *)malloc(prop->num * sizeof(struct v4l2_property));
-
-    if (property == NULL)
-    {
-        ALOGE("malloc failed, error:%s", strerror(errno));
-        return UNAVAILABLE;
-    }
-
-    memset(&v4l2_prop, 0, sizeof(struct v4l2_properties));
-
-    v4l2_prop.num = prop->num;
-    v4l2_prop.props = property;
-
-    for (i = 0; i < prop->num; ++i)
-    {
-        (v4l2_prop.props + i)->cmd = (prop->props + i)->cmd;
-        (v4l2_prop.props + i)->data = (prop->props + i)->u.data;
-    }
-
-    ALOGD("V4L2_GET_PROPERTY cmd = 0x%x", prop->props->cmd);
-
-    if (ioctl(fd, V4L2_GET_PROPERTY, &v4l2_prop) == -1)
-    {
-        ALOGE("ioctl V4L2_GET_PROPERTY failed, error:%s", strerror(errno));
-        free(property);
-        return UNAVAILABLE;
-    }
-
-    for (i = 0; i < prop->num; ++i)
-    {
-        (prop->props + i)->result = (v4l2_prop.props + i)->result;
-        (prop->props + i)->u.data = (v4l2_prop.props + i)->data;
-    }
-
-    free(property);
-    v4l2_prop.props = NULL;
-
-    return SUCCESS;
-}
-
 
 }  // namespace tuner
 }  // namespace tv

@@ -21,12 +21,12 @@
 #include <aidl/android/hardware/tv/tuner/FrontendType.h>
 
 #define CONFIG_AMLOGIC_DVB_COMPAT
-#include "atv_frontend.h"
 #include <semaphore.h>
 #include <utils/Thread.h>
 #include <utils/Errors.h>
 #include "utils/frontend.h"
 #include "utils/stbtrace.h"
+#include "analog/analogInterface.h"
 
 using namespace std;
 using ::android::sp;
@@ -163,10 +163,6 @@ private:
     int dvbsx_blindscan_getscanevent(dvbsx_blindscanevent *pbsevent);
     int setDvbsBlindScanParams(bool start);
     void analogMTS(int mode, int value);
-    int setAudioOutmode(int mode);
-    int getAudioOutmode(void);
-    int v4l2_set_prop(int fd, const struct dtv_properties *prop);
-    int v4l2_get_prop(int fd, struct dtv_properties *prop);
 };
 
 

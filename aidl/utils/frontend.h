@@ -856,10 +856,12 @@ struct dvb_ofdm_parameters
 };
 
 #ifdef CONFIG_AMLOGIC_DVB_COMPAT
+/*
 #ifndef ANALOG_FLAG_ENABLE_AFC
 #define ANALOG_FLAG_ENABLE_AFC                 0X00000001
 #endif
 #define  ANALOG_FLAG_MANUL_SCAN                0x00000011
+*/
 struct dvb_analog_parameters
 {
     /*V4L2_TUNER_MODE_MONO,V4L2_TUNER_MODE_STEREO,*/
