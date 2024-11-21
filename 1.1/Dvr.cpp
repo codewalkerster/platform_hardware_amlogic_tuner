@@ -239,9 +239,15 @@ Return<Result> Dvr::stop() {
 }
 
 Return<Result> Dvr::flush() {
-    int flushSize = mDvrSettings.playback().packetSize * 100;//188 bytes
+    int flushSize = 0;
     int left      = 0;
     char *buffer  = NULL;
+    if (mType == DvrType::PLAYBACK) {
+        flushSize = mDvrSettings.playback().packetSize * 100;//188 bytes
+    } else if (mType == DvrType::RECORD) {
+        flushSize = mDvrSettings.record().packetSize * 100;//188 bytes
+    }
+
     mFlushing = true;
     std::lock_guard<std::mutex> lock(mReadLock);
     if (mDvrMQ.get() != NULL) {

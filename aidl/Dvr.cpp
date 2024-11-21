@@ -219,9 +219,15 @@ Dvr::~Dvr() {
 
 ::ndk::ScopedAStatus Dvr::flush() {
     ALOGD("%s/%d", __FUNCTION__, __LINE__);
-    int flushSize = mDvrSettings.get<DvrSettings::Tag::playback>().packetSize * 100;//188 bytes
+    int flushSize = 0;
     int left      = 0;
     char *buffer  = NULL;
+    if (mType == DvrType::PLAYBACK) {
+        flushSize = mDvrSettings.get<DvrSettings::Tag::playback>().packetSize * 100;//188 bytes
+    } else if (mType == DvrType::RECORD) {
+        flushSize = mDvrSettings.get<DvrSettings::Tag::record>().packetSize * 100;//188 bytes
+    }
+
     mFlushing = true;
     std::lock_guard<std::mutex> lock(mReadLock);
     if (mDvrMQ.get() != NULL) {
