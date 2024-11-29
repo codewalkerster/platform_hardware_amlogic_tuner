@@ -271,6 +271,14 @@ Dvr::~Dvr() {
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr playback failed!\n");
         }
+        //avoid tunerhal crash, because app didn't call DvrPlayback stop interface to exit playback thread;
+        if (mDvrThreadRunning) {
+            mDvrThreadRunning = false;
+            if (mDvrThread.joinable()) {
+                mDvrEventFlag->wake(static_cast<uint32_t>(DemuxQueueNotifyBits::DATA_READY));
+                mDvrThread.join();
+            }
+        }
         mDemux->setPlaybackHandle(NULL);
 #ifdef SUPPORT_CBS_V3
         //avoid tunerhal crash, because app didn't call DvrPlayback stop interface to exit playback thread;
@@ -292,6 +300,18 @@ Dvr::~Dvr() {
         DVR_Result_t ret = dvr_record_close(mRecordhandle);
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr record failed!\n");
+        }
+        //avoid tunerhal crash, because app didn't call DvrRecord stop interface to exit record thread;
+        if (mDvrRecordThreadRunning) {
+            mDvrRecordThreadRunning = false;
+            if (mDvrRecordThread.joinable()) {
+                mDvrRecordThread.join();
+            }
+
+            if (mReceiveParams.buf) {
+                free(mReceiveParams.buf);
+                mReceiveParams.buf = NULL;
+            }
         }
         mDemux->setRecordHandle(NULL);
 #ifdef SUPPORT_CBS_V3
