@@ -141,6 +141,7 @@ class Demux : public BnDemux {
     void getPesRawData(int64_t filterId);
     bool checkPesFilterId(int64_t filterId);
     bool checkTemiFilterId(int64_t filterId);
+    bool checkFilterExist(int64_t filterId);
     bool isRawData(int64_t filterId);
     bool checkSoftDemuxForSubtitle();
     void getTemiData(int64_t filterId);

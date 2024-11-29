@@ -169,11 +169,15 @@ void Demux::pesDataCallback(void* demux, int fid, uint8_t *pes, int len) {
     //ALOGD("dump bytes: %s", strData.c_str());
 
     Demux *dmxDev = (Demux*)demux;
-    vector<int8_t> pesData;
-    pesData.resize(len);
-    memcpy(pesData.data(), pes, len * sizeof(uint8_t));
-    dmxDev->updateFilterOutput(fid, pesData);
-    dmxDev->startFilterHandler(fid);
+    if (dmxDev->checkFilterExist(fid)) {
+        vector<int8_t> pesData;
+        pesData.resize(len);
+        memcpy(pesData.data(), pes, len * sizeof(uint8_t));
+        dmxDev->updateFilterOutput(fid, pesData);
+        dmxDev->startFilterHandler(fid);
+    } else {
+        ALOGW("%s/%d filterId = %d may be removed", __FUNCTION__, __LINE__, fid);
+    }
 }
 
 void Demux::combinePesData(int64_t filterId) {
@@ -990,6 +994,20 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 
 ::ndk::ScopedAStatus Demux::removeFilter(int64_t filterId) {
     ALOGD("%s/%d filterId = %" PRIu64 "", __FUNCTION__, __LINE__, filterId);
+    {
+        if (checkPesFilterId(filterId)) {
+            if (bSupportSoftDemuxForSubtitle) {
+                closePesRecordFilter();
+            }
+            ALOGD("remove PES filter mPesFid = %" PRIu64 "", filterId);
+            mPesFilterIds.erase(filterId);
+        }
+
+        if (bSupportSoftDemuxForTemi && mTemiFid == filterId) {
+            closeTemiRecordFilter();
+            mTemiFilterIds.erase(filterId);
+        }
+    }
     std::lock_guard<std::mutex> lock(mFilterLock);
     if (mFilters[filterId] != nullptr) {
         mFilters[filterId]->clear();
@@ -997,19 +1015,6 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     mFilters.erase(filterId);
     mPlaybackFilterIds.erase(filterId);
     mRecordFilterIds.erase(filterId);
-    if (checkPesFilterId(filterId)) {
-        if (bSupportSoftDemuxForSubtitle) {
-            closePesRecordFilter();
-        }
-        ALOGD("remove PES filter mPesFid = %" PRIu64 "", filterId);
-        mPesFilterIds.erase(filterId);
-    }
-
-    if (bSupportSoftDemuxForTemi && mTemiFid == filterId) {
-        closeTemiRecordFilter();
-    }
-    mTemiFilterIds.erase(filterId);
-
     if (mDvrPlayback != nullptr) {
         mDvrPlayback->removePlaybackFilter(filterId);
     }
@@ -1502,6 +1507,10 @@ bool Demux::checkTemiFilterId(int64_t filterId) {
 
 }
 
+bool Demux::checkFilterExist(int64_t filterId) {
+    return mFilters[filterId] != nullptr;
+}
+
 bool Demux::isRawData(int64_t filterId) {
     return mFilters[filterId]->isRawData();
 }
@@ -1511,6 +1520,10 @@ bool Demux::checkSoftDemuxForSubtitle() {
 }
 
 int Demux::recordTsPacketForPesData(int64_t         filterId) {
+    if (!checkFilterExist(filterId)) {
+        ALOGW("%s/%d filterId = %" PRIu64 " may be removed", __FUNCTION__, __LINE__, filterId);
+        return -1;
+    }
     mFilters[filterId]->stop();
     mPesFid = filterId;
 
