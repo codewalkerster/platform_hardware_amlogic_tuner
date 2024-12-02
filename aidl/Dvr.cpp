@@ -259,6 +259,7 @@ Dvr::~Dvr() {
     mRecordStatus = RecordStatus::DATA_READY;
     mNotifyFlushToDemux = true;
     mFlushing = false;
+    maySendPlaybackStatusCallback();
     return ::ndk::ScopedAStatus::ok();
 }
 
@@ -436,7 +437,6 @@ void Dvr::playbackThreadLoop() {
             ALOGD("[Dvr] wait for data ready on the playback FMQ, demux id: %d", mDemux->getDemuxId());
             continue;
         }
-
         // If the both dvr playback and dvr record are created, the playback will be treated as
         // the source of the record. isVirtualFrontend set to true would direct the dvr playback
         // input to the demux record filters or live broadcast filters.
@@ -459,6 +459,8 @@ void Dvr::playbackThreadLoop() {
             mNotifyFlushToDemux = false;
         }
 
+        maySendPlaybackStatusCallback(false);//Only update status when the data is ready
+
         // Our current implementation filter the data and write it into the filter FMQ immediately
         // after the DATA_READY from the VTS/framework
         // This is for the non-ES data source, real playback use case handling.
@@ -467,43 +469,43 @@ void Dvr::playbackThreadLoop() {
             ALOGE("[Dvr] playback data failed to be filtered. Ending thread");
             break;
         }
-
-        maySendPlaybackStatusCallback();
+        maySendPlaybackStatusCallback();//Update status and notify playbackstatus after data was consumed.
     }
 
     mDvrThreadRunning = false;
     ALOGD("[Dvr] playback thread ended.");
 }
 
-void Dvr::maySendPlaybackStatusCallback() {
+void Dvr::maySendPlaybackStatusCallback(bool shouldNotify) {
     lock_guard<mutex> lock(mPlaybackStatusLock);
     int availableToRead = mDvrMQ->availableToRead();
     int availableToWrite = mDvrMQ->availableToWrite();
 
-    PlaybackStatus newStatus =
+    int newStatus =
             checkPlaybackStatusChange(availableToWrite, availableToRead,
                                       mDvrSettings.get<DvrSettings::Tag::playback>().highThreshold,
                                       mDvrSettings.get<DvrSettings::Tag::playback>().lowThreshold);
-    if ((mPlaybackStatus != newStatus)
-        || (mIsSecureBuffer
-        && (newStatus == PlaybackStatus::SPACE_ALMOST_EMPTY || newStatus == PlaybackStatus::SPACE_EMPTY))) {
-        mCallback->onPlaybackStatus(newStatus);
-        mPlaybackStatus = newStatus;
+    if (mPlaybackStatus != newStatus &&
+            shouldNotify &&
+            newStatus != ((int)PlaybackStatus::SPACE_ALMOST_FULL | (int)PlaybackStatus::SPACE_ALMOST_EMPTY)) {
+        mCallback->onPlaybackStatus((PlaybackStatus)newStatus);
     }
+    mPlaybackStatus = newStatus;
 }
 
-PlaybackStatus Dvr::checkPlaybackStatusChange(uint32_t availableToWrite, uint32_t availableToRead,
+int Dvr::checkPlaybackStatusChange(uint32_t availableToWrite, uint32_t availableToRead,
                                               int64_t highThreshold, int64_t lowThreshold) {
-    if (availableToWrite == 0) {
-        return PlaybackStatus::SPACE_FULL;
-    } else if (availableToRead > highThreshold) {
-        return PlaybackStatus::SPACE_ALMOST_FULL;
-    } else if (availableToRead < lowThreshold) {
-        return PlaybackStatus::SPACE_ALMOST_EMPTY;
-    } else if (availableToRead == 0) {
-        return PlaybackStatus::SPACE_EMPTY;
+    if (availableToRead == 0) {
+        return (int)PlaybackStatus::SPACE_EMPTY;
+    } else if (availableToRead <= lowThreshold) {
+        return (int)PlaybackStatus::SPACE_ALMOST_EMPTY;
+    } else if (availableToRead >= highThreshold) {
+        if (availableToWrite == 0) {
+            return (int)PlaybackStatus::SPACE_FULL;
+        }
+        return (int)PlaybackStatus::SPACE_ALMOST_FULL;
     }
-    return mPlaybackStatus;
+    return (int)PlaybackStatus::SPACE_ALMOST_FULL | (int)PlaybackStatus::SPACE_ALMOST_EMPTY;
 }
 
 bool Dvr::checkIsSecureBuffer() {

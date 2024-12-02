@@ -120,9 +120,9 @@ class Dvr : public BnDvr {
     void deleteEventFlag();
     bool readDataFromMQ();
     void getMetaDataValue(int& index, int8_t* dataOutputBuffer, int& value);
-    void maySendPlaybackStatusCallback();
+    void maySendPlaybackStatusCallback(bool shouldNotify = true);
     void maySendRecordStatusCallback();
-    PlaybackStatus checkPlaybackStatusChange(uint32_t availableToWrite, uint32_t availableToRead,
+    int checkPlaybackStatusChange(uint32_t availableToWrite, uint32_t availableToRead,
                                              int64_t highThreshold, int64_t lowThreshold);
     RecordStatus checkRecordStatusChange(uint32_t availableToWrite, uint32_t availableToRead,
                                          int64_t highThreshold, int64_t lowThreshold);
@@ -151,7 +151,7 @@ class Dvr : public BnDvr {
     std::thread mDvrThread;
 
     // FMQ status local records
-    PlaybackStatus mPlaybackStatus;
+    int mPlaybackStatus;
     RecordStatus mRecordStatus;
     /**
      * If a specific filter's writing loop is still running
