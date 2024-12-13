@@ -145,6 +145,8 @@ Demux::Demux(int32_t demuxId, std::shared_ptr<Tuner> tuner) {
         for (int i = 0; i < 4; i++) {
             pStreamPidInfo->audioPids[i] = 0x1fff;
         }
+        mStreamControlArgs.pidInfo = pStreamPidInfo;
+        mStreamControlArgs.pidInfoSize = sizeof(StreamPidInfo);
     }
 }
 #endif
@@ -1247,6 +1249,65 @@ bool Demux::broadcastSecureBuffer(vector<int8_t> data) {
     }
 
     root.clear();
+
+    return true;
+}
+
+bool Demux::updateMediaSyncIdByDvrPassthroughParam(int avSyncId) {
+    if (avSyncId < 0) {
+        ALOGD("%s/%d update mediasync id by dvr param failed, invalid avsyncId: %d",
+                __FUNCTION__, __LINE__, avSyncId);
+        return false;
+    }
+
+    if (mDvrPlayback == nullptr) {
+        ALOGD("%s/%d update mediasync id by dvr param failed, no dvr playback",
+                __FUNCTION__, __LINE__);
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(mFilterLock);
+    int audioPidIndex = 0;
+    for (set<int64_t>::iterator it = mPlaybackFilterIds.begin(); it != mPlaybackFilterIds.end(); it++) {
+        uint16_t avPid = mFilters[*it]->getTpid();
+        DemuxFilterType type = mFilters[*it]->getFilterType();
+        if (type.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::VIDEO) {
+            pStreamPidInfo->videoPid = avPid;
+        }
+
+        if (type.subType.get<DemuxFilterSubType::Tag::tsFilterType>() == DemuxTsFilterType::AUDIO) {
+            ALOGD("%s/%d how many audio pids: %d", __FUNCTION__, __LINE__, audioPidIndex + 1);
+            pStreamPidInfo->numAudioPids = audioPidIndex + 1;
+            pStreamPidInfo->audioPids[audioPidIndex] = avPid;
+            audioPidIndex++;
+        }
+    }
+
+    mStreamControlArgs.pidInfo = pStreamPidInfo;
+    mStreamControlArgs.pidInfoSize = sizeof(StreamPidInfo);
+
+    struct AmDemuxControlInfo info;
+    info.demuxId = mDemuxId;
+    info.mediasyncId = avSyncId;
+
+    if (mDemuxHandle && mHwDemuxOps) {
+        mHwDemuxOps->AmHwDemux_ResetStatus(mDemuxHandle);
+        mHwDemuxOps->AmHwDemux_Init(mDemuxHandle, 0, &info);
+        mStreamControlArgs.writeTsSize = 0;
+    }
+
+    if (mMediaSync != nullptr) {
+        ALOGD("%s/%d update mediasync id by dvr param destroy mediasync",
+                __FUNCTION__, __LINE__);
+        destroyMediaSync();
+        ALOGD("%s/%d update mediasync id by dvr param create new mediasync",
+                __FUNCTION__, __LINE__);
+        mMediaSync = new MediaSyncWrap();
+        ALOGD("%s/%d update mediasync id by dvr param bind mediasync to avSyncId: %d",
+                __FUNCTION__, __LINE__, avSyncId);
+        mMediaSync->bindAvSyncId((uint32_t)avSyncId);
+        mAvSyncHwId = avSyncId;
+    }
 
     return true;
 }

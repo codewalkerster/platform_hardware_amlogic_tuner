@@ -23,6 +23,7 @@
 #include <utils/Log.h>
 #include <sys/prctl.h>
 #include <cutils/properties.h>
+#include <json/json.h>
 #include "Dvr.h"
 
 namespace aidl {
@@ -32,7 +33,7 @@ namespace tv {
 namespace tuner {
 
 #define WAIT_TIMEOUT 3000000000
-#define SUPPORT_AES128_DATA_INJECT "vendor.tunerhal.AES128.data.inject"
+#define SUPPORT_DVR_PASSTHROUGH_PARAMS "vendor.tunerhal.dvr.passthrough.params"
 using namespace std;
 
 Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>& cb,
@@ -44,12 +45,13 @@ Dvr::Dvr(DvrType type, uint32_t bufferSize, const std::shared_ptr<IDvrCallback>&
     mTuner = in_tuner;
 
     if (mType == DvrType::PLAYBACK) {
-        mSupportAES128Data = property_get_bool(SUPPORT_AES128_DATA_INJECT, false);
-        ALOGD("%s/%d dvr_playback_open dmxid = %d, mSupportAES128Data = %d", __FUNCTION__, __LINE__, mDemux->getDemuxId(), mSupportAES128Data);
-        if (mSupportAES128Data) {
+        mSupportDvrPassthroughParam = property_get_bool(SUPPORT_DVR_PASSTHROUGH_PARAMS, false);
+        ALOGD("%s/%d dvr_playback_open dmxid = %d, mSupportDvrParam = %d",
+            __FUNCTION__, __LINE__, mDemux->getDemuxId(), mSupportDvrPassthroughParam);
+        if (mSupportDvrPassthroughParam) {
             mNeedCheckFirstPacket = true;
-            mIsSecureBuffer = false;
         }
+        mIsSecureBuffer = false;
         mPlaybackParams.dmx_dev_id = mDemux->getDemuxId();
         DVR_Result_t ret = dvr_playback_open(&mPlaybackhandle, &mPlaybackParams);
         if (ret != DVR_SUCCESS) {
@@ -196,6 +198,9 @@ Dvr::~Dvr() {
         DVR_Result_t ret = dvr_playback_stop(mPlaybackhandle);
         if (ret != DVR_SUCCESS) {
             ALOGD("stop dvr playback failed!\n");
+        }
+        if (mIsSecureBuffer) {
+            mNeedCheckFirstPacket = true;
         }
         mDvrThreadRunning = false;
         if (mDvrThread.joinable()) {
@@ -532,7 +537,7 @@ int Dvr::checkPlaybackStatusChange(uint32_t availableToWrite, uint32_t available
     return (int)PlaybackStatus::SPACE_ALMOST_FULL | (int)PlaybackStatus::SPACE_ALMOST_EMPTY;
 }
 
-bool Dvr::checkIsSecureBuffer() {
+bool Dvr::checkDvrPassthroughParam() {
     size_t size = mDvrMQ->availableToRead();
     ALOGD("%s fmq size: %u", __FUNCTION__, size);
     if (size == 0) {
@@ -542,6 +547,7 @@ bool Dvr::checkIsSecureBuffer() {
     if (size > 188) {
         size = 188;
     }
+
     DvrMQ::MemTransaction tx;
     uint8_t *firstPacket = new uint8_t[size];
     memset(firstPacket, 0, size);
@@ -557,36 +563,96 @@ bool Dvr::checkIsSecureBuffer() {
 
         memcpy(firstPacket, (uint8_t *)data, size);
 
+        int startCodeLength = 4;
+        bool passthroughParam = false;
+
         if (firstPacket[0] == 0xFF && firstPacket[1] == 0xFF && firstPacket[2] == 0xFE
             && firstPacket[3] == 0xFE) {
-            mIsSecureBuffer = true;
+            passthroughParam = true;
         } else {
-            mIsSecureBuffer = false;
+            passthroughParam = false;
         }
 
         ALOGI("%s fmq header: [%x %x %x %x]", __FUNCTION__,
             firstPacket[0], firstPacket[1], firstPacket[2], firstPacket[3]);
 
-        ALOGI("%s mIsSecureBuffer: %s", __FUNCTION__, mIsSecureBuffer ? "true" : "false");
-        mDemux->setUseSecureBuffer(mIsSecureBuffer);
+        ALOGI("%s passthroughParam: %s", __FUNCTION__, passthroughParam ? "true" : "false");
 
-        delete [] firstPacket;
         mNeedCheckFirstPacket = false;
 
-        if (mIsSecureBuffer) {
+        if (passthroughParam) {
+            uint8_t *headerStart = firstPacket + startCodeLength;
+            size_t headerLength = (headerStart[0] << 24) | (headerStart[1] << 16) | (headerStart[2] << 8) | headerStart[3];
+            if (headerLength > 188 - startCodeLength - 4) { // length - start_code_length - data_length_bytes
+                ALOGD("%s passthroughParam invalid header length: %u", __FUNCTION__, headerLength);
+                delete[] firstPacket;
+                return false;
+            }
+
+            uint8_t *dataStart = firstPacket + startCodeLength + 4;
+            processDvrPassthroughParam(dataStart, headerLength);
             if (!mDvrMQ->commitRead(size)) {
                 ALOGD("%s fmq size: %u, commit read failed", __FUNCTION__, size);
+                delete[] firstPacket;
                 return false;
             } else {
                 ALOGD("%s fmq read %u bytes", __FUNCTION__, size);
             }
         }
 
+        delete[] firstPacket;
+
         return true;
     } else {
         delete [] firstPacket;
         return false;
     }
+}
+
+bool Dvr::processDvrPassthroughParam(uint8_t *param, size_t paramLength) {
+    if (param == nullptr || paramLength == 0) {
+        return false;
+    }
+
+    Json::Value root;
+    Json::Reader reader;
+
+    ALOGI("%s start, header length: %u", __FUNCTION__, paramLength);
+
+    if (!reader.parse((char*)param, root)) {
+        ALOGE("%s parse passthrough param info failed", __FUNCTION__);
+        return false;
+    }
+
+    // check aes-128
+    if (root.isMember("aes-128")) {
+        mIsSecureBuffer = true;
+    } else {
+        mIsSecureBuffer = false;
+    }
+
+    ALOGI("%s mIsSecureBuffer: %s", __FUNCTION__, mIsSecureBuffer ? "true" : "false");
+    mDemux->setUseSecureBuffer(mIsSecureBuffer);
+
+    // check video-audio passthrough control
+    if (root.isMember("passthrough")) {
+        ALOGI("%s has passthrough params", __FUNCTION__);
+        auto& passthrough = root["passthrough"];
+        if (passthrough.isMember("flow-control")) {
+            auto& flowControl = passthrough["flow-control"];
+            if (flowControl.isMember("av-sync-id") && flowControl["av-sync-id"].isInt()) {
+                int avSyncId = flowControl["av-sync-id"].asInt();
+                ALOGI("%s process passthrough params, avSyncId: %d", __FUNCTION__, avSyncId);
+                mDemux->updateMediaSyncIdByDvrPassthroughParam(avSyncId);
+            }
+        }
+    } else {
+        ALOGI("%s no passthrough params", __FUNCTION__);
+    }
+
+    root.clear();
+
+    return true;
 }
 
 bool Dvr::injectSecureBuffer() {
@@ -640,9 +706,9 @@ bool Dvr::readPlaybackFMQ(bool isVirtualFrontend, bool isRecording) {
 
     // Read playback data from the input FMQ
     std::lock_guard<std::mutex> lock(mReadLock);
-    if (mSupportAES128Data) {
+    if (mSupportDvrPassthroughParam) {
         if (mNeedCheckFirstPacket && !mFlushing && mDvrThreadRunning) {
-            bool success = checkIsSecureBuffer();
+            bool success = checkDvrPassthroughParam();
             if (!success) {
                 return false;
             }
