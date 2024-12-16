@@ -593,6 +593,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
     }
 
     if (hasTsFilterType && tsFilterType == DemuxTsFilterType::PES) {
+        std::lock_guard<std::mutex> lock(mPesFilterLock);
         mAmPesFilter = new AmPesFilter(dmxFilterIdx, pesDataCallback, this);
         mPesFilterIds.insert(dmxFilterIdx);
         ALOGD("Insert PES filter mPesFid = %d", dmxFilterIdx);
@@ -998,6 +999,7 @@ void Demux::postData(void* demux, int fid, bool esOutput, bool passthrough) {
 ::ndk::ScopedAStatus Demux::removeFilter(int64_t filterId) {
     ALOGD("%s/%d filterId = %" PRIu64 "", __FUNCTION__, __LINE__, filterId);
     {
+        std::lock_guard<std::mutex> lock(mPesFilterLock);
         if (checkPesFilterId(filterId)) {
             if (bSupportSoftDemuxForSubtitle) {
                 closePesRecordFilter();

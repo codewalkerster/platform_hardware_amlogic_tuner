@@ -254,6 +254,8 @@ class Demux : public BnDemux {
     std::atomic<bool> mFrontendInputThreadRunning;
     std::atomic<bool> mKeepFetchingDataFromFrontend;
 
+    std::mutex mPesFilterLock;
+
     std::mutex mFilterLock;
 
     /**

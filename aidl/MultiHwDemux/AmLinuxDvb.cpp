@@ -44,7 +44,6 @@ AmLinuxDvb::AmLinuxDvb() {
     mDvrFd = -1;
     pollFailCount = 0;
     mFilterMemInfoFd = -1;
-    mDmxFd = 0;
 }
 
 AmLinuxDvb::~AmLinuxDvb() {
@@ -389,25 +388,26 @@ AM_ErrorCode_t AmLinuxDvb::dvb_set_source(AM_DMX_Device *dev, dmx_input_source i
     int ret = 0;
     ALOGI("%s/%d", __FUNCTION__, __LINE__);
 
-    mDmxFd = open(dmx->dev_name, O_RDWR);
-    if (mDmxFd == -1) {
+    int fd = open(dmx->dev_name, O_RDWR);
+    if (fd == -1) {
         ALOGE("cannot open \"%s\" (%s)", dmx->dev_name, strerror(errno));
         return AM_DMX_ERR_CANNOT_OPEN_DEV;
     }
 
     if (inputSource == INPUT_LOCAL) {
         ALOGI("set ---> INPUT_LOCAL \n");
-        ret = ioctl(mDmxFd, DMX_SET_INPUT, INPUT_LOCAL);
+        ret = ioctl(fd, DMX_SET_INPUT, INPUT_LOCAL);
         ALOGI("DMX_SET_INPUT ret:%d\n", ret);
-        ret = ioctl(mDmxFd, DMX_SET_HW_SOURCE, getDmaByDemuxId(dev->dev_no));
+        ret = ioctl(fd, DMX_SET_HW_SOURCE, getDmaByDemuxId(dev->dev_no));
         ALOGI("DMX_SET_HW_SOURCE ret:%d\n", ret);
     } else if (inputSource == INPUT_DEMOD) {
         ALOGI("set ---> INPUT_DEMOD \n" );
-        ret = ioctl(mDmxFd, DMX_SET_INPUT, INPUT_DEMOD);
+        ret = ioctl(fd, DMX_SET_INPUT, INPUT_DEMOD);
         ALOGI("DMX_SET_INPUT ret:%d\n", ret);
-        ret = ioctl(mDmxFd, DMX_SET_HW_SOURCE, FRONTEND_TS0);
+        ret = ioctl(fd, DMX_SET_HW_SOURCE, FRONTEND_TS0);
         ALOGI("DMX_SET_HW_SOURCE ret:%d\n", ret);
     }
+    close(fd);
     return AM_SUCCESS;
 }
 
@@ -466,11 +466,6 @@ AM_ErrorCode_t AmLinuxDvb::dvr_close(void) {
     if (mDvrFd > 0) {
         close(mDvrFd);
         mDvrFd = -1;
-    }
-
-    if (mDmxFd > 0) {
-        close(mDmxFd);
-        mDmxFd = -1;
     }
     return AM_SUCCESS;
 }
