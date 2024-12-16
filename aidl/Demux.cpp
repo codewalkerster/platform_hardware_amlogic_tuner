@@ -1096,6 +1096,7 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
      vector<uint8_t> udata;
      udata.resize(data.size());
      memcpy(udata.data(), data.data(), data.size() * sizeof(uint8_t));
+#ifndef SUPPORT_CBS_V3
      //clear stream inject
      if ((isValidTsPacket(udata) && pStreamPidInfo != NULL && pStreamPidInfo->videoPid != 0x1fff) ||
         (isValidTsPacket(udata) && pStreamPidInfo != NULL && pStreamPidInfo->numAudioPids != 0)) {
@@ -1113,6 +1114,7 @@ void Demux::startBroadcastTsFilter(vector<int8_t> data) {
              }
          }
      }
+#endif
      #if 0
      if (isDscReady && !mScrambledCache.empty()) {
          if (isValidTsPacket(udata))
