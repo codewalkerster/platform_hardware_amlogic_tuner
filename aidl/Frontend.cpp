@@ -1139,6 +1139,17 @@ void Frontend::sendEventCallBack(FrontendEventType locked) {
     } else {
       mIsLocked = false;
     }
+    #ifdef SUPPORT_CBS_V3
+    FrontendSettings* feSettings = mFeDev->getFeSetting();
+    FrontendScanMessage msg;
+    if (feSettings->getTag() == FrontendSettings::Tag::dvbt &&
+        feSettings->get<FrontendSettings::Tag::dvbt>().standard == FrontendDvbtStandard::T2 && mIsLocked) {
+        msg.set<FrontendScanMessage::Tag::hierarchy>((FrontendDvbtHierarchy)mFeDev->getActualTerrHierarchy());
+        mCallback->onScanMessage(FrontendScanMessageType::HIERARCHY, msg);
+        msg.set<FrontendScanMessage::Tag::plpIds>(mFeDev->getMPLPIDList());
+        mCallback->onScanMessage(FrontendScanMessageType::PLP_IDS, msg);
+    }
+    #endif
 }
 
 }  // namespace tuner
