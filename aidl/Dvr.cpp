@@ -265,19 +265,14 @@ Dvr::~Dvr() {
 
 ::ndk::ScopedAStatus Dvr::close() {
     ALOGD("%s/%d  mType = %hhu", __FUNCTION__, __LINE__, mType);
-    if (mDvrMQ.get() != NULL)
-       mDvrMQ.reset();
-
-    if (mDvrEventFlag != nullptr) {
-        EventFlag::deleteEventFlag(&mDvrEventFlag);
-        mDvrEventFlag = nullptr;
-    }
 
     if (mType == DvrType::PLAYBACK) {
         DVR_Result_t ret = dvr_playback_close(mPlaybackhandle);
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr playback failed!\n");
         }
+        mDemux->setPlaybackHandle(NULL);
+#ifdef SUPPORT_CBS_V3
         //avoid tunerhal crash, because app didn't call DvrPlayback stop interface to exit playback thread;
         if (mDvrThreadRunning) {
             mDvrThreadRunning = false;
@@ -286,7 +281,7 @@ Dvr::~Dvr() {
                 mDvrThread.join();
             }
         }
-        mDemux->setPlaybackHandle(NULL);
+#endif
     } else if (mType == DvrType::RECORD) {
         if (mOpenParams.dmx_dev_id[1] != 0 && mOpenParams.dmx_dev_id[2] != 0) {
             mTuner->removeDemuxResource(mOpenParams.dmx_dev_id[1]);
@@ -298,19 +293,28 @@ Dvr::~Dvr() {
         if (ret != DVR_SUCCESS) {
             ALOGD("close dvr record failed!\n");
         }
+        mDemux->setRecordHandle(NULL);
+#ifdef SUPPORT_CBS_V3
         //avoid tunerhal crash, because app didn't call DvrRecord stop interface to exit record thread;
         if (mDvrRecordThreadRunning) {
             mDvrRecordThreadRunning = false;
             if (mDvrRecordThread.joinable()) {
                 mDvrRecordThread.join();
             }
-
             if (mReceiveParams.buf) {
                 free(mReceiveParams.buf);
                 mReceiveParams.buf = NULL;
             }
         }
-        mDemux->setRecordHandle(NULL);
+#endif
+    }
+
+    if (mDvrMQ.get() != NULL)
+       mDvrMQ.reset();
+
+    if (mDvrEventFlag != nullptr) {
+        EventFlag::deleteEventFlag(&mDvrEventFlag);
+        mDvrEventFlag = nullptr;
     }
 
     return ::ndk::ScopedAStatus::ok();
