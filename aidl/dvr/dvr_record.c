@@ -29,7 +29,7 @@
 #include "ts_indexer.h"
 
 #define DVR_MAX_RECORD_SESSION_CNT  (4)
-#define DVR_MAX_RECORD_PID_CNT      (16)
+#define DVR_MAX_RECORD_PID_CNT      (32)
 #define DVR_MAX_RECORD_PUSI_CNT     (200)
 #define DVR_TIMEOUT                 (100)
 
