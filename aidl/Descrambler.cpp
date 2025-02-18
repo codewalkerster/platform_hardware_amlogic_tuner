@@ -426,6 +426,8 @@ void* Descrambler::caSetKey(void *arg) {
                 result = dvr_playback_set_key_token(mPlaybackhandle, mPid, -1);
                 if (result != DVR_SUCCESS) {
                     TUNER_DSC_ERR(mDescramblerId, "unset playback key token fail");
+                } else {
+                    mAddedPid.erase(mPid);
                 }
             } else {
                 TUNER_DSC_ERR(mDescramblerId, "mPlaybackhandle is null");
