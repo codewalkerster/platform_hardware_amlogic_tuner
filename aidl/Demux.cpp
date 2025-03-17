@@ -1709,8 +1709,10 @@ int Demux::recordTsPacketForPesData(int64_t         filterId) {
 }
 
 int64_t Demux::findFilterIdByfakeFilterId(int64_t fakefilterId) {
-    if (fakefilterId > DMX_FILTER_COUNT + START_FILTERID_FROM_ONE) {
-         return (fakefilterId >> 26) & 0x3f;
+    if ((fakefilterId >> 26) & 0x3f) {
+        return (fakefilterId >> 26) & 0x3f;
+    } else if (fakefilterId > DMX_FILTER_COUNT + START_FILTERID_FROM_ONE) {
+        return fakefilterId & 0x3f;
     }
     return fakefilterId;
 }
