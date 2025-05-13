@@ -261,10 +261,14 @@ Dvr::~Dvr() {
         delete[] buffer;
       }
     }
-    mRecordStatus = RecordStatus::DATA_READY;
     mNotifyFlushToDemux = true;
     mFlushing = false;
-    maySendPlaybackStatusCallback();
+    if (mType == DvrType::PLAYBACK) {
+        maySendPlaybackStatusCallback();
+    } else {
+        mRecordStatus = RecordStatus::DATA_READY;
+        maySendRecordStatusCallback();
+    }
     return ::ndk::ScopedAStatus::ok();
 }
 
